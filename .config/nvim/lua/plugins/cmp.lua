@@ -30,10 +30,10 @@ return {
       'hrsh7th/cmp-nvim-lsp',
       'hrsh7th/cmp-path',
       'Exafunction/codeium.nvim',
-      'nvim-lua/plenary.nvim',
+      'nvim-lua/plenary.nvim', 
     },
     config = function()
-      require 'kickstart.completion'
+      require 'completion'
     end,
   },
 }

@@ -1,4 +1,3 @@
--- See `:help cmp`
 local cmp = require 'cmp'
 local luasnip = require 'luasnip'
 luasnip.config.setup {}
@@ -65,7 +64,7 @@ cmp.setup {
 
 cmp.setup.filetype({ 'sql' }, {
   sources = {
-    { name = 'vim-dadbod-completion' },
+    -- { name = 'vim-dadbod-completion' },
     { name = 'buffer' },
   },
 })
