@@ -25,9 +25,6 @@ require('lazy').setup({
     'nvim-lualine/lualine.nvim',
     dependencies = { 'nvim-tree/nvim-web-devicons' },
     opts = {},
-    -- config = function()
-    --   require 'kickstart.lualine'
-    -- end,
   },
 
   'voldikss/vim-floaterm',

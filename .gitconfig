@@ -1,0 +1,7 @@
+[user]
+	email = matthewsssmith1@gmail.com
+	name = Matt Smith
+[init]
+	defaultBranch = main
+[credential]
+	helper = cache --timeout=259200
