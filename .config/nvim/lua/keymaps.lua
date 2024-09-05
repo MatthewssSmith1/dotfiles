@@ -4,8 +4,6 @@ set('n', '<C-s>', ':w<CR>', { desc = 'Save file' })
 
 set('n', '<leader>x', '<cmd>source %<CR>', { desc = 'Execute the current file' })
 
-set({ 'i', 'v' }, '<M-k>', '<Esc>', { desc = 'Easier escape sequence' })
-
 set('n', '<Esc>', '<cmd>nohlsearch<CR>', { desc = 'Clear search highlights with <Esc>' })
 
 set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })

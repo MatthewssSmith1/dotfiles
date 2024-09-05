@@ -64,6 +64,7 @@ alias ...="cd ../.."
 alias c='clear'
 alias ls='ls --color'
 alias vi='nvim'
+alias vim='nvim'
 alias r='cargo watch -q -c -w templates -w src -x run'
 alias t='cargo watch -q -c -w templates -w styles -s ./tailwind.sh'
 alias gac='git add . && git commit -m'
