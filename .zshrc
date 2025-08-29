@@ -82,8 +82,15 @@ alias sandbox='pnpm sandbox'
 alias s='pnpm sandbox:log'
 alias d='cd dream'
 alias dev='pnpm dev'
+alias build='pnpm build'
 alias dezone="find . -type f -name '*Zone.Identifier' -delete"
-alias w="windsurf"
+alias cc="clear && claude"
+alias ca="clear && cursor-agent"
+
+export CLAUDE_CODE_MAX_OUTPUT_TOKENS=8192
+export MAX_THINKING_TOKENS=2048
+export CLAUDE_CODE_USE_BEDROCK=1
+export ANTHROPIC_MODEL=us.anthropic.claude-sonnet-4-20250514-v1:0
 
 # eval "$(fzf --zsh)"
 eval "$(zoxide init --cmd cd zsh)"
@@ -93,6 +100,7 @@ export PATH="$PATH:/home/matt/.turso"
 
 eval "$(rbenv init -)"
 
+export PATH="$HOME/.local/bin:$PATH"
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export ANDROID_HOME="$HOME/android_sdk"
 export PATH="$PATH:$HOME/android_sdk/cmdline-tools/latest/bin"
