@@ -1,0 +1,8 @@
+.gitconfig.local
+
+.zcompdump*
+.zsh_history
+.p10k-instant-prompt-*
+*.zwc
+
+.DS_Store

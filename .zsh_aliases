@@ -1,0 +1,38 @@
+# Navigation
+alias ..="cd .."
+alias ...="cd ../.."
+alias c='clear'
+alias ls='ls --color'
+
+# Git
+alias gac='git add . && git commit -m'
+
+# Mise
+alias mr='mise run'
+alias dev='mr dev'
+alias build='mr build'
+alias d='mr dev'
+alias b='mr build'
+alias l='mr lint'
+alias f='mr fmt'
+alias t='mr test'
+
+# Package Managers
+alias npm='pnpm'
+
+# Editors
+alias v='nvim'
+
+# Agents
+alias oc='clear && opencode'
+alias cc='clear && claude'
+
+# Directory Shortcuts
+alias dot='zed ~/dotfiles'
+alias skills='zed ~/.agents/skills'
+
+# Serve Static Files
+alias serve='npx live-server .'
+
+# WSL Cleanup
+alias dezone="find . -type f -name '*Zone.Identifier' -delete"
