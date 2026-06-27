@@ -149,6 +149,7 @@ if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)
 
 # ALIASES
 [[ -f ~/.zsh_aliases ]] && source ~/.zsh_aliases
+[[ -f ~/.zsh_aliases.local ]] && source ~/.zsh_aliases.local
 
 # Load Powerlevel10k config
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh

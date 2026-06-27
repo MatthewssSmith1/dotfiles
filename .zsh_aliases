@@ -4,6 +4,19 @@ alias ...="cd ../.."
 alias c='clear'
 alias ls='ls --color'
 
+# Editors
+alias v='nvim'
+alias dot='zed ~/dotfiles'
+alias skills='zed ~/.agents/skills'
+
+# Agents
+alias oc='clear && opencode'
+alias cc='clear && claude'
+
+# Toolchain
+alias vr='vp run'
+alias npm='pnpm'
+
 # Git
 alias gac='git add . && git commit -m'
 
@@ -16,20 +29,6 @@ alias b='mr build'
 alias l='mr lint'
 alias f='mr fmt'
 alias t='mr test'
-
-# Package Managers
-alias npm='pnpm'
-
-# Editors
-alias v='nvim'
-
-# Agents
-alias oc='clear && opencode'
-alias cc='clear && claude'
-
-# Directory Shortcuts
-alias dot='zed ~/dotfiles'
-alias skills='zed ~/.agents/skills'
 
 # Serve Static Files
 alias serve='npx live-server .'

@@ -6,3 +6,7 @@
 *.zwc
 
 .DS_Store
+
+.agents
+
+.zsh_aliases.local
