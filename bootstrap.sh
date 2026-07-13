@@ -5,6 +5,7 @@ set -Eeuo pipefail
 readonly SCRIPT_NAME="${0##*/}"
 BOOTSTRAP_STEP="initialization"
 TEMP_FILES=()
+CHECK_ONLY=false
 
 log() {
   printf '[%s] %s\n' "$SCRIPT_NAME" "$*"
@@ -32,8 +33,17 @@ on_error() {
 trap cleanup EXIT
 trap on_error ERR
 
+case "$#" in
+  0) ;;
+  1)
+    [[ "$1" == "--check" ]] || die "usage: $SCRIPT_NAME [--check]"
+    CHECK_ONLY=true
+    ;;
+  *) die "usage: $SCRIPT_NAME [--check]" ;;
+esac
+
+((EUID != 0)) || die 'run bootstrap as the non-root workstation user'
 [[ -n "${HOME:-}" && -d "$HOME" ]] || die 'HOME must refer to an existing directory'
-[[ "$(id -u)" -ne 0 ]] || die 'run bootstrap as the non-root workstation user'
 
 # Keep system tools available even when an existing shell manager has changed PATH.
 export PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
@@ -41,6 +51,12 @@ export PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:
 BOOTSTRAP_STEP="resolving the dotfiles directory"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly DOTFILES_DIR="$SCRIPT_DIR"
+readonly USER_ID="$EUID"
+
+[[ "$(stat -c %u "$HOME")" == "$USER_ID" ]] || die "$HOME must be owned by the invoking user"
+foreign_owned_path="$(find "$DOTFILES_DIR" -xdev ! -user "$USER_ID" -print -quit)"
+[[ -z "$foreign_owned_path" ]] || \
+  die "dotfiles checkout contains a path not owned by the invoking user: $foreign_owned_path"
 
 for required_file in \
   .gitconfig \
@@ -51,46 +67,55 @@ for required_file in \
     die "expected $required_file next to $SCRIPT_NAME"
 done
 
-BOOTSTRAP_STEP="checking operating system support"
-[[ -r /etc/os-release ]] || die 'cannot identify this operating system'
-# shellcheck source=/dev/null
-source /etc/os-release
-case "${ID:-}" in
-  ubuntu | debian) ;;
-  *) die "unsupported operating system: ${PRETTY_NAME:-${ID:-unknown}} (Ubuntu or Debian required)" ;;
-esac
-command -v apt-get >/dev/null 2>&1 || die 'apt-get is required'
-
-SUDO=()
-if command -v sudo >/dev/null 2>&1; then
-  SUDO=(sudo)
-else
-  die 'sudo is required to install system packages'
+BOOTSTRAP_STEP="checking system dependencies"
+missing_dependencies=()
+for dependency in \
+  'curl|curl' \
+  'git|git' \
+  'stow|stow' \
+  'zsh|zsh' \
+  'unzip|unzip' \
+  'make|build-essential' \
+  'gcc|build-essential' \
+  'rg|ripgrep' \
+  'fzf|fzf' \
+  'jq|jq' \
+  'tmux|tmux' \
+  'tar|tar'; do
+  command_name="${dependency%%|*}"
+  package_name="${dependency#*|}"
+  command -v "$command_name" >/dev/null 2>&1 || \
+    missing_dependencies+=("$command_name (Ubuntu/Debian package: $package_name)")
+done
+if ! command -v fd >/dev/null 2>&1 && ! command -v fdfind >/dev/null 2>&1; then
+  missing_dependencies+=('fd or fdfind (Ubuntu/Debian package: fd-find)')
+fi
+if ((${#missing_dependencies[@]} > 0)); then
+  printf '[%s] error: missing required system dependencies:\n' "$SCRIPT_NAME" >&2
+  printf '  - %s\n' "${missing_dependencies[@]}" >&2
+  die 'install the missing dependencies outside bootstrap (see README.md), then rerun'
 fi
 
-if [[ ! -t 0 ]]; then
-  BOOTSTRAP_STEP="checking non-interactive sudo access"
-  "${SUDO[@]}" -n true || \
-    die 'non-interactive bootstrap requires passwordless sudo access'
-  SUDO+=(--non-interactive)
+BOOTSTRAP_STEP="checking Stow conflicts"
+stow_check_status=0
+stow_check_output="$(
+  cd "$DOTFILES_DIR"
+  stow --simulate --restow --target="$HOME" . 2>&1
+)" || stow_check_status=$?
+if [[ "$stow_check_output" == *'BUG in find_stowed_path'* ]]; then
+  stow_check_output="$(
+    cd "$DOTFILES_DIR"
+    stow --simulate --target="$HOME" . 2>&1
+  )" || die 'Stow conflict preflight failed'
+elif ((stow_check_status != 0)); then
+  [[ -z "$stow_check_output" ]] || printf '%s\n' "$stow_check_output" >&2
+  die 'Stow conflict preflight failed'
 fi
 
-BOOTSTRAP_STEP="installing system packages"
-log 'Installing system packages'
-"${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get update
-"${SUDO[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  build-essential \
-  ca-certificates \
-  curl \
-  fd-find \
-  fzf \
-  git \
-  jq \
-  ripgrep \
-  stow \
-  tmux \
-  unzip \
-  zsh
+if [[ "$CHECK_ONLY" == true ]]; then
+  log 'Dependency and Stow conflict preflight passed; no changes made'
+  exit 0
+fi
 
 BOOTSTRAP_STEP="configuring fd"
 mkdir -p "$HOME/.local/bin"
@@ -160,34 +185,16 @@ log 'Applying dotfiles with Stow'
 (
   cd "$DOTFILES_DIR"
   stow_status=0
-  stow_output="$(stow -R . 2>&1)" || stow_status=$?
+  stow_output="$(stow --restow --target="$HOME" . 2>&1)" || stow_status=$?
   [[ -z "$stow_output" ]] || printf '%s\n' "$stow_output" >&2
   if [[ "$stow_output" == *'BUG in find_stowed_path'* ]]; then
     # Stow 2.3 reports success despite failing to scan unrelated WSL links.
     log 'Restow failed; retrying the same package without the removal pass'
-    stow .
+    stow --target="$HOME" .
   elif ((stow_status != 0)); then
     exit "$stow_status"
   fi
 )
-
-BOOTSTRAP_STEP="configuring the login shell"
-zsh_path="$(command -v zsh)"
-zsh_is_allowed=false
-while IFS= read -r shell_path; do
-  if [[ "$shell_path" == "$zsh_path" ]]; then
-    zsh_is_allowed=true
-    break
-  fi
-done </etc/shells
-[[ "$zsh_is_allowed" == true ]] || die "$zsh_path is not listed in /etc/shells"
-
-current_shell="$(getent passwd "$(id -un)" | cut -d: -f7)"
-[[ -n "$current_shell" ]] || die 'could not determine the current login shell'
-if [[ "$current_shell" != "$zsh_path" ]]; then
-  "${SUDO[@]}" usermod --shell "$zsh_path" "$(id -un)"
-  log 'Changed the login shell to Zsh; start a new login session to use it'
-fi
 
 BOOTSTRAP_STEP="validating installed tools"
 log 'Validating installed tools'
