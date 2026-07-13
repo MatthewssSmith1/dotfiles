@@ -111,6 +111,10 @@ eval_if_available() {
 # Core utilities
 path_prepend "$HOME/.local/bin"
 
+# Go
+path_append "/usr/local/go/bin"
+path_append "$HOME/go/bin"
+
 # Bun (Primary JavaScript runtime)
 export BUN_INSTALL="$HOME/.bun"
 path_prepend "$BUN_INSTALL/bin"
@@ -121,7 +125,6 @@ path_prepend "$PNPM_HOME"
 path_prepend "$PNPM_HOME/bin"
 
 # Development Tools
-path_append "/usr/local/go/bin"        # Go
 path_append "$HOME/.fly/bin"           # Fly.io
 path_append "$HOME/.opencode/bin"      # OpenCode
 
