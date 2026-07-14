@@ -135,11 +135,11 @@ path_append "$HOME/.opencode/bin"      # OpenCode
 # Bun completions
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
-# Zoxide: Improved `cd`
-eval_if_available zoxide zoxide init --cmd cd zsh
-
 # Mise: Manage multiple versions of tools
 eval_if_available mise mise activate zsh
+
+# Zoxide: Improved `cd`
+eval_if_available zoxide zoxide init --cmd cd zsh
 
 # Fuzzy finder
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

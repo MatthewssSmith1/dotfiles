@@ -19,7 +19,7 @@ or changes the login shell.
 
 ```bash
 git clone https://github.com/MatthewssSmith1/dotfiles.git ~/dotfiles
-~/dotfiles/bootstrap.sh
+GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' ~/dotfiles/bootstrap.sh
 ```
 
 To check the checkout and system prerequisites without making changes or using
@@ -39,24 +39,25 @@ and Debian, one possible manual setup is:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y build-essential ca-certificates curl fd-find fzf git jq ripgrep stow tar tmux unzip zsh
+sudo apt-get install -y build-essential ca-certificates curl fd-find fzf gh git jq ripgrep stow tar tmux unzip zsh
 ```
 
 Bootstrap preflights `curl`, `git`, GNU Stow, Zsh, `unzip`, `make`, `gcc`,
-`ripgrep`, `fd`/`fdfind`, `fzf`, `jq`, tmux, and `tar`, then reports all missing
+`ripgrep`, `fd`/`fdfind`, `fzf`, GitHub CLI, `jq`, tmux, and `tar`, then reports all missing
 commands before making changes. On Debian-family systems it creates a
 user-local `fd` symlink to `fdfind` when needed.
 
 It uses [mise](https://mise.jdx.dev/) for Node.js LTS, pnpm, Neovim, Claude
-Code, OpenCode, and Worktrunk. Neovim is validated as version 0.11 or newer.
+Code, OpenCode, zoxide, and Worktrunk. Neovim is validated as version 0.11 or newer.
 Vite+ is installed with its official installer because it is not in the mise
 registry; its Node manager is disabled so mise remains responsible for the
 global Node and pnpm versions.
 
-The script does not install Bun, Go, Fly CLI, GitHub CLI, credentials, or
-service authentication. Authenticate Claude Code, OpenCode, and GitHub
-separately after bootstrap. Zinit is bootstrapped automatically on first Zsh
-startup.
+The script does not install Bun, Go, Fly CLI, credentials, or service
+authentication. It runs the upstream `opencode-openai-codex-auth@latest`
+installer to write OpenCode's Codex plugin configuration, but it never starts
+an OAuth flow. Authenticate Claude Code, OpenCode, and GitHub separately after
+bootstrap. Zinit is bootstrapped automatically on first Zsh startup.
 
 Bootstrap does not change the default shell. If desired, do that separately
 after setup (for example, with `chsh -s "$(command -v zsh)"`) and start a new
@@ -81,9 +82,12 @@ Personal identity is loaded from:
 ```
 
 The repo includes `.gitconfig.local.example`. When `~/.gitconfig.local` is
-missing, bootstrap copies the template there with private permissions. Existing
-files and valid symlinks are preserved exactly; broken symlinks cause bootstrap
-to stop. Replace the generated placeholder name and email before committing.
+missing or still contains its placeholders, provide `GIT_USER_NAME` and
+`GIT_USER_EMAIL`; bootstrap writes only missing or placeholder fields and uses
+private permissions. Existing real identity fields are authoritative and are
+not overwritten. Broken symlinks and malformed or ambiguous Git configuration
+cause bootstrap to stop. Bootstrap succeeds only after Git can form valid
+author and committer identities.
 
 ## Commands
 

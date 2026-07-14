@@ -6,6 +6,7 @@ readonly SCRIPT_NAME="${0##*/}"
 BOOTSTRAP_STEP="initialization"
 TEMP_FILES=()
 CHECK_ONLY=false
+GIT_IDENTITY_CONFIGURED=false
 
 log() {
   printf '[%s] %s\n' "$SCRIPT_NAME" "$*"
@@ -33,6 +34,112 @@ on_error() {
 trap cleanup EXIT
 trap on_error ERR
 
+validate_git_identity_inputs() {
+  local name="${GIT_USER_NAME:-}"
+  local email="${GIT_USER_EMAIL:-}"
+
+  if [[ -n "$name" || -n "$email" ]]; then
+    [[ -n "$name" && -n "$email" ]] || \
+      die 'GIT_USER_NAME and GIT_USER_EMAIL must be supplied together'
+    [[ "$name" != *$'\n'* && "$name" != *$'\r'* ]] || \
+      die 'GIT_USER_NAME must not contain line breaks'
+    [[ "$email" != *$'\n'* && "$email" != *$'\r'* ]] || \
+      die 'GIT_USER_EMAIL must not contain line breaks'
+  fi
+}
+
+git_config_value() {
+  local file="$1"
+  local key="$2"
+  local value
+  local status
+
+  if value="$(git config --file "$file" --get-all "$key" 2>/dev/null)"; then
+    [[ "$value" != *$'\n'* ]] || die "$file contains multiple values for $key"
+    printf '%s' "$value"
+    return
+  else
+    status=$?
+  fi
+  ((status == 1)) || die "$file is not valid Git configuration"
+}
+
+validate_git_commit_readiness() {
+  local placeholder_name="$1"
+  local placeholder_email="$2"
+  local name
+  local email
+
+  name="$(git config --file "$HOME/.gitconfig.local" --get user.name 2>/dev/null || true)"
+  email="$(git config --file "$HOME/.gitconfig.local" --get user.email 2>/dev/null || true)"
+  [[ -n "$name" && "$name" != "$placeholder_name" ]] || \
+    die 'Git user.name is missing or still uses the placeholder value'
+  [[ -n "$email" && "$email" != "$placeholder_email" ]] || \
+    die 'Git user.email is missing or still uses the placeholder value'
+
+  env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL \
+    -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL -u EMAIL \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$DOTFILES_DIR/.gitconfig" \
+    git -C "$HOME" -c user.useConfigOnly=true var GIT_AUTHOR_IDENT >/dev/null
+  env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL \
+    -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL -u EMAIL \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$DOTFILES_DIR/.gitconfig" \
+    git -C "$HOME" -c user.useConfigOnly=true var GIT_COMMITTER_IDENT >/dev/null
+}
+
+configure_local_git_identity() {
+  local gitconfig_local="$HOME/.gitconfig.local"
+  local template="$DOTFILES_DIR/.gitconfig.local.example"
+  local placeholder_name
+  local placeholder_email
+  local current_name=""
+  local current_email=""
+  local replace_name=false
+  local replace_email=false
+  local temporary_config
+
+  placeholder_name="$(git config --file "$template" --get user.name)"
+  placeholder_email="$(git config --file "$template" --get user.email)"
+
+  if [[ -L "$gitconfig_local" && ! -e "$gitconfig_local" ]]; then
+    die "$gitconfig_local is a broken symlink; repair it before rerunning bootstrap"
+  elif [[ -e "$gitconfig_local" ]]; then
+    [[ -f "$gitconfig_local" ]] || die "$gitconfig_local exists but is not a regular file"
+    current_name="$(git_config_value "$gitconfig_local" user.name)"
+    current_email="$(git_config_value "$gitconfig_local" user.email)"
+    [[ -n "$current_name" && "$current_name" != "$placeholder_name" ]] || replace_name=true
+    [[ -n "$current_email" && "$current_email" != "$placeholder_email" ]] || replace_email=true
+  else
+    replace_name=true
+    replace_email=true
+  fi
+
+  if [[ "$replace_name" == true || "$replace_email" == true ]]; then
+    [[ -n "${GIT_USER_NAME:-}" && -n "${GIT_USER_EMAIL:-}" ]] || \
+      die 'set GIT_USER_NAME and GIT_USER_EMAIL to configure Git identity'
+    [[ "$GIT_USER_NAME" != "$placeholder_name" ]] || die 'GIT_USER_NAME must not use the template placeholder'
+    [[ "$GIT_USER_EMAIL" != "$placeholder_email" ]] || die 'GIT_USER_EMAIL must not use the template placeholder'
+
+    if [[ ! -e "$gitconfig_local" && ! -L "$gitconfig_local" ]]; then
+      temporary_config="$(mktemp "$HOME/.gitconfig.local.XXXXXX")"
+      TEMP_FILES+=("$temporary_config")
+      chmod 0600 "$temporary_config"
+      git config --file "$temporary_config" user.name "$GIT_USER_NAME"
+      git config --file "$temporary_config" user.email "$GIT_USER_EMAIL"
+      mv "$temporary_config" "$gitconfig_local"
+    else
+      [[ "$replace_name" == false ]] || \
+        git config --file "$gitconfig_local" --replace-all user.name "$GIT_USER_NAME"
+      [[ "$replace_email" == false ]] || \
+        git config --file "$gitconfig_local" --replace-all user.email "$GIT_USER_EMAIL"
+      chmod 0600 "$gitconfig_local"
+    fi
+  fi
+
+  validate_git_commit_readiness "$placeholder_name" "$placeholder_email"
+  GIT_IDENTITY_CONFIGURED=true
+}
+
 case "$#" in
   0) ;;
   1)
@@ -44,9 +151,14 @@ esac
 
 ((EUID != 0)) || die 'run bootstrap as the non-root workstation user'
 [[ -n "${HOME:-}" && -d "$HOME" ]] || die 'HOME must refer to an existing directory'
+validate_git_identity_inputs
 
 # Keep system tools available even when an existing shell manager has changed PATH.
 export PATH="$HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+if [[ -n "${BOOTSTRAP_TEST_BIN:-}" ]]; then
+  [[ -d "$BOOTSTRAP_TEST_BIN" ]] || die 'BOOTSTRAP_TEST_BIN must refer to a directory'
+  export PATH="$BOOTSTRAP_TEST_BIN:$PATH"
+fi
 
 BOOTSTRAP_STEP="resolving the dotfiles directory"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -79,6 +191,7 @@ for dependency in \
   'gcc|build-essential' \
   'rg|ripgrep' \
   'fzf|fzf' \
+  'gh|gh' \
   'jq|jq' \
   'tmux|tmux' \
   'tar|tar'; do
@@ -117,6 +230,9 @@ if [[ "$CHECK_ONLY" == true ]]; then
   exit 0
 fi
 
+BOOTSTRAP_STEP="configuring local Git identity"
+configure_local_git_identity
+
 BOOTSTRAP_STEP="configuring fd"
 mkdir -p "$HOME/.local/bin"
 if ! command -v fd >/dev/null 2>&1; then
@@ -152,8 +268,15 @@ log 'Installing versioned and personal tools with mise'
   neovim@latest \
   claude-code@latest \
   opencode@latest \
+  zoxide@latest \
   worktrunk@latest
 hash -r
+
+BOOTSTRAP_STEP="configuring OpenCode"
+log 'Installing or updating OpenCode Codex plugin configuration'
+command -v opencode >/dev/null 2>&1 || die 'mise did not provide opencode'
+command -v npx >/dev/null 2>&1 || die 'mise-managed Node.js did not provide npx'
+npx -y opencode-openai-codex-auth@latest
 
 BOOTSTRAP_STEP="installing Vite+"
 if ! command -v vp >/dev/null 2>&1; then
@@ -167,18 +290,6 @@ export PATH="$MISE_DATA_DIR/shims:$HOME/.vite-plus/bin:$HOME/.local/bin:$PATH"
 hash -r
 command -v vp >/dev/null 2>&1 || die 'Vite+ installation did not provide vp'
 vp env off
-
-BOOTSTRAP_STEP="configuring local Git identity"
-gitconfig_local="$HOME/.gitconfig.local"
-if [[ -L "$gitconfig_local" && ! -e "$gitconfig_local" ]]; then
-  die "$gitconfig_local is a broken symlink; repair it before rerunning bootstrap"
-elif [[ -e "$gitconfig_local" ]]; then
-  [[ -f "$gitconfig_local" ]] || die "$gitconfig_local exists but is not a regular file"
-else
-  cp "$DOTFILES_DIR/.gitconfig.local.example" "$gitconfig_local"
-  chmod 0600 "$gitconfig_local"
-  log "Created $gitconfig_local; replace its placeholder identity"
-fi
 
 BOOTSTRAP_STEP="applying dotfiles with Stow"
 log 'Applying dotfiles with Stow'
@@ -199,8 +310,8 @@ log 'Applying dotfiles with Stow'
 BOOTSTRAP_STEP="validating installed tools"
 log 'Validating installed tools'
 required_commands=(
-  git zsh stow curl unzip make rg fd fzf jq tmux mise nvim node pnpm
-  claude opencode wt vp
+  git gh zsh stow curl unzip make rg fd fzf jq tmux mise nvim node npx pnpm
+  claude opencode wt vp zoxide
 )
 for required_command in "${required_commands[@]}"; do
   command -v "$required_command" >/dev/null 2>&1 || \
@@ -220,7 +331,7 @@ if ((nvim_major < 1 && nvim_minor < 11)); then
   die "Neovim 0.11 or newer is required; found $nvim_version"
 fi
 
-[[ -f "$gitconfig_local" ]] || die "$gitconfig_local is unavailable"
+[[ "$GIT_IDENTITY_CONFIGURED" == true ]] || die 'Git identity was not validated'
 [[ ! -e "$HOME/bootstrap.sh" && ! -L "$HOME/bootstrap.sh" ]] || \
   die 'Stow unexpectedly created ~/bootstrap.sh'
 
