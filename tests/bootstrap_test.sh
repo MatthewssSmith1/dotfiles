@@ -5,6 +5,7 @@ set -Eeuo pipefail
 readonly TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
 readonly BOOTSTRAP="$REPO_DIR/bootstrap.sh"
+readonly TMUX_CONFIG="$REPO_DIR/.tmux.conf"
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -12,6 +13,43 @@ fail() {
 }
 
 bash -n "$BOOTSTRAP" || fail 'bootstrap.sh has invalid Bash syntax'
+
+[[ -f "$TMUX_CONFIG" ]] || fail '.tmux.conf is missing'
+grep -Fq 'set -g mode-keys vi' "$TMUX_CONFIG" || fail 'tmux copy mode does not use Vim keys'
+grep -Fq 'set -g status-keys vi' "$TMUX_CONFIG" || fail 'tmux prompts do not use Vim keys'
+grep -Fq 'set -g mouse on' "$TMUX_CONFIG" || fail 'tmux mouse support is not enabled'
+grep -Fq 'set -g history-limit 50000' "$TMUX_CONFIG" || fail 'tmux history limit is not configured'
+grep -Fq 'set -g focus-events on' "$TMUX_CONFIG" || fail 'tmux focus events are not enabled'
+grep -Fq 'set -s set-clipboard external' "$TMUX_CONFIG" || fail 'tmux OSC 52 clipboard export is not enabled'
+grep -Fq 'bind -T copy-mode-vi v send-keys -X begin-selection' "$TMUX_CONFIG" || \
+  fail 'tmux copy mode does not bind v to begin selection'
+grep -Fq 'bind -T copy-mode-vi C-v send-keys -X rectangle-toggle' "$TMUX_CONFIG" || \
+  fail 'tmux copy mode does not bind Ctrl-v to rectangular selection'
+grep -Fq 'bind -T copy-mode-vi y send-keys -X copy-selection-and-cancel' "$TMUX_CONFIG" || \
+  fail 'tmux copy mode does not bind y to copy a selection'
+grep -Fq 'bind -T copy-mode-vi Enter send-keys -X copy-selection-and-cancel' "$TMUX_CONFIG" || \
+  fail 'tmux copy mode does not bind Enter to copy a selection'
+grep -Fq "set -g @plugin 'tmux-plugins/tpm'" "$TMUX_CONFIG" || fail 'TPM plugin is not configured'
+grep -Fq "set -g @plugin 'tmux-plugins/tmux-resurrect'" "$TMUX_CONFIG" || fail 'tmux-resurrect is not configured'
+grep -Fq "set -g @plugin 'timvw/tmux-assistant-resurrect'" "$TMUX_CONFIG" || fail 'tmux-assistant-resurrect is not configured'
+grep -Fq "set -g @plugin 'tmux-plugins/tmux-continuum'" "$TMUX_CONFIG" || fail 'tmux-continuum is not configured'
+
+tpm_line="$(grep -nF "set -g @plugin 'tmux-plugins/tpm'" "$TMUX_CONFIG" | cut -d: -f1)"
+resurrect_line="$(grep -nF "set -g @plugin 'tmux-plugins/tmux-resurrect'" "$TMUX_CONFIG" | cut -d: -f1)"
+assistant_line="$(grep -nF "set -g @plugin 'timvw/tmux-assistant-resurrect'" "$TMUX_CONFIG" | cut -d: -f1)"
+continuum_line="$(grep -nF "set -g @plugin 'tmux-plugins/tmux-continuum'" "$TMUX_CONFIG" | cut -d: -f1)"
+((tpm_line < resurrect_line && resurrect_line < assistant_line && assistant_line < continuum_line)) || \
+  fail 'tmux plugins are not declared in dependency order with Continuum last'
+
+grep -Fq "set -g @continuum-save-interval '5'" "$TMUX_CONFIG" || fail 'Continuum does not save every five minutes'
+grep -Fq "set -g @continuum-restore 'on'" "$TMUX_CONFIG" || fail 'Continuum automatic restore is not enabled'
+grep -Fq "set-environment -g TMUX_PLUGIN_MANAGER_PATH '~/.tmux/plugins/'" "$TMUX_CONFIG" || \
+  fail 'TPM plugin path is not initialized before automatic installation'
+if grep -Eq '^[[:space:]]*set(-option)?[[:space:]]+-g[[:space:]]+@resurrect-(default-)?processes' "$TMUX_CONFIG"; then
+  fail 'tmux config overrides Resurrect process defaults'
+fi
+last_tmux_command="$(grep -Ev '^[[:space:]]*(#|$)' "$TMUX_CONFIG" | tail -n 1)"
+[[ "$last_tmux_command" == "run '~/.tmux/plugins/tpm/tpm'" ]] || fail 'TPM initialization is not the final tmux command'
 
 grep -q '((EUID != 0))' "$BOOTSTRAP" || fail 'bootstrap does not use the shell EUID for root refusal'
 grep -q -- '--target="$HOME"' "$BOOTSTRAP" || fail 'Stow does not explicitly target HOME'

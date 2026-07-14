@@ -1,93 +1,94 @@
 # Dotfiles
 
-Personal dotfiles for zsh, Git, and Neovim, managed with [GNU Stow](https://www.gnu.org/software/stow/).
-
-This is my working setup. It is public for reference and reuse, but intentionally opinionated.
+Opinionated zsh, Git, Neovim, and tmux configuration managed with
+[GNU Stow](https://www.gnu.org/software/stow/).
 
 ## Includes
 
-- zsh config with vi mode, history, Zinit, Powerlevel10k, aliases, and tool initialization
-- Git config with private identity loaded from `~/.gitconfig.local`
-- Neovim config based on Kickstart
+- zsh with vi mode, Zinit, Powerlevel10k, aliases, and tool initialization
+- Git defaults with private identity stored outside the repository
+- Neovim based on Kickstart
+- tmux with persistent layouts and AI assistant session restoration
 
-## Bootstrap
+## Setup
 
-The bootstrap script configures an existing checkout and is tested primarily on
-Ubuntu 22.04+ and Ubuntu under WSL. It is strictly user-scoped: it refuses to
-run as root and never invokes a privilege escalator, installs system packages,
-or changes the login shell.
-
-```bash
-git clone https://github.com/MatthewssSmith1/dotfiles.git ~/dotfiles
-GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' ~/dotfiles/bootstrap.sh
-```
-
-To check the checkout and system prerequisites without making changes or using
-the network:
-
-```bash
-~/dotfiles/bootstrap.sh --check
-```
-
-The repository must already be cloned; bootstrap does not clone, pull, reset, or
-clean it. It can be run from any current directory and safely rerun after
-updates. Reruns converge without duplicating symlinks, shell configuration, or
-PATH entries. Tools configured as `latest` or `lts` may advance when rerun.
-
-Before running bootstrap, install its system prerequisites yourself. For Ubuntu
-and Debian, one possible manual setup is:
+Tested primarily on Ubuntu 22.04+ and Ubuntu under WSL. Install the system
+prerequisites first:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y build-essential ca-certificates curl fd-find fzf gh git jq ripgrep stow tar tmux unzip zsh
 ```
 
-Bootstrap preflights `curl`, `git`, GNU Stow, Zsh, `unzip`, `make`, `gcc`,
-`ripgrep`, `fd`/`fdfind`, `fzf`, GitHub CLI, `jq`, tmux, and `tar`, then reports all missing
-commands before making changes. On Debian-family systems it creates a
-user-local `fd` symlink to `fdfind` when needed.
+Clone and bootstrap:
 
-It uses [mise](https://mise.jdx.dev/) for Node.js LTS, pnpm, Neovim, Claude
-Code, OpenCode, zoxide, and Worktrunk. Neovim is validated as version 0.11 or newer.
-Vite+ is installed with its official installer because it is not in the mise
-registry; its Node manager is disabled so mise remains responsible for the
-global Node and pnpm versions.
+```bash
+git clone https://github.com/MatthewssSmith1/dotfiles.git ~/dotfiles
+GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' ~/dotfiles/bootstrap.sh
+```
 
-The script does not install Bun, Go, Fly CLI, credentials, or service
-authentication. It runs the upstream `opencode-openai-codex-auth@latest`
-installer to write OpenCode's Codex plugin configuration, but it never starts
-an OAuth flow. Authenticate Claude Code, OpenCode, and GitHub separately after
-bootstrap. Zinit is bootstrapped automatically on first Zsh startup.
+Run the non-mutating preflight separately with:
 
-Bootstrap does not change the default shell. If desired, do that separately
-after setup (for example, with `chsh -s "$(command -v zsh)"`) and start a new
-login session.
+```bash
+~/dotfiles/bootstrap.sh --check
+```
 
-GNU Stow fails rather than overwrite conflicting unmanaged files. Back up or
-remove existing paths such as `~/.zshrc`, `~/.gitconfig`, and
-`~/.config/nvim` before rerunning when Stow reports a conflict.
-Bootstrap normally restows with `stow -R .`; on older Stow versions affected by
-WSL absolute-link scanning bugs, it safely retries with `stow .`.
+Bootstrap is user-scoped, refuses to run as root, and does not install system
+packages or change the login shell. It is safe to rerun and fails rather than
+overwrite unmanaged files that conflict with Stow.
 
-The Neovim config works best with common Kickstart dependencies: `ripgrep`, `fd`, `unzip`, `make`/`gcc`, a clipboard provider, and a Nerd Font. See `.config/nvim/README.md` for details.
+The script uses [mise](https://mise.jdx.dev/) to install Node.js LTS, pnpm,
+Neovim, Claude Code, OpenCode, zoxide, and Worktrunk. It installs Vite+ with its
+official installer and bootstraps Zinit on the first zsh startup. Credentials
+and service authentication remain manual.
+
+To make zsh the login shell, run this separately and start a new login session:
+
+```bash
+chsh -s "$(command -v zsh)"
+```
+
+Neovim requires version 0.11 or newer and works best with a Nerd Font and a
+clipboard provider. See [the Neovim README](.config/nvim/README.md) for details.
+
+## Tmux
+
+Tmux uses [TPM](https://github.com/tmux-plugins/tpm) with
+[Resurrect](https://github.com/tmux-plugins/tmux-resurrect),
+[Continuum](https://github.com/tmux-plugins/tmux-continuum), and
+[Assistant Resurrect](https://github.com/timvw/tmux-assistant-resurrect).
+Plugins install automatically on first start, which requires network access.
+
+Sessions save every five minutes and restore when the tmux server starts:
+
+| Key | Action |
+|-----|--------|
+| `prefix` + `Ctrl-s` | Save manually |
+| `prefix` + `Ctrl-r` | Restore manually |
+| `prefix` + `U` | Update plugins |
+
+Neovim relaunches in its restored pane and working directory, but editor state
+is not preserved. Claude Code, OpenCode, and Codex conversations resume from
+their saved session IDs; in-flight work is not restored.
+
+Copy mode uses Vim keys, mouse support, extended scrollback, and OSC 52:
+
+| Key | Action |
+|-----|--------|
+| `prefix` + `[` | Enter copy mode |
+| `v` | Begin selection |
+| `y` or `Enter` | Copy selection |
+| `prefix` + `]` | Paste the tmux buffer |
 
 ## Git Identity
 
-The committed `.gitconfig` contains shared Git defaults only.
+Shared Git defaults live in `.gitconfig`; personal identity lives in the
+private `~/.gitconfig.local` file. Bootstrap creates that file with restricted
+permissions when it is missing or still contains example placeholders. It does
+not overwrite an established identity.
 
-Personal identity is loaded from:
-
-```text
-~/.gitconfig.local
-```
-
-The repo includes `.gitconfig.local.example`. When `~/.gitconfig.local` is
-missing or still contains its placeholders, provide `GIT_USER_NAME` and
-`GIT_USER_EMAIL`; bootstrap writes only missing or placeholder fields and uses
-private permissions. Existing real identity fields are authoritative and are
-not overwritten. Broken symlinks and malformed or ambiguous Git configuration
-cause bootstrap to stop. Bootstrap succeeds only after Git can form valid
-author and committer identities.
+Use `.gitconfig.local.example` as the template, or provide `GIT_USER_NAME` and
+`GIT_USER_EMAIL` when running bootstrap.
 
 ## Commands
 
@@ -95,5 +96,5 @@ author and committer identities.
 |---------|-------------|
 | `stow .` | Create symlinks |
 | `stow -D .` | Remove symlinks |
-| `stow -R .` | Restow / refresh symlinks |
-| `tests/bootstrap_test.sh` | Run non-destructive bootstrap checks |
+| `stow -R .` | Refresh symlinks |
+| `tests/bootstrap_test.sh` | Run repository checks |
