@@ -1,8 +1,1 @@
-^/\.git$
-^/\.gitignore$
-^/\.gitconfig\.local$
-^/README\.md$
-^/LICENSE$
-^/\.gitconfig\.local\.example$
-^/bootstrap\.sh$
-^/tests$
+^/.*$

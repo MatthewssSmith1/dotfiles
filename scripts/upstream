@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly SCRIPT_NAME="${0##*/}"
+
+die() {
+  printf '[%s] error: %s\n' "$SCRIPT_NAME" "$*" >&2
+  exit 1
+}
+
+is_safe_relative_path() {
+  local path="$1"
+  local segment
+  local -a segments
+
+  [[ -n "$path" && "$path" != /* && "$path" != */ && "$path" != *'//'* && \
+    "$path" != *$'\n'* && "$path" != *$'\r'* && "$path" != *$'\t'* ]] || return 1
+  IFS='/' read -r -a segments <<< "$path"
+  ((${#segments[@]} > 0)) || return 1
+  for segment in "${segments[@]}"; do
+    [[ -n "$segment" && "$segment" != '.' && "$segment" != '..' ]] || return 1
+  done
+}
+
+(($# == 1)) || die "usage: $SCRIPT_NAME verify"
+[[ "$1" == 'verify' ]] || die "usage: $SCRIPT_NAME verify"
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR
+REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+readonly REPO_DIR
+readonly SCHEMA="$REPO_DIR/schemas/source-manifest-v1.schema.json"
+readonly MANIFEST="$REPO_DIR/manifests/sources.json"
+readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/source-manifest-v1.schema.json'
+
+command -v jq >/dev/null 2>&1 || die 'jq is required'
+command -v git >/dev/null 2>&1 || die 'git is required'
+[[ -f "$SCHEMA" && ! -L "$SCHEMA" ]] || die 'source manifest schema is missing or is not a regular file'
+[[ -f "$MANIFEST" && ! -L "$MANIFEST" ]] || die 'source manifest is missing or is not a regular file'
+
+jq empty "$SCHEMA" >/dev/null 2>&1 || die 'source manifest schema is malformed'
+jq -e --arg schema_id "$SCHEMA_ID" '
+  .["$schema"] == "https://json-schema.org/draft/2020-12/schema" and
+  .["$id"] == $schema_id and
+  .type == "object" and
+  .additionalProperties == false and
+  .properties["$schema"].const == "../schemas/source-manifest-v1.schema.json" and
+  .properties.schema_version.const == 1 and
+  .properties.snapshot_root.const == "packages/upstream"
+' "$SCHEMA" >/dev/null || die 'source manifest schema is unsupported'
+
+jq empty "$MANIFEST" >/dev/null 2>&1 || die 'source manifest is malformed'
+jq -e '
+  def keys_are($allowed): (keys | sort) == ($allowed | sort);
+  def clean_string:
+    type == "string" and length > 0 and (test("[[:cntrl:]]") | not);
+  def git_mode: type == "string" and test("^100(644|755)$");
+  type == "object" and
+  keys_are(["$schema", "schema_version", "snapshot_root", "sources"]) and
+  .["$schema"] == "../schemas/source-manifest-v1.schema.json" and
+  .schema_version == 1 and
+  .snapshot_root == "packages/upstream" and
+  (.sources | type == "array" and length > 0) and
+  (.sources | all(.[];
+    type == "object" and
+    keys_are(["id", "repository", "release", "commit", "source", "snapshot", "destination", "transform"]) and
+    (.id | clean_string and test("^[a-z0-9]+(-[a-z0-9]+)*$")) and
+    (.repository | clean_string and test("^https://[^[:space:]]+$")) and
+    (.release | clean_string) and
+    (.commit | type == "string" and test("^[0-9a-f]{40}$")) and
+    (.source | type == "object" and keys_are(["path", "blob", "mode"])) and
+    (.source.path | clean_string) and
+    (.source.blob | type == "string" and test("^[0-9a-f]{40}$")) and
+    (.source.mode | git_mode) and
+    (.snapshot | clean_string) and
+    (.destination | type == "object" and keys_are(["root", "path", "mode"])) and
+    .destination.root == "home" and
+    (.destination.path | clean_string) and
+    (.destination.mode | git_mode) and
+    .transform == "none"
+  )) and
+  ([.sources[].id] | length) == ([.sources[].id] | unique | length) and
+  ([.sources[].snapshot] | length) == ([.sources[].snapshot] | unique | length) and
+  ([.sources[].destination.path] | length) == ([.sources[].destination.path] | unique | length)
+' "$MANIFEST" >/dev/null || die 'source manifest does not conform to schema version 1'
+
+readonly SNAPSHOT_ROOT_REL="$(jq -r '.snapshot_root' "$MANIFEST")"
+is_safe_relative_path "$SNAPSHOT_ROOT_REL" || die 'snapshot root is not a safe relative path'
+readonly SNAPSHOT_ROOT="$REPO_DIR/$SNAPSHOT_ROOT_REL"
+[[ -d "$SNAPSHOT_ROOT" && ! -L "$SNAPSHOT_ROOT" ]] || \
+  die 'snapshot root is missing or is not a directory'
+
+declare -a ids repositories releases commits source_paths blobs source_modes
+declare -a snapshot_paths destination_paths destination_modes
+while IFS=$'\t' read -r id repository release commit source_path blob source_mode \
+  snapshot_path destination_root destination_path destination_mode transform; do
+  is_safe_relative_path "$source_path" || die "unsafe source path for $id: $source_path"
+  is_safe_relative_path "$snapshot_path" || die "unsafe snapshot path for $id: $snapshot_path"
+  [[ "$snapshot_path" == "$SNAPSHOT_ROOT_REL/"* ]] || \
+    die "snapshot path is outside $SNAPSHOT_ROOT_REL for $id: $snapshot_path"
+  is_safe_relative_path "$destination_path" || \
+    die "unsafe home-relative destination path for $id: $destination_path"
+  [[ "$destination_root" == 'home' ]] || die "unsupported destination root for $id"
+  [[ "$transform" == 'none' ]] || die "unsupported transform for $id"
+  [[ "$source_mode" == "$destination_mode" ]] || \
+    die "source and destination modes differ for untransformed source $id"
+
+  ids+=("$id")
+  repositories+=("$repository")
+  releases+=("$release")
+  commits+=("$commit")
+  source_paths+=("$source_path")
+  blobs+=("$blob")
+  source_modes+=("$source_mode")
+  snapshot_paths+=("$snapshot_path")
+  destination_paths+=("$destination_path")
+  destination_modes+=("$destination_mode")
+done < <(jq -r '.sources[] | [
+  .id,
+  .repository,
+  .release,
+  .commit,
+  .source.path,
+  .source.blob,
+  .source.mode,
+  .snapshot,
+  .destination.root,
+  .destination.path,
+  .destination.mode,
+  .transform
+] | @tsv' "$MANIFEST")
+
+shopt -s nullglob dotglob globstar
+for absolute_path in "$SNAPSHOT_ROOT"/**; do
+  [[ -d "$absolute_path" && ! -L "$absolute_path" ]] && continue
+  relative_path="${absolute_path#"$REPO_DIR/"}"
+  declared=false
+  for snapshot_path in "${snapshot_paths[@]}"; do
+    if [[ "$relative_path" == "$snapshot_path" ]]; then
+      declared=true
+      break
+    fi
+  done
+  [[ "$declared" == true ]] || die "undeclared snapshot inventory path: $relative_path"
+done
+
+for index in "${!snapshot_paths[@]}"; do
+  snapshot_path="${snapshot_paths[$index]}"
+  absolute_path="$REPO_DIR/$snapshot_path"
+  [[ -f "$absolute_path" && ! -L "$absolute_path" ]] || \
+    die "missing or non-regular snapshot: $snapshot_path"
+
+  actual_mode="$(stat -c '%a' -- "$absolute_path")"
+  expected_mode="${destination_modes[$index]#100}"
+  [[ "$actual_mode" == "$expected_mode" ]] || \
+    die "snapshot mode drift for $snapshot_path: expected $expected_mode, found $actual_mode"
+
+  actual_blob="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git hash-object --no-filters -- "$absolute_path")"
+  [[ "$actual_blob" == "${blobs[$index]}" ]] || \
+    die "snapshot blob drift for $snapshot_path: expected ${blobs[$index]}, found $actual_blob"
+done
+
+printf '[%s] verified %d pinned snapshot file(s)\n' "$SCRIPT_NAME" "${#snapshot_paths[@]}"
+for index in "${!ids[@]}"; do
+  printf '[%s] pin %s: %s %s %s\n' \
+    "$SCRIPT_NAME" "${ids[$index]}" "${repositories[$index]}" \
+    "${releases[$index]}" "${commits[$index]}"
+  printf '[%s] source %s: %s blob %s mode %s -> ~/%s mode %s (transform: none)\n' \
+    "$SCRIPT_NAME" "${ids[$index]}" "${source_paths[$index]}" \
+    "${blobs[$index]}" "${source_modes[$index]}" \
+    "${destination_paths[$index]}" "${destination_modes[$index]}"
+done

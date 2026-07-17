@@ -1,0 +1,25 @@
+{
+  "$schema": "../schemas/source-manifest-v1.schema.json",
+  "schema_version": 1,
+  "snapshot_root": "packages/upstream",
+  "sources": [
+    {
+      "id": "omarchy-git-config",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v3.8.3",
+      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "source": {
+        "path": "config/git/config",
+        "blob": "0f8e979785bb2a451f42cd494517d12eabcd54bf",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/git/.config/git/config",
+      "destination": {
+        "root": "home",
+        "path": ".config/git/config",
+        "mode": "100644"
+      },
+      "transform": "none"
+    }
+  ]
+}

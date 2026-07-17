@@ -17,11 +17,9 @@ This repository is not a fork of either project.
 
 ## Setup
 
-This config is installed through the root dotfiles repo using GNU Stow:
-
-```bash
-stow .
-```
+This is the retained legacy configuration. Existing links remain usable, but
+the retired repository-root Stow package must not be run. Fresh deployment is
+deferred until the generic and WSL Neovim migration stage.
 
 Start Neovim and let lazy.nvim install plugins:
 

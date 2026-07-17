@@ -1,7 +1,8 @@
 # Dotfiles
 
-Opinionated zsh, Git, Neovim, and tmux configuration managed with
-[GNU Stow](https://www.gnu.org/software/stow/).
+Opinionated zsh, Git, Neovim, and tmux configuration. Git is deployed through
+profile-aware [GNU Stow](https://www.gnu.org/software/stow/) packages; the
+remaining areas retain their legacy links until their migration stages land.
 
 ## Includes
 
@@ -12,35 +13,29 @@ Opinionated zsh, Git, Neovim, and tmux configuration managed with
 
 ## Setup
 
-Tested primarily on Ubuntu 22.04+ and Ubuntu under WSL. Install the system
-prerequisites first:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y build-essential ca-certificates curl fd-find fzf gh git jq ripgrep stow tar tmux unzip zsh
-```
+Ubuntu 24.04 and newer, including WSL2, is the primary generic target.
+Bootstrap reports missing Git-area dependencies and prints the exact manual
+`apt-get` command; it never invokes `sudo` itself.
 
 Clone and bootstrap:
 
 ```bash
 git clone https://github.com/MatthewssSmith1/dotfiles.git ~/dotfiles
-GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' ~/dotfiles/bootstrap.sh
+GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' ~/dotfiles/bootstrap.sh --area git
 ```
 
 Run the non-mutating preflight separately with:
 
 ```bash
-~/dotfiles/bootstrap.sh --check
+GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
+  ~/dotfiles/bootstrap.sh --check --area git
 ```
 
-Bootstrap is user-scoped, refuses to run as root, and does not install system
-packages or change the login shell. It is safe to rerun and fails rather than
-overwrite unmanaged files that conflict with Stow.
-
-The script uses [mise](https://mise.jdx.dev/) to install Node.js LTS, pnpm,
-Neovim, Claude Code, OpenCode, zoxide, and Worktrunk. It installs Vite+ with its
-official installer and bootstraps Zinit on the first zsh startup. Credentials
-and service authentication remain manual.
+Bootstrap is user-scoped, refuses to run as root, stays offline, and does not
+install packages or change the login shell. Stage 2 deploys only Git. It leaves
+existing shell, tmux, Neovim, zsh, agent, application, and authentication state
+untouched. Do not run Stow against the repository root; that package is
+permanently retired and inert.
 
 To make zsh the login shell, run this separately and start a new login session:
 
@@ -82,10 +77,11 @@ Copy mode uses Vim keys, mouse support, extended scrollback, and OSC 52:
 
 ## Git Identity
 
-Shared Git defaults live in `.gitconfig`; personal identity lives in the
-private `~/.gitconfig.local` file. Bootstrap creates that file with restricted
-permissions when it is missing or still contains example placeholders. It does
-not overwrite an established identity.
+The pinned Omarchy baseline is deployed to `~/.config/git/config`, while shared
+personal settings live under `~/.config/dotfiles/personal/`. The regular
+`~/.gitconfig` entrypoint loads those settings, private identity from the
+external mode-`0600` `~/.gitconfig.local`, and optional host settings from
+`~/.config/dotfiles/local/git.conf`.
 
 Use `.gitconfig.local.example` as the template, or provide `GIT_USER_NAME` and
 `GIT_USER_EMAIL` when running bootstrap.
@@ -94,7 +90,8 @@ Use `.gitconfig.local.example` as the template, or provide `GIT_USER_NAME` and
 
 | Command | Description |
 |---------|-------------|
-| `stow .` | Create symlinks |
-| `stow -D .` | Remove symlinks |
-| `stow -R .` | Refresh symlinks |
+| `bootstrap.sh --check --area git` | Check Git deployment without mutation |
+| `bootstrap.sh --area git` | Apply the Git area |
+| `bootstrap.sh --remove --area git` | Remove managed Git links and includes |
+| `scripts/upstream verify` | Verify the pinned Git snapshot offline |
 | `tests/bootstrap_test.sh` | Run repository checks |

@@ -24,7 +24,7 @@ Gate: an implementation agent can begin the Git foundation without choosing
 undocumented profile, package, state, migration, network, or authentication
 behavior.
 
-## 2. Minimal Source Foundation And Git End-To-End
+## 2. Minimal Source Foundation And Git End-To-End (Status: Implemented)
 
 Build the smallest complete vertical slice. This stage includes the source data
 that Git deployment consumes rather than depending on the later general sync

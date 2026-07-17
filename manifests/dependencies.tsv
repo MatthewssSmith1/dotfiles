@@ -1,0 +1,10 @@
+schema|1
+manager|apt|sudo|apt-get|install|-y
+manager|native
+require|git|apply,check|generic,wsl|git|apt|git
+require|git|apply,check,remove|all|jq|apt|jq
+require|git|apply,check|generic,wsl|stow|apt|stow
+require|git|apply,check,remove|all|flock|apt|util-linux
+require|git|apply,check,remove|all|realpath|apt|coreutils
+require|git|apply,check|omarchy|git|native|-
+require|git|apply,check|omarchy|stow|native|-

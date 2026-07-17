@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/source-manifest-v1.schema.json",
+  "title": "Dotfiles upstream source manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "snapshot_root",
+    "sources"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "../schemas/source-manifest-v1.schema.json"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "snapshot_root": {
+      "const": "packages/upstream"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    }
+  },
+  "$defs": {
+    "gitMode": {
+      "type": "string",
+      "enum": [
+        "100644",
+        "100755"
+      ]
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!\\.{1,2}(?:/|$))[^/\\u0000-\\u001f\\u007f]+(?:/(?!\\.{1,2}(?:/|$))[^/\\u0000-\\u001f\\u007f]+)*$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "repository",
+        "release",
+        "commit",
+        "source",
+        "snapshot",
+        "destination",
+        "transform"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "repository": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "release": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "blob",
+            "mode"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "blob": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "mode": {
+              "$ref": "#/$defs/gitMode"
+            }
+          }
+        },
+        "snapshot": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "destination": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "root",
+            "path",
+            "mode"
+          ],
+          "properties": {
+            "root": {
+              "const": "home"
+            },
+            "path": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "mode": {
+              "$ref": "#/$defs/gitMode"
+            }
+          }
+        },
+        "transform": {
+          "const": "none"
+        }
+      }
+    }
+  }
+}
