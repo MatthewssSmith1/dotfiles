@@ -4,6 +4,12 @@ TX_PATHS=()
 TX_EXISTED=()
 TX_SNAPSHOTS=()
 TX_CREATED_DIRS=()
+AREA=""
+AREA_STATE=""
+AREA_JOURNAL_PATHS=()
+AREA_ATTACHMENT_VALIDATOR=""
+AREA_ORDER=()
+declare -A AREA_STATUS=()
 DEPENDENCY_APT_INSTALL=()
 DEPENDENCY_AREAS=()
 DEPENDENCY_MODES=()
@@ -11,6 +17,38 @@ DEPENDENCY_PROFILES=()
 DEPENDENCY_COMMANDS=()
 DEPENDENCY_MANAGERS=()
 DEPENDENCY_PACKAGES=()
+
+validate_area_manifest() {
+  local manifest="$DOTFILES_DIR/manifests/areas.tsv"
+  local line area status
+  local fields=() schema_count=0
+  [[ -f "$manifest" && ! -L "$manifest" ]] || die 'missing manifests/areas.tsv'
+  AREA_ORDER=()
+  AREA_STATUS=()
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" && "$line" != *$'\t'* && "$line" != *' '* ]] || die 'invalid area manifest'
+    IFS='|' read -r -a fields <<< "$line"
+    case "${fields[0]}" in
+      schema)
+        ((${#fields[@]} == 2)) && [[ "${fields[1]}" == 1 ]] || die 'invalid area manifest'
+        ((schema_count += 1))
+        ;;
+      area)
+        ((${#fields[@]} == 3)) || die 'invalid area manifest'
+        area="${fields[1]}"
+        status="${fields[2]}"
+        [[ "$area" =~ ^[a-z0-9-]+$ ]] || die 'invalid area manifest'
+        [[ "$status" == ready || "$status" == framework ]] || die 'invalid area manifest'
+        [[ -z "${AREA_STATUS[$area]+x}" ]] || die "duplicate area '$area' in area manifest"
+        AREA_ORDER+=("$area")
+        AREA_STATUS["$area"]="$status"
+        ;;
+      *) die 'invalid area manifest' ;;
+    esac
+  done < "$manifest"
+  ((schema_count == 1 && ${#AREA_ORDER[@]} > 0)) || die 'invalid area manifest'
+}
 
 validate_dependency_manifest() {
   local manifest="$DOTFILES_DIR/manifests/dependencies.tsv"
@@ -26,38 +64,39 @@ validate_dependency_manifest() {
   DEPENDENCY_PACKAGES=()
 
   while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -n "$line" && "$line" != *$'\t'* && "$line" != *' '* ]] || die 'invalid Git dependency manifest'
+    [[ -n "$line" && "$line" != *$'\t'* && "$line" != *' '* ]] || die 'invalid dependency manifest'
     IFS='|' read -r -a fields <<< "$line"
     kind="${fields[0]}"
     case "$kind" in
       schema)
-        ((${#fields[@]} == 2)) && [[ "${fields[1]}" == 1 ]] || die 'invalid Git dependency manifest'
+        ((${#fields[@]} == 2)) && [[ "${fields[1]}" == 1 ]] || die 'invalid dependency manifest'
         ((schema_count += 1))
         ;;
       manager)
         if [[ "${fields[1]:-}" == apt ]]; then
           ((${#fields[@]} == 6)) && [[ "${fields[*]:2}" == 'sudo apt-get install -y' ]] || \
-            die 'invalid Git dependency manifest'
+            die 'invalid dependency manifest'
           DEPENDENCY_APT_INSTALL=("${fields[@]:2}")
           ((apt_count += 1))
         elif [[ "${fields[1]:-}" == native ]]; then
-          ((${#fields[@]} == 2)) || die 'invalid Git dependency manifest'
+          ((${#fields[@]} == 2)) || die 'invalid dependency manifest'
           ((native_count += 1))
         else
-          die 'invalid Git dependency manifest'
+          die 'invalid dependency manifest'
         fi
         ;;
       require)
-        ((${#fields[@]} == 7)) || die 'invalid Git dependency manifest'
+        ((${#fields[@]} == 7)) || die 'invalid dependency manifest'
         area="${fields[1]}"; modes="${fields[2]}"; profiles="${fields[3]}"
         command="${fields[4]}"; manager="${fields[5]}"; package="${fields[6]}"
-        [[ "$area" == git && "$command" =~ ^[a-z0-9-]+$ ]] || die 'invalid Git dependency manifest'
-        for entry in ${modes//,/ }; do [[ "$entry" == apply || "$entry" == check || "$entry" == remove ]] || die 'invalid Git dependency manifest'; done
-        for entry in ${profiles//,/ }; do [[ "$entry" == all || "$entry" == generic || "$entry" == wsl || "$entry" == omarchy ]] || die 'invalid Git dependency manifest'; done
+        [[ "$command" =~ ^[a-z0-9-]+$ ]] || die 'invalid dependency manifest'
+        for entry in ${area//,/ }; do [[ -n "${AREA_STATUS[$entry]+x}" ]] || die 'invalid dependency manifest'; done
+        for entry in ${modes//,/ }; do [[ "$entry" == apply || "$entry" == check || "$entry" == remove ]] || die 'invalid dependency manifest'; done
+        for entry in ${profiles//,/ }; do [[ "$entry" == all || "$entry" == generic || "$entry" == wsl || "$entry" == omarchy ]] || die 'invalid dependency manifest'; done
         if [[ "$manager" == apt ]]; then
-          [[ "$package" =~ ^[a-z0-9+.-]+$ ]] || die 'invalid Git dependency manifest'
+          [[ "$package" =~ ^[a-z0-9+.-]+$ ]] || die 'invalid dependency manifest'
         else
-          [[ "$manager" == native && "$package" == - ]] || die 'invalid Git dependency manifest'
+          [[ "$manager" == native && "$package" == - ]] || die 'invalid dependency manifest'
         fi
         DEPENDENCY_AREAS+=("$area")
         DEPENDENCY_MODES+=("$modes")
@@ -66,20 +105,28 @@ validate_dependency_manifest() {
         DEPENDENCY_MANAGERS+=("$manager")
         DEPENDENCY_PACKAGES+=("$package")
         ;;
-      *) die 'invalid Git dependency manifest' ;;
+      *) die 'invalid dependency manifest' ;;
     esac
   done < "$manifest"
   ((schema_count == 1 && apt_count == 1 && native_count == 1 && ${#DEPENDENCY_AREAS[@]} > 0)) || \
-    die 'invalid Git dependency manifest'
+    die 'invalid dependency manifest'
 }
 
 check_manifest_dependencies() {
   local mode="$1" profile="$2" guidance="$3"
-  local command manager package entry existing install_word index
-  local missing_commands=() missing_packages=() native_missing=()
+  local command manager package entry existing install_word index selected
+  local missing_commands=() missing_packages=() native_missing=() row_areas=()
 
   for index in "${!DEPENDENCY_AREAS[@]}"; do
-    [[ "${DEPENDENCY_AREAS[index]}" == git ]] || continue
+    selected=false
+    IFS=',' read -r -a row_areas <<< "${DEPENDENCY_AREAS[index]}"
+    for entry in "${row_areas[@]}"; do
+      if array_contains "$entry" "${AREAS[@]}"; then
+        selected=true
+        break
+      fi
+    done
+    [[ "$selected" == true ]] || continue
     csv_contains "${DEPENDENCY_MODES[index]}" "$mode" || continue
     if ! csv_contains "${DEPENDENCY_PROFILES[index]}" all &&
       ! csv_contains "${DEPENDENCY_PROFILES[index]}" "$profile"; then
@@ -131,7 +178,7 @@ acquire_lock() {
 
 validate_state_file() {
   local file="$1"
-  local schema area basename value
+  local schema area basename value areas_json
 
   validate_home_parent_chain "$file"
   [[ -f "$file" && ! -L "$file" ]] || die "state is not a regular file: $file"
@@ -140,14 +187,15 @@ validate_state_file() {
   [[ "$schema" =~ ^[0-9]+$ ]] || die "malformed or unknown deployment state: $file"
   ((schema <= 1)) || die "newer deployment state schema $schema is not supported: $file"
   ((schema == 1)) || die "unknown deployment state schema $schema: $file"
+  areas_json="$(jq -cn '$ARGS.positional' --args "${AREA_ORDER[@]}")"
   # This jq expression is the authoritative v1 state validator; keep
   # schemas/deployment-state-v1.schema.json (documentation only) aligned with it.
-  jq -e '
+  jq -e --argjson areas "$areas_json" '
     type == "object" and
     ((keys - ["area","attachments","backups","checkout_root","managed_directories","packages","profile","schema_version","target_root","targets"]) | length == 0) and
     (keys | length == 10) and
     (.profile == "omarchy" or .profile == "generic" or .profile == "wsl") and
-    (.area == "git" or .area == "bash" or .area == "tmux" or .area == "nvim" or .area == "zsh") and
+    (.area as $recorded | ($areas | index($recorded)) != null) and
     (.checkout_root | type == "string" and startswith("/")) and
     (.target_root | type == "string" and startswith("/")) and
     (.packages | type == "array" and all(.[]; type == "string" and test("^[a-z0-9-]+/[a-z0-9-]+$")) and
@@ -204,33 +252,42 @@ refuse_profile_mismatch() {
 }
 
 load_profile_closure() {
+  local requested="$1"
   local file="$DOTFILES_DIR/profiles/$SELECTED_PROFILE.conf"
-  local line area package extra found=false
+  local line area closure extra package found=false
+  local packages=() seen=()
   PACKAGES=()
 
   [[ -f "$file" && ! -L "$file" ]] || die "missing profile manifest: $file"
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -n "$line" && "$line" != \#* ]] || continue
-    read -r area package extra <<< "$line"
-    [[ -n "$area" && -n "$package" && -z "${extra:-}" ]] || die "malformed profile entry: $line"
-    [[ "$area" == git ]] || die "profile contains an area not implemented in Stage 2: $area"
-    [[ "$found" == false ]] || die "duplicate git closure in $file"
-    PACKAGES+=("$package")
-    found=true
+    read -r area closure extra <<< "$line"
+    [[ -n "$area" && -n "$closure" && -z "${extra:-}" ]] || die "malformed profile entry: $line"
+    [[ -n "${AREA_STATUS[$area]+x}" ]] || die "profile lists an unknown area: $area"
+    if array_contains "$area" "${seen[@]}"; then
+      die "duplicate $area closure in $file"
+    fi
+    seen+=("$area")
+    # Profile entries use comma-separated qualified IDs to keep order explicit.
+    IFS=',' read -r -a packages <<< "$closure"
+    ((${#packages[@]} > 0)) || die "malformed profile entry: $line"
+    # Every listed package must exist even when its area is not selected.
+    for package in "${packages[@]}"; do validate_package_root "$package"; done
+    if [[ "$area" == "$requested" ]]; then
+      PACKAGES=("${packages[@]}")
+      found=true
+    fi
   done < "$file"
-  [[ "$found" == true ]] || die "profile has no git closure: $file"
-
-  # Profile entries use comma-separated qualified IDs to keep order explicit.
-  IFS=',' read -r -a PACKAGES <<< "${PACKAGES[0]}"
+  [[ "$found" == true ]] || die "profile has no $requested closure: $file"
 }
 
 validate_package_root() {
   local package="$1"
-  local layer area root resolved packages_root
-  [[ "$package" =~ ^([a-z0-9-]+)/(git)$ ]] || die "invalid qualified package ID: $package"
+  local layer name root resolved packages_root
+  [[ "$package" =~ ^([a-z0-9-]+)/([a-z0-9-]+)$ ]] || die "invalid qualified package ID: $package"
   layer="${BASH_REMATCH[1]}"
-  area="${BASH_REMATCH[2]}"
-  root="$DOTFILES_DIR/packages/$layer/$area"
+  name="${BASH_REMATCH[2]}"
+  root="$DOTFILES_DIR/packages/$layer/$name"
   [[ -d "$root" && ! -L "$root" ]] || die "missing package root: packages/$package"
   resolved="$(cd -- "$root" && pwd -P)"
   packages_root="$(cd -- "$DOTFILES_DIR/packages" && pwd -P)"
@@ -256,7 +313,7 @@ record_managed_parents() {
 }
 
 scan_packages() {
-  local package layer area root path relative source target_parent lexical
+  local package layer name root path relative source target_parent lexical
   declare -gA TARGET_OWNER=()
   TARGET_PATHS=()
   TARGET_SOURCES=()
@@ -266,12 +323,12 @@ scan_packages() {
   for package in "${PACKAGES[@]}"; do
     validate_package_root "$package"
     layer="${package%%/*}"
-    area="${package#*/}"
-    root="$DOTFILES_DIR/packages/$layer/$area"
+    name="${package#*/}"
+    root="$DOTFILES_DIR/packages/$layer/$name"
     for path in "$root"/**/*; do
       relative="${path#"$root"/}"
       [[ "$relative" != .stow-local-ignore ]] || continue
-      [[ "$package:$relative" != generic/git:.stage2-empty ]] || continue
+      [[ "$relative" != .empty-package ]] || continue
       if [[ -L "$path" ]]; then
         die "package payload symlinks are not allowed: packages/$package/$relative"
       elif [[ -d "$path" ]]; then
@@ -317,16 +374,97 @@ validate_recorded_target() {
   [[ "$actual_resolved" == "$resolved" ]] || die "recorded target has different resolved ownership: $path"
 }
 
+owned_legacy_link() {
+  local path="$1" destination="$2" source_relative="$3" area="$4" action="$5"
+  local current_source="$DOTFILES_DIR/$source_relative"
+  local manifest="$DOTFILES_DIR/manifests/legacy-links.json"
+  local value lexical host_count record_count old_root expected resolved
+
+  OWNED_LEGACY_SOURCE=""
+  if known_link "$path" "$current_source"; then
+    OWNED_LEGACY_SOURCE="$current_source"
+    return 0
+  fi
+  [[ -L "$path" && -f "$manifest" && ! -L "$manifest" ]] || return 1
+  host_count="$(jq --arg home "$TARGET_ROOT" '[.hosts[] | select(.home == $home)] | length' "$manifest" 2>/dev/null)" || return 1
+  [[ "$host_count" == 1 ]] || return 1
+  record_count="$(jq --arg home "$TARGET_ROOT" --arg destination "$destination" --arg source "$source_relative" \
+    --arg area "$area" --arg action "$action" \
+    '[.hosts[] | select(.home == $home) | .records[] |
+      select(.[0] == $destination and .[1] == $source and .[2] == $area and .[4] == $action)] | length' \
+    "$manifest" 2>/dev/null)" || return 1
+  [[ "$record_count" == 1 ]] || return 1
+  old_root="$(jq -er --arg home "$TARGET_ROOT" '.hosts[] | select(.home == $home) | .checkout_root |
+    select(type == "string" and startswith("/"))' "$manifest" 2>/dev/null)" || return 1
+  [[ "$(realpath -m -s -- "$old_root")" == "$old_root" ]] || return 1
+  expected="$old_root/$source_relative"
+  value="$(readlink -- "$path")"
+  if [[ "$value" == /* ]]; then
+    lexical="$(realpath -m -s -- "$value")"
+  else
+    lexical="$(realpath -m -s -- "$(dirname -- "$path")/$value")"
+  fi
+  [[ "$lexical" == "$expected" ]] || return 1
+  if [[ -e "$path" ]]; then
+    resolved="$(resolve_link "$path")"
+    [[ "$resolved" == "$expected" ]] || return 1
+    OWNED_LEGACY_SOURCE="$expected"
+  else
+    [[ -f "$current_source" && ! -L "$current_source" ]] || return 1
+    OWNED_LEGACY_SOURCE="$current_source"
+  fi
+}
+
+preflight_existing_state() {
+  AREA_STATE="$HOME/.local/state/dotfiles/v1/$AREA.json"
+  OLD_STATE=false
+  if [[ -e "$AREA_STATE" || -L "$AREA_STATE" ]]; then
+    validate_state_file "$AREA_STATE"
+    [[ "$(jq -r .target_root "$AREA_STATE")" == "$TARGET_ROOT" ]] || \
+      die "existing $AREA state belongs to a different target root"
+    OLD_STATE=true
+    local count index dir path
+    count="$(jq '.targets | length' "$AREA_STATE")"
+    for ((index=0; index<count; index++)); do validate_recorded_target "$AREA_STATE" "$index"; done
+    "$AREA_ATTACHMENT_VALIDATOR" "$AREA_STATE"
+    while IFS= read -r dir; do
+      path="$HOME/$dir"
+      validate_home_directory "$path"
+      array_contains "$dir" "${MANAGED_DIRS[@]}" || MANAGED_DIRS+=("$dir")
+    done < <(jq -r '.managed_directories[]' "$AREA_STATE")
+  fi
+}
+
+preflight_desired_targets() {
+  local i relative path index
+  for i in "${!TARGET_PATHS[@]}"; do
+    relative="${TARGET_PATHS[i]}"
+    path="$HOME/$relative"
+    if [[ -L "$path" ]]; then
+      if [[ "$(readlink -- "$path")" == "${TARGET_LEXICAL[i]}" && "$(resolve_link "$path")" == "${TARGET_SOURCES[i]}" ]]; then
+        continue
+      fi
+      if [[ "$OLD_STATE" == true ]]; then
+        index="$(state_target_index "$AREA_STATE" "$relative")"
+        [[ -n "$index" ]] && continue
+      fi
+      die "unrelated destination conflict: $path"
+    elif [[ -e "$path" ]]; then
+      die "unrelated destination conflict: $path"
+    fi
+  done
+}
+
 run_stow_preflight() {
-  local package layer area output status=0 target="$HOME"
-  if [[ "$OLD_STATE" == true && "$(jq -r .checkout_root "$GIT_STATE")" != "$CHECKOUT_ROOT" ]]; then
+  local package layer name output status=0 target="$HOME"
+  if [[ "$OLD_STATE" == true && "$(jq -r .checkout_root "$AREA_STATE")" != "$CHECKOUT_ROOT" ]]; then
     target="$DOTFILES_DIR/lib/stow-preflight-target"
     [[ -d "$target" && ! -L "$target" ]] || die 'missing moved-checkout Stow preflight target'
   fi
   for package in "${PACKAGES[@]}"; do
     layer="${package%%/*}"
-    area="${package#*/}"
-    output="$(stow --dir="$DOTFILES_DIR/packages/$layer" --target="$target" --no-folding --stow "$area" --simulate 2>&1)" || status=$?
+    name="${package#*/}"
+    output="$(stow --dir="$DOTFILES_DIR/packages/$layer" --target="$target" --no-folding --stow "$name" --simulate 2>&1)" || status=$?
     if ((status != 0)); then
       [[ -z "$output" ]] || printf '%s\n' "$output" >&2
       die "Stow conflict preflight failed for $package"
@@ -353,22 +491,22 @@ snapshot_path() {
 
 begin_transaction() {
   local path
-  JOURNAL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-git-journal.XXXXXX")"
+  JOURNAL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-$AREA-journal.XXXXXX")"
   TEMP_PATHS+=("$JOURNAL_DIR")
-  for path in "$HOME/.gitconfig" "$HOME/.gitconfig.local" \
-    "$HOME/.config/dotfiles/local/git.conf" "$GIT_STATE" \
-    "$HOME/.local/state/dotfiles/v1/migrations.json"; do
+  snapshot_path "$AREA_STATE"
+  for path in "${AREA_JOURNAL_PATHS[@]}"; do
     snapshot_path "$path"
   done
   for path in "${TARGET_PATHS[@]}"; do snapshot_path "$HOME/$path"; done
   if [[ "$OLD_STATE" == true ]]; then
-    while IFS= read -r path; do snapshot_path "$HOME/$path"; done < <(jq -r '.targets[].path' "$GIT_STATE")
+    while IFS= read -r path; do snapshot_path "$HOME/$path"; done < <(jq -r '.targets[].path' "$AREA_STATE")
   fi
   TRANSACTION_ACTIVE=true
 }
 
 rollback_transaction() {
   local index path dir failed=false
+  test_hold before-rollback
   TRANSACTION_ROLLING_BACK=true
   set +e
   for ((index=${#TX_PATHS[@]}-1; index>=0; index--)); do
@@ -395,7 +533,7 @@ rollback_transaction() {
     printf '[%s] error: rollback failed; inspect journal %s\n' "$SCRIPT_NAME" "$JOURNAL_DIR" >&2
     return 1
   }
-  log 'rolled back incomplete Git deployment'
+  log "rolled back incomplete deployment of area '$AREA'"
 }
 
 ensure_directory() {
@@ -439,20 +577,20 @@ write_string_atomic() {
 remove_recorded_links_for_apply() {
   local count index relative
   [[ "$OLD_STATE" == true ]] || return 0
-  count="$(jq '.targets | length' "$GIT_STATE")"
+  count="$(jq '.targets | length' "$AREA_STATE")"
   for ((index=0; index<count; index++)); do
-    relative="$(jq -r ".targets[$index].path" "$GIT_STATE")"
+    relative="$(jq -r ".targets[$index].path" "$AREA_STATE")"
     rm -- "$HOME/$relative"
   done
 }
 
 apply_stow_packages() {
-  local package layer area output status
+  local package layer name output status
   for package in "${PACKAGES[@]}"; do
     layer="${package%%/*}"
-    area="${package#*/}"
+    name="${package#*/}"
     status=0
-    output="$(stow --dir="$DOTFILES_DIR/packages/$layer" --target="$HOME" --no-folding --stow "$area" 2>&1)" || status=$?
+    output="$(stow --dir="$DOTFILES_DIR/packages/$layer" --target="$HOME" --no-folding --stow "$name" 2>&1)" || status=$?
     [[ -z "$output" ]] || printf '%s\n' "$output" >&2
     ((status == 0)) || return "$status"
   done

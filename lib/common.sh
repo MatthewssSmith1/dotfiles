@@ -22,10 +22,17 @@ cleanup() {
   if [[ "$TRANSACTION_ACTIVE" == true && "$TRANSACTION_ROLLING_BACK" == false ]]; then
     rollback_transaction || true
   fi
+  if declare -F cleanup_before_temp_paths >/dev/null; then
+    cleanup_before_temp_paths || true
+  fi
   for path in "${TEMP_PATHS[@]}"; do
     [[ "$ROLLBACK_FAILED" != true || "$path" != "$JOURNAL_DIR" ]] || continue
     rm -rf -- "$path"
   done
+  # Reserved status 70 tells the caller to stop all further area mutation.
+  if [[ "$ROLLBACK_FAILED" == true ]]; then
+    exit 70
+  fi
   exit "$status"
 }
 

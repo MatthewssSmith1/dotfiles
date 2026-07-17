@@ -75,7 +75,7 @@ Gate: Git deploys and removes independently on the fresh WSL host; every
 required value resolves from the expected layer; identity and credentials
 remain functional and external; root-package Stow is no longer reachable.
 
-## 3. Generalize Deployment Mechanics And Migration Safety
+## 3. Generalize Deployment Mechanics And Migration Safety (Status: Implemented)
 
 - Generalize area manifests, dependency closure, per-area transactions, state,
   and removal to Bash, tmux, Neovim, and transitional zsh.
@@ -101,17 +101,19 @@ Gate: the framework represents every in-scope area and proves its transaction
 semantics with fixtures, without claiming unfinished shell, tmux, or Neovim
 payloads are ready.
 
-## 4. Full Upstream Synchronization
+## 4. Full Upstream Synchronization (Status: Implemented)
 
-- Expand the source manifest to Bash, Starship, tmux, theme input, LazyVim
-  starter, and Omarchy Neovim overlay sources.
-- Record source blob identities, file modes, destinations, and deterministic
-  transforms.
-- Add explicit networked synchronization and complete offline accepted-snapshot
-  verification.
-- Relocate the preserved `lazy-lock.json` into the snapshot tree without
-  changing its bytes.
-- Preserve verifiable package evidence for the next Neovim package revision.
+- Expanded schema v1 compatibly with reference destinations, append/overwrite
+  transforms, and artifacts, with one manifest entry per snapshot file.
+- Populated `packages/upstream/{starship,tmux,nvim}` and the Omarchy Bash/theme
+  reference root from the reviewed proposal and exact immutable pins.
+- Added HTTPS-only networked sync with same-filesystem staging, Git path/blob
+  verification, offline candidate verification, atomic replacement recovery,
+  and complete offline accepted-snapshot verification.
+- Relocated the preserved `lazy-lock.json` into the Neovim snapshot without
+  changing its bytes, hash, or recorded provenance.
+- Recorded one real append and no overwrite: the pinned starter has no
+  `lazyvim.json` collision.
 
 Tests added in this stage cover:
 

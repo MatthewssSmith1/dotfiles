@@ -22,6 +22,8 @@ packages/
     tmux/
     starship/
     nvim/
+    reference/
+      omarchy/
   generic/
     git/
     bash/
@@ -38,9 +40,16 @@ profiles/
 ```
 
 Every package listed in the profile closure must exist, even when its payload
-is temporarily empty during framework tests. Package IDs are stable, qualified
+is empty during framework tests. Stage 4 populated the real `upstream/starship`,
+`upstream/tmux`, and `upstream/nvim` snapshots; `upstream/bash` alone retains
+framework markers. Snapshot presence does not change area readiness in
+`manifests/areas.tsv`. Package IDs are stable, qualified
 paths such as `common/git`, `upstream/git`, and `generic/git`; state never
 records an unqualified name.
+
+`upstream/reference` is verified source material, not a Stow package. No
+profile closure names it, so deployment never scans or installs its Bash and
+theme inputs.
 
 Profiles expand areas into this ordered package closure:
 
@@ -56,6 +65,12 @@ Baseline packages deploy before adapters, which deploy before personal
 packages. Packages must use include/source boundaries rather than target the
 same path. Manifest expansion rejects duplicate payload destinations before
 Stow runs.
+
+The generic and WSL baseline mappings are XDG-native: Starship links
+`~/.config/starship.toml` from `upstream/starship`, and tmux links
+`~/.config/tmux/tmux.conf` from `upstream/tmux`. Their areas remain
+framework-only until the shell and tmux migration stages make the complete
+closures ready.
 
 ## Stow Rules
 
@@ -109,7 +124,11 @@ Bootstrap must:
 - Auto-detect the profile using the rules in [Architecture](architecture.md).
 - Support a validated `--profile` override.
 - Treat repeated `--area` options as the complete requested area set.
-- Use all default areas when no `--area` is supplied.
+- Use all default areas when no `--area` is supplied. During the staged
+  migration, `manifests/areas.tsv` records each area as `ready` or
+  `framework`; default apply and check select only `ready` areas, and
+  explicitly selecting a `framework` area is refused until its payload stage
+  lands. Removal ignores readiness because it is state-driven.
 - Provide a non-mutating `--check` mode.
 - Support `--remove` with optional repeated `--area` arguments. `--profile` is
   invalid with `--remove`; removal uses recorded state. With no areas,
@@ -226,7 +245,11 @@ atomically after cleanup succeeds. A mismatch leaves state intact and refuses
 cleanup.
 
 `--remove` removes only deployed links, exact managed attachment content, empty
-managed directories, and successful area state. It deliberately retains
+managed directories, and successful area state. After every selected area is
+removed, it re-prunes the selected areas' recorded managed directories (a
+directory one area could not prune may only empty once a later area is
+removed), and once no recorded state or retained ledger remains it prunes the
+empty deployment state directory chain. It deliberately retains
 installed applications and mise tools, tmux plugin checkouts, Neovim runtime
 data and backups, migration backups, credentials, and every host-local file.
 It also retains `migrations.json`. Those resources may be reported but are

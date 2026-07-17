@@ -30,44 +30,15 @@ tag.sort	-version:refname
 rerere.enabled	true
 rerere.autoupdate	true'
 
-owned_legacy_link() {
-  local path="$1" destination="$2" source_relative="$3"
-  local current_source="$DOTFILES_DIR/$source_relative"
-  local manifest="$DOTFILES_DIR/manifests/legacy-links.json"
-  local value lexical host_count record_count old_root expected resolved
-
-  OWNED_LEGACY_SOURCE=""
-  if known_link "$path" "$current_source"; then
-    OWNED_LEGACY_SOURCE="$current_source"
-    return 0
-  fi
-  [[ -L "$path" && -f "$manifest" && ! -L "$manifest" ]] || return 1
-  host_count="$(jq --arg home "$TARGET_ROOT" '[.hosts[] | select(.home == $home)] | length' "$manifest" 2>/dev/null)" || return 1
-  [[ "$host_count" == 1 ]] || return 1
-  record_count="$(jq --arg home "$TARGET_ROOT" --arg destination "$destination" --arg source "$source_relative" \
-    '[.hosts[] | select(.home == $home) | .records[] |
-      select(.[0] == $destination and .[1] == $source and .[2] == "git" and .[4] == "migrate-stage-2")] | length' \
-    "$manifest" 2>/dev/null)" || return 1
-  [[ "$record_count" == 1 ]] || return 1
-  old_root="$(jq -er --arg home "$TARGET_ROOT" '.hosts[] | select(.home == $home) | .checkout_root |
-    select(type == "string" and startswith("/"))' "$manifest" 2>/dev/null)" || return 1
-  [[ "$(realpath -m -s -- "$old_root")" == "$old_root" ]] || return 1
-  expected="$old_root/$source_relative"
-  value="$(readlink -- "$path")"
-  if [[ "$value" == /* ]]; then
-    lexical="$(realpath -m -s -- "$value")"
-  else
-    lexical="$(realpath -m -s -- "$(dirname -- "$path")/$value")"
-  fi
-  [[ "$lexical" == "$expected" ]] || return 1
-  if [[ -e "$path" ]]; then
-    resolved="$(resolve_link "$path")"
-    [[ "$resolved" == "$expected" ]] || return 1
-    OWNED_LEGACY_SOURCE="$expected"
-  else
-    [[ -f "$current_source" && ! -L "$current_source" ]] || return 1
-    OWNED_LEGACY_SOURCE="$current_source"
-  fi
+init_git_area() {
+  AREA=git
+  AREA_JOURNAL_PATHS=(
+    "$HOME/.gitconfig"
+    "$HOME/.gitconfig.local"
+    "$HOME/.config/dotfiles/local/git.conf"
+    "$HOME/.local/state/dotfiles/v1/migrations.json"
+  )
+  AREA_ATTACHMENT_VALIDATOR=validate_attachment_from_state
 }
 
 validate_managed_global() {
@@ -149,7 +120,8 @@ preflight_identity() {
   validate_home_parent_chain "$path"
 
   if [[ -L "$path" ]]; then
-    owned_legacy_link "$path" .gitconfig.local .gitconfig.local || die "$path is an unknown identity symlink"
+    owned_legacy_link "$path" .gitconfig.local .gitconfig.local git migrate-stage-2 || \
+      die "$path is an unknown identity symlink"
     [[ -f "$OWNED_LEGACY_SOURCE" && ! -L "$OWNED_LEGACY_SOURCE" ]] || \
       die "known legacy identity source is missing: $OWNED_LEGACY_SOURCE"
     source="$OWNED_LEGACY_SOURCE"
@@ -335,7 +307,8 @@ preflight_global() {
   validate_home_parent_chain "$path"
 
   if [[ -L "$path" ]]; then
-    owned_legacy_link "$path" .gitconfig .gitconfig || die "$path is an unknown global-config symlink"
+    owned_legacy_link "$path" .gitconfig .gitconfig git migrate-stage-2 || \
+      die "$path is an unknown global-config symlink"
     GLOBAL_KIND=legacy
     GLOBAL_ACTION=replace
     MIGRATION_REQUIRED=true
@@ -363,47 +336,11 @@ validate_attachment_from_state() {
   done < <(jq -r '.attachments[] | [.id,.path,.content_hash] | @tsv' "$state")
 }
 
-preflight_existing_state() {
-  GIT_STATE="$HOME/.local/state/dotfiles/v1/git.json"
-  OLD_STATE=false
-  if [[ -e "$GIT_STATE" || -L "$GIT_STATE" ]]; then
-    validate_state_file "$GIT_STATE"
-    [[ "$(jq -r .target_root "$GIT_STATE")" == "$TARGET_ROOT" ]] || die 'Git state belongs to a different target root'
-    OLD_STATE=true
-    local count index dir path
-    count="$(jq '.targets | length' "$GIT_STATE")"
-    for ((index=0; index<count; index++)); do validate_recorded_target "$GIT_STATE" "$index"; done
-    validate_attachment_from_state "$GIT_STATE"
-    while IFS= read -r dir; do
-      path="$HOME/$dir"
-      validate_home_directory "$path"
-      array_contains "$dir" "${MANAGED_DIRS[@]}" || MANAGED_DIRS+=("$dir")
-    done < <(jq -r '.managed_directories[]' "$GIT_STATE")
-  fi
-}
-
-preflight_desired_targets() {
-  local i relative path index
-  for i in "${!TARGET_PATHS[@]}"; do
-    relative="${TARGET_PATHS[i]}"
-    path="$HOME/$relative"
-    if [[ -L "$path" ]]; then
-      if [[ "$(readlink -- "$path")" == "${TARGET_LEXICAL[i]}" && "$(resolve_link "$path")" == "${TARGET_SOURCES[i]}" ]]; then
-        continue
-      fi
-      if [[ "$OLD_STATE" == true ]]; then
-        index="$(state_target_index "$GIT_STATE" "$relative")"
-        [[ -n "$index" ]] && continue
-      fi
-      die "unrelated destination conflict: $path"
-    elif [[ -e "$path" ]]; then
-      die "unrelated destination conflict: $path"
-    fi
-  done
-}
-
 preflight_git() {
-  load_profile_closure
+  validate_identity_inputs
+  validate_git_environment
+  init_git_area
+  load_profile_closure git
   scan_packages
   record_managed_parents '.local/state/dotfiles/v1/git.json'
   load_baseline_keys
@@ -543,7 +480,7 @@ apply_git() {
   validate_effective_git
   fault before-state
   state_json="$(build_state_json)"
-  write_string_atomic "$state_json" "$GIT_STATE" 0600
+  write_string_atomic "$state_json" "$AREA_STATE" 0600
   TRANSACTION_ACTIVE=false
   fault after-state-commit
   log "applied Git area for profile '$SELECTED_PROFILE'"
@@ -583,12 +520,13 @@ remove_git() {
   local state="$HOME/.local/state/dotfiles/v1/git.json"
   local count index relative dir
   local managed_directories=()
+  init_git_area
   if [[ ! -e "$state" && ! -L "$state" ]]; then
     log 'Git area is not deployed; no changes made'
     return
   fi
   validate_state_file "$state"
-  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || die 'Git state belongs to a different target root'
+  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || die 'existing git state belongs to a different target root'
   count="$(jq '.targets | length' "$state")"
   for ((index=0; index<count; index++)); do validate_recorded_target "$state" "$index"; done
   validate_attachment_from_state "$state"
@@ -597,7 +535,7 @@ remove_git() {
     managed_directories+=("$dir")
   done < <(jq -r '.managed_directories[]' "$state")
 
-  GIT_STATE="$state"
+  AREA_STATE="$state"
   OLD_STATE=true
   TARGET_PATHS=()
   while IFS= read -r relative; do TARGET_PATHS+=("$relative"); done < <(jq -r '.targets[].path' "$state")

@@ -20,12 +20,13 @@ copy_fixture() {
     "$destination/scripts" \
     "$destination/schemas" \
     "$destination/manifests" \
-    "$destination/packages/upstream/git/.config/git"
+    "$destination/lib" \
+    "$destination/packages"
   cp -p "$REPO_DIR/scripts/upstream" "$destination/scripts/upstream"
+  cp -p "$REPO_DIR/lib/common.sh" "$destination/lib/common.sh"
   cp -p "$REPO_DIR/schemas/source-manifest-v1.schema.json" "$destination/schemas/"
   cp -p "$REPO_DIR/manifests/sources.json" "$destination/manifests/"
-  cp -p "$REPO_DIR/packages/upstream/git/.config/git/config" \
-    "$destination/packages/upstream/git/.config/git/config"
+  cp -a "$REPO_DIR/packages/upstream" "$destination/packages/upstream"
 }
 
 new_fixture() {
@@ -37,10 +38,10 @@ new_fixture() {
 
 rewrite_manifest() {
   local fixture="$1"
-  local filter="$2"
   local temporary="$fixture/manifests/sources.json.new"
+  shift
 
-  jq "$filter" "$fixture/manifests/sources.json" > "$temporary"
+  jq "$@" "$fixture/manifests/sources.json" > "$temporary"
   mv -- "$temporary" "$fixture/manifests/sources.json"
 }
 
@@ -166,6 +167,15 @@ printf 'extra\n' > "$FIXTURE/packages/upstream/git/.config/git/extra"
 expect_failure 'extra snapshot inventory' 'undeclared snapshot inventory path' \
   "$FIXTURE/scripts/upstream" verify
 
+new_fixture 'framework-markers'
+printf 'placeholder\n' > "$FIXTURE/packages/upstream/git/.empty-package"
+printf '^/\\.empty-package$\n' > "$FIXTURE/packages/upstream/git/.stow-local-ignore"
+"$FIXTURE/scripts/upstream" verify >/dev/null || \
+  fail 'top-level framework package markers were not accepted'
+printf 'nested\n' > "$FIXTURE/packages/upstream/git/.config/.empty-package"
+expect_failure 'nested framework marker' 'undeclared snapshot inventory path' \
+  "$FIXTURE/scripts/upstream" verify
+
 new_fixture 'missing-inventory'
 rm -- "$FIXTURE/packages/upstream/git/.config/git/config"
 expect_failure 'missing snapshot inventory' 'missing or non-regular snapshot' \
@@ -177,7 +187,40 @@ ln -s /etc/passwd "$FIXTURE/packages/upstream/git/.config/git/config"
 expect_failure 'symlink snapshot' 'missing or non-regular snapshot' "$FIXTURE/scripts/upstream" verify
 
 expect_failure 'missing command' 'usage: upstream verify' "$UPSTREAM"
-expect_failure 'unknown command' 'usage: upstream verify' "$UPSTREAM" sync
-expect_failure 'extra argument' 'usage: upstream verify' "$UPSTREAM" verify extra
+expect_failure 'incomplete sync command' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" sync
+expect_failure 'unknown command' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" unknown
+expect_failure 'extra argument' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" verify extra
+
+new_fixture 'append-replay'
+append_file="$FIXTURE/packages/upstream/git/.config/git/config"
+source_blob="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git hash-object --no-filters -- "$append_file")"
+printf 'append-one\nappend-two\n' >> "$append_file"
+output_blob="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git hash-object --no-filters -- "$append_file")"
+rewrite_manifest "$FIXTURE" --arg source_blob "$source_blob" --arg output_blob "$output_blob" \
+  '.sources[0].source.blob = $source_blob |
+   .sources[0].transform = {type:"append", appended:"append-one\nappend-two\n", output_blob:$output_blob}'
+"$FIXTURE/scripts/upstream" verify >/dev/null || fail 'append transform did not replay'
+rewrite_manifest "$FIXTURE" '.sources[0].transform.appended = "append-two\nappend-one\n"'
+expect_failure 'append ordering' 'recorded appended bytes' "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'artifact-hash'
+mkdir -p "$FIXTURE/packages/upstream/nvim/.config/nvim"
+cp -p "$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json" \
+  "$FIXTURE/packages/upstream/nvim/.config/nvim/lazy-lock.json"
+rewrite_manifest "$FIXTURE" --arg hash '0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de' '
+  .artifacts = [{id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.6.17-1",
+    snapshot:"packages/upstream/nvim/.config/nvim/lazy-lock.json",
+    destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"}, sha256:$hash,
+    provenance:{artifact:"fixture", artifact_sha256:("2"*64), build_date:"2026-06-17",
+      extracted:"/usr/share/omarchy-nvim/config/lazy-lock.json", trust:"accepted", record:"fixture"}}]'
+"$FIXTURE/scripts/upstream" verify >/dev/null || fail 'accepted artifact did not verify'
+printf '\ncorrupt\n' >> "$FIXTURE/packages/upstream/nvim/.config/nvim/lazy-lock.json"
+expect_failure 'artifact hash drift' 'artifact hash drift' "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'unsafe-overwrite-provenance'
+rewrite_manifest "$FIXTURE" '.sources[0].transform = {type:"overwrite", replaces:{
+  repository:"https://example.invalid/replaced", commit:"1111111111111111111111111111111111111111",
+  path:"../outside", blob:"2222222222222222222222222222222222222222", mode:"100644"}}'
+expect_failure 'unsafe overwrite provenance' 'unsafe replaced source path' "$FIXTURE/scripts/upstream" verify
 
 printf 'PASS: pinned upstream source verification checks\n'

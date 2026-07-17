@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "pins": [
+    {
+      "id": "omarchy",
+      "repository": "https://github.com/basecamp/omarchy",
+      "version": "v3.8.3",
+      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3"
+    },
+    {
+      "id": "lazyvim-starter",
+      "repository": "https://github.com/LazyVim/starter",
+      "version": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
+      "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
+      "package_identity": "omarchy-nvim 2026.6.17-1"
+    },
+    {
+      "id": "omarchy-pkgs",
+      "repository": "https://github.com/omacom-io/omarchy-pkgs",
+      "version": "2026.6.17-1",
+      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "package_identity": "omarchy-nvim 2026.6.17-1"
+    }
+  ]
+}

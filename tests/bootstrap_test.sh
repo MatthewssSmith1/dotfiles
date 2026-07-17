@@ -17,6 +17,7 @@ readonly BOOTSTRAP_SOURCES=(
   "$REPO_DIR/lib/host.sh"
   "$REPO_DIR/lib/engine.sh"
   "$REPO_DIR/lib/areas/git.sh"
+  "$REPO_DIR/lib/areas/generic.sh"
 )
 for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
   [[ -f "$source_file" ]] || fail "missing bootstrap source file: $source_file"
@@ -26,7 +27,9 @@ bash -n \
   "${BOOTSTRAP_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
   "$TEST_DIR/stage2_bootstrap_test.sh" \
-  "$TEST_DIR/upstream_test.sh" || fail 'a Stage 2 Bash file has invalid syntax'
+  "$TEST_DIR/stage3_bootstrap_test.sh" \
+  "$TEST_DIR/upstream_test.sh" \
+  "$TEST_DIR/upstream_sync_test.sh" || fail 'a bootstrap Bash file has invalid syntax'
 
 [[ -f "$TMUX_CONFIG" ]] || fail '.tmux.conf is missing'
 grep -Fq 'set -g mode-keys vi' "$TMUX_CONFIG" || fail 'tmux copy mode does not use Vim keys'
@@ -84,6 +87,8 @@ if [[ "$root_stow_output" == *'LINK:'* || "$root_stow_output" == *'UNLINK:'* || 
 fi
 
 "$TEST_DIR/upstream_test.sh"
+"$TEST_DIR/upstream_sync_test.sh"
 "$TEST_DIR/stage2_bootstrap_test.sh"
+"$TEST_DIR/stage3_bootstrap_test.sh"
 
-printf 'PASS: repository Stage 2 checks\n'
+printf 'PASS: repository bootstrap checks\n'

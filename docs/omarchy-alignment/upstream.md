@@ -21,15 +21,17 @@ and provenance recorded in [Artifacts](artifacts/README.md).
 Use one active tracked baseline. Git history provides rollback; do not retain a
 directory for every old release.
 
-## Initial Pins
+## Active Pins
 
-| Source | Pin | Status |
-|--------|-----|--------|
-| Omarchy release | `v3.8.3` | Accepted |
-| Omarchy commit | `6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3` | Accepted |
-| LazyVim starter | `803bc181d7c0d6d5eeba9274d9be49b287294d99` | Accepted |
-| Omarchy Neovim overlay | `omarchy-pkgs` commit `78e5cc81953c44c804eb00e5be093e2674e09503`, path `pkgbuilds/omarchy-nvim/` | Accepted |
-| Neovim release identity | `omarchy-nvim 2026.6.17-1` | Accepted |
+| Source | Repository | Version | Commit |
+|--------|------------|---------|--------|
+| Omarchy | `https://github.com/basecamp/omarchy` | `v3.8.3` | `6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3` |
+| LazyVim starter | `https://github.com/LazyVim/starter` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` |
+| Omarchy Neovim overlay | `https://github.com/omacom-io/omarchy-pkgs` | `2026.6.17-1` | `78e5cc81953c44c804eb00e5be093e2674e09503` |
+
+The reviewed proposal is
+[`manifests/proposals/2026-07-17-initial-pins.json`](../../manifests/proposals/2026-07-17-initial-pins.json).
+Both Neovim inputs record package identity `omarchy-nvim 2026.6.17-1`.
 
 There is no standalone Omarchy Neovim repository. The released configuration
 is assembled from three inputs:
@@ -52,8 +54,9 @@ The `omarchy-pkgs` commit above is the commit associated with
 `2026.6.17-1`; the artifact's recorded build date follows it by four minutes.
 The built package generated `lazy-lock.json` at build time; the extracted copy
 is committed at
-[`artifacts/omarchy-nvim-2026.6.17-1-lazy-lock.json`](artifacts/omarchy-nvim-2026.6.17-1-lazy-lock.json)
-with artifact and extracted-file hashes recorded for provenance. The original
+[`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../packages/upstream/nvim/.config/nvim/lazy-lock.json)
+with fixed artifact and extracted-file hashes recorded in
+[Artifacts](artifacts/README.md). The original
 package and signature were not retained, and the stable channel deletes
 superseded artifacts. Package membership therefore cannot now be independently
 reverified; this lockfile is an explicitly accepted extracted snapshot.
@@ -66,21 +69,23 @@ the Neovim stage runs, extracting its lockfile the same way. See
 
 ## Manifest
 
-The machine-readable source manifest records one entry for every synchronized
-input or generated output:
+The active [`manifests/sources.json`](../../manifests/sources.json) records one
+entry per snapshot file, rather than one entry per source tree. Source-manifest
+schema v1 remains compatible with the Stage 2 records and adds optional
+reference destinations, append and overwrite transforms, and artifact records.
+Each entry records:
 
 - Schema version.
 - Upstream repository URL and immutable commit.
 - Human-readable release identity where applicable.
 - Source path, Git blob ID, and file mode.
 - Destination path and mode.
-- Deterministic transformation or assembly rule, including input order,
-  overwrite behavior, and exact appended bytes.
+- Deterministic append or overwrite assembly metadata, including replaced input
+  identity or exact appended bytes.
 - Output Git blob ID for transformed files.
 - The committed `lazy-lock.json` snapshot path, hash, and provenance record.
 
-The manifest becomes canonical for exact pins after it exists. Until then,
-this document is canonical.
+The manifest is canonical for exact pins and file inventory.
 
 Source blob IDs are practical verification records, not a claim that the
 manifest alone proves a blob's path through an unavailable upstream tree. The
@@ -90,29 +95,25 @@ mapping afterward.
 
 ## Snapshot Scope
 
-Commit readable snapshots of:
+The single active snapshot root is `packages/upstream`. It contains:
 
-- The full Omarchy `default/bash/` tree for reference and selected use.
-- Omarchy Git configuration.
-- Omarchy tmux configuration.
-- Omarchy Starship configuration.
-- The default Tokyo Night Neovim theme input
-  (`themes/tokyo-night/neovim.lua` in the Omarchy tree).
-- The assembled Omarchy Neovim user configuration: starter tree, overlay
-  files, and appended option lines, per the source model above.
-- The released `lazy-lock.json` (already committed under
-  [artifacts](artifacts/README.md); it relocates into the snapshot tree when
-  the sync stage is built).
+- `git/.config/git/config`, `tmux/.config/tmux/tmux.conf`, and
+  `starship/.config/starship.toml`, mapped to their XDG home destinations.
+- `nvim/.config/nvim/`, the assembled Neovim configuration and released
+  `lazy-lock.json`.
+- `reference/omarchy/default/bash/` and
+  `reference/omarchy/themes/tokyo-night/neovim.lua`, which are verified
+  reference inputs and are not home payloads.
 
 Do not commit the complete Omarchy repository or any Neovim plugin cache.
 
 ## Synchronization Interface
 
-The intended interface has separate verification and update modes:
+The implemented interface has separate verification and update modes:
 
 ```text
 scripts/upstream verify
-scripts/upstream sync --proposal /path/to/reviewed-source-proposal.json
+scripts/upstream sync --proposal manifests/proposals/2026-07-17-initial-pins.json
 ```
 
 The proposal records every requested human-readable version, immutable commit,
@@ -120,19 +121,29 @@ repository, and package identity. Sync refuses version-only inputs and writes a
 candidate active manifest from the reviewed proposal plus verified source blob
 data.
 
-`verify` is fully offline. It computes Git blob identities from the committed
-active baseline, replays deterministic transforms where applicable, verifies
-inventory, modes, and artifact hashes, and prints the recorded pins. It proves
-that the working snapshot matches the accepted manifest, not that absent
-upstream Git history is authentic.
+`verify` is fully offline and invokes no network-capable operation. It computes
+Git blob identities directly from committed files, replays append transforms,
+and verifies complete inventory, modes, destinations, artifact hashes, and
+recorded pins. Overwrite records verify the accepted output blob and preserve
+the replaced source identity for review; offline verification does not fetch or
+authenticate absent upstream history.
 
-`sync` is the only baseline operation allowed to use the network. Existing pins
-are addressed by recorded version and commit. A proposed update must supply an
-explicit version-to-commit mapping rather than asking sync to trust a mutable
-version name. Sync fetches those commits into temporary storage, verifies each
-selected path and blob against Git, assembles a candidate snapshot and
-manifest, and runs offline verification against the candidate before replacing
-the active snapshot.
+`sync` is the only baseline operation allowed to use the network. It accepts
+only the three exact HTTPS repositories above and fetches proposal commits by
+immutable 40-character ID with tags disabled, prompts disabled, object checking
+enabled, and HTTPS as the only production Git protocol. It creates
+`.upstream-staging.*` beside the active snapshot, verifies each selected Git
+path, blob, and mode, assembles a candidate snapshot and manifest, preserves the
+fixed-hash lockfile artifact, and runs offline candidate verification before
+replacement. Failures before or during candidate verification remove staging
+and leave the active baseline unchanged. If replacement is interrupted, cleanup
+restores the old snapshot and manifest together; failed restoration preserves
+staging and reports its path for manual recovery.
+
+The current real baseline has exactly one append transform, for
+`lua/config/options.lua`, and no overwrite transforms. The pinned LazyVim
+starter has no `lazyvim.json`, so the overlay adds that file without a
+collision. Sync supports overwrite records for future real collisions.
 
 Synchronization must never:
 
@@ -157,8 +168,8 @@ baseline changes during review.
 2. Resolve and review each version-to-commit mapping before invoking sync.
 3. For a Neovim package update, download the exact package and signature while
    available; preserve package metadata and the extraction procedure.
-4. Fetch pinned commits and package inputs into same-filesystem staging beside
-   the checkout content that will be replaced.
+4. Fetch immutable commits over HTTPS into same-filesystem staging beside the
+   checkout content that will be replaced.
 5. Verify Git path/blob relationships and package evidence.
 6. Assemble only the documented inventory with deterministic transforms.
 7. Generate the candidate manifest, including source and output blob IDs.

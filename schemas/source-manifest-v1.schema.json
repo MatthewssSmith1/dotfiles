@@ -26,6 +26,13 @@
       "items": {
         "$ref": "#/$defs/source"
       }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
     }
   },
   "$defs": {
@@ -98,27 +105,197 @@
           "$ref": "#/$defs/relativePath"
         },
         "destination": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/homeDestination"
+            },
+            {
+              "$ref": "#/$defs/referenceDestination"
+            }
+          ]
+        },
+        "transform": {
+          "oneOf": [
+            {
+              "const": "none"
+            },
+            {
+              "$ref": "#/$defs/appendTransform"
+            },
+            {
+              "$ref": "#/$defs/overwriteTransform"
+            }
+          ]
+        }
+      }
+    },
+    "homeDestination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "path",
+        "mode"
+      ],
+      "properties": {
+        "root": {
+          "const": "home"
+        },
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "mode": {
+          "$ref": "#/$defs/gitMode"
+        }
+      }
+    },
+    "referenceDestination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root"
+      ],
+      "properties": {
+        "root": {
+          "const": "reference"
+        }
+      }
+    },
+    "appendTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "appended",
+        "output_blob"
+      ],
+      "properties": {
+        "type": {
+          "const": "append"
+        },
+        "appended": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_blob": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "overwriteTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "replaces"
+      ],
+      "properties": {
+        "type": {
+          "const": "overwrite"
+        },
+        "replaces": {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "root",
+            "repository",
+            "commit",
             "path",
+            "blob",
             "mode"
           ],
           "properties": {
-            "root": {
-              "const": "home"
+            "repository": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://"
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
             },
             "path": {
               "$ref": "#/$defs/relativePath"
+            },
+            "blob": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
             },
             "mode": {
               "$ref": "#/$defs/gitMode"
             }
           }
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "release",
+        "snapshot",
+        "destination",
+        "sha256",
+        "provenance"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
         },
-        "transform": {
-          "const": "none"
+        "release": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "destination": {
+          "$ref": "#/$defs/homeDestination"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact",
+            "artifact_sha256",
+            "build_date",
+            "extracted",
+            "trust",
+            "record"
+          ],
+          "properties": {
+            "artifact": {
+              "type": "string",
+              "minLength": 1
+            },
+            "artifact_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "build_date": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extracted": {
+              "type": "string",
+              "minLength": 1
+            },
+            "trust": {
+              "type": "string",
+              "minLength": 1
+            },
+            "record": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     }

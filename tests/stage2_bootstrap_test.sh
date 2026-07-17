@@ -109,6 +109,7 @@ readonly BOOTSTRAP_SOURCES=(
   "$REPO_DIR/lib/host.sh"
   "$REPO_DIR/lib/engine.sh"
   "$REPO_DIR/lib/areas/git.sh"
+  "$REPO_DIR/lib/areas/generic.sh"
 )
 for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
   [[ -f "$source_file" ]] || fail "missing bootstrap source file: $source_file"
@@ -173,7 +174,7 @@ pass
 # Stage 2 CLI and deduplication.
 home="$(new_home cli)"
 expect_success "$home" "$wsl_host" "$BOOTSTRAP" --check --area git --area git
-expect_failure "area 'bash' is not implemented" "$home" "$wsl_host" "$BOOTSTRAP" --check --area bash
+expect_failure "area 'bash' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --check --area bash
 expect_failure 'invalid profile' "$home" "$wsl_host" "$BOOTSTRAP" --check --profile Generic
 expect_failure '--profile is invalid with --remove' "$home" "$wsl_host" "$BOOTSTRAP" --remove --profile wsl
 expect_failure 'usage:' "$home" "$wsl_host" "$BOOTSTRAP" --unknown
@@ -665,7 +666,7 @@ for point in after-local after-identity after-stow after-global before-state; do
     fail "fault injection unexpectedly succeeded at $point"
   fi
   assert_contains "$TEST_OUTPUT" "injected test failure at $point"
-  assert_contains "$TEST_OUTPUT" 'rolled back incomplete Git deployment'
+  assert_contains "$TEST_OUTPUT" "rolled back incomplete deployment of area 'git'"
   assert_empty_home "$home"
 done
 home="$(new_home fault-after-state-commit)"
@@ -686,7 +687,7 @@ for point in remove-after-links remove-after-global; do
     DOTFILES_TEST_FAIL_AT="$point" "$BOOTSTRAP" --remove 2>&1)"; then
     fail "removal fault injection unexpectedly succeeded at $point"
   fi
-  assert_contains "$TEST_OUTPUT" 'rolled back incomplete Git deployment'
+  assert_contains "$TEST_OUTPUT" "rolled back incomplete deployment of area 'git'"
   [[ "$(sha256sum "$home/.local/state/dotfiles/v1/git.json")" == "$state_hash" ]] || fail 'removal rollback changed state'
   [[ "$(sha256sum "$home/.gitconfig")" == "$global_hash" ]] || fail 'removal rollback changed global config'
   [[ -L "$home/.config/git/config" && -L "$home/.config/dotfiles/personal/git.conf" ]] || fail 'removal rollback lost links'

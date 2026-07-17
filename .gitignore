@@ -12,3 +12,5 @@
 .zsh_aliases.local
 
 docs/todo.md
+
+.upstream-staging.*

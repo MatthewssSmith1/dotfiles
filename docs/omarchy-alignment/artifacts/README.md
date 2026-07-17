@@ -1,6 +1,6 @@
 # Preserved Artifacts
 
-## omarchy-nvim-2026.6.17-1-lazy-lock.json
+## omarchy-nvim 2026.6.17-1 lazy-lock.json
 
 The `lazy-lock.json` shipped inside the built package
 `omarchy-nvim 2026.6.17-1`, extracted from
@@ -39,7 +39,10 @@ time, signature status and signer, package metadata, extraction command and
 tool version, archive hash, and extracted lockfile hash. Only then describe
 package membership as independently verifiable.
 
-The lockfile contains 51 pinned plugins. It relocates into the upstream
-snapshot tree when the synchronization stage of the
-[implementation plan](../plan.md) is built; until then this directory is its
-canonical location. See [Upstream](../upstream.md) for the full source model.
+The lockfile contains 51 pinned plugins. Stage 4 relocated it without changing
+its bytes; its canonical committed location is
+[`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../../packages/upstream/nvim/.config/nvim/lazy-lock.json).
+Its fixed SHA-256 and provenance are carried in
+[`manifests/sources.json`](../../../manifests/sources.json). Sync copies only
+this hash-verified artifact into candidates; offline verify checks it without
+network access. See [Upstream](../upstream.md) for the full source model.

@@ -3,11 +3,52 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="${0##*/}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR
+REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+readonly REPO_DIR
 
-die() {
-  printf '[%s] error: %s\n' "$SCRIPT_NAME" "$*" >&2
-  exit 1
-}
+source "$REPO_DIR/lib/common.sh"
+
+readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/source-manifest-v1.schema.json'
+
+# Pinned upstream scope: which repositories sync may consume and which paths of
+# each pinned commit become snapshot content. The reviewed proposal supplies
+# only version-to-commit pins; this table is the documented inventory.
+readonly OMARCHY_REPOSITORY='https://github.com/basecamp/omarchy'
+readonly STARTER_REPOSITORY='https://github.com/LazyVim/starter'
+readonly PKGS_REPOSITORY='https://github.com/omacom-io/omarchy-pkgs'
+
+# id|source path|snapshot path|destination root|destination path
+readonly OMARCHY_FILES=(
+  'omarchy-git-config|config/git/config|packages/upstream/git/.config/git/config|home|.config/git/config'
+  'omarchy-tmux-config|config/tmux/tmux.conf|packages/upstream/tmux/.config/tmux/tmux.conf|home|.config/tmux/tmux.conf'
+  'omarchy-starship-config|config/starship.toml|packages/upstream/starship/.config/starship.toml|home|.config/starship.toml'
+  'omarchy-theme-tokyo-night-neovim|themes/tokyo-night/neovim.lua|packages/upstream/reference/omarchy/themes/tokyo-night/neovim.lua|reference|-'
+)
+readonly OMARCHY_TREE_ID_PREFIX='omarchy-bash'
+readonly OMARCHY_TREE_PREFIX='default/bash'
+readonly OMARCHY_TREE_SNAPSHOT_PREFIX='packages/upstream/reference/omarchy/default/bash'
+
+readonly STARTER_ID_PREFIX='lazyvim-starter'
+readonly OVERLAY_ID_PREFIX='omarchy-nvim-overlay'
+readonly OVERLAY_PREFIX='pkgbuilds/omarchy-nvim'
+readonly OVERLAY_SUBTREES=('lua' 'plugin')
+readonly OVERLAY_FILES=('lazyvim.json')
+readonly NVIM_SNAPSHOT_PREFIX='packages/upstream/nvim/.config/nvim'
+readonly NVIM_DESTINATION_PREFIX='.config/nvim'
+readonly NVIM_APPEND_TARGET='lua/config/options.lua'
+readonly LAZY_LOCK_ID='omarchy-nvim-lazy-lock'
+readonly LAZY_LOCK_RELEASE='omarchy-nvim 2026.6.17-1'
+readonly LAZY_LOCK_SNAPSHOT='packages/upstream/nvim/.config/nvim/lazy-lock.json'
+readonly LAZY_LOCK_DESTINATION='.config/nvim/lazy-lock.json'
+readonly LAZY_LOCK_SHA256='0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de'
+# Exact bytes the release PKGBUILD appends to lua/config/options.lua; they
+# exist only in the PKGBUILD and are recorded here and in the manifest.
+readonly NVIM_OPTIONS_APPEND="require('config.remote_clipboard').setup()
+vim.opt.relativenumber = false
+vim.g.autoformat = false
+"
 
 is_safe_relative_path() {
   local path="$1"
@@ -15,7 +56,7 @@ is_safe_relative_path() {
   local -a segments
 
   [[ -n "$path" && "$path" != /* && "$path" != */ && "$path" != *'//'* && \
-    "$path" != *$'\n'* && "$path" != *$'\r'* && "$path" != *$'\t'* ]] || return 1
+    "$path" != *[[:cntrl:]]* ]] || return 1
   IFS='/' read -r -a segments <<< "$path"
   ((${#segments[@]} > 0)) || return 1
   for segment in "${segments[@]}"; do
@@ -23,152 +64,914 @@ is_safe_relative_path() {
   done
 }
 
-(($# == 1)) || die "usage: $SCRIPT_NAME verify"
-[[ "$1" == 'verify' ]] || die "usage: $SCRIPT_NAME verify"
+usage() {
+  die "usage: $SCRIPT_NAME verify | sync --proposal <file>"
+}
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-readonly SCRIPT_DIR
-REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
-readonly REPO_DIR
-readonly SCHEMA="$REPO_DIR/schemas/source-manifest-v1.schema.json"
-readonly MANIFEST="$REPO_DIR/manifests/sources.json"
-readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/source-manifest-v1.schema.json'
+git_quiet() {
+  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git "$@"
+}
+
+hash_blob_file() {
+  git_quiet hash-object --no-filters -- "$1"
+}
+
+hash_blob_stdin() {
+  git_quiet hash-object --stdin
+}
+
+validate_schema_file() {
+  local schema="$1"
+
+  [[ -f "$schema" && ! -L "$schema" ]] || die 'source manifest schema is missing or is not a regular file'
+  jq empty "$schema" >/dev/null 2>&1 || die 'source manifest schema is malformed'
+  jq -e --arg schema_id "$SCHEMA_ID" '
+    .["$schema"] == "https://json-schema.org/draft/2020-12/schema" and
+    .["$id"] == $schema_id and
+    .type == "object" and
+    .additionalProperties == false and
+    .properties["$schema"].const == "../schemas/source-manifest-v1.schema.json" and
+    .properties.schema_version.const == 1 and
+    .properties.snapshot_root.const == "packages/upstream"
+  ' "$schema" >/dev/null || die 'source manifest schema is unsupported'
+}
+
+validate_manifest_file() {
+  local manifest="$1"
+
+  [[ -f "$manifest" && ! -L "$manifest" ]] || die 'source manifest is missing or is not a regular file'
+  jq empty "$manifest" >/dev/null 2>&1 || die 'source manifest is malformed'
+  jq -e '
+    def keys_are($allowed): (keys | sort) == ($allowed | sort);
+    def clean_string:
+      type == "string" and length > 0 and (test("[[:cntrl:]]") | not);
+    def git_mode: type == "string" and test("^100(644|755)$");
+    def hex40: type == "string" and test("^[0-9a-f]{40}$");
+    def hex64: type == "string" and test("^[0-9a-f]{64}$");
+    def home_destination:
+      type == "object" and keys_are(["root", "path", "mode"]) and
+      .root == "home" and (.path | clean_string) and (.mode | git_mode);
+    def reference_destination:
+      type == "object" and keys_are(["root"]) and .root == "reference";
+    def valid_transform:
+      . == "none" or
+      (type == "object" and keys_are(["type", "appended", "output_blob"]) and
+        .type == "append" and
+        (.appended | type == "string" and length > 0) and
+        (.output_blob | hex40)) or
+      (type == "object" and keys_are(["type", "replaces"]) and
+        .type == "overwrite" and
+        (.replaces | type == "object" and
+          keys_are(["repository", "commit", "path", "blob", "mode"]) and
+          (.repository | clean_string and test("^https://[^[:space:]]+$")) and
+          (.commit | hex40) and
+          (.path | clean_string) and
+          (.blob | hex40) and
+          (.mode | git_mode)));
+    def valid_source:
+      type == "object" and
+      keys_are(["id", "repository", "release", "commit", "source", "snapshot", "destination", "transform"]) and
+      (.id | clean_string and test("^[a-z0-9]+(-[a-z0-9]+)*$")) and
+      (.repository | clean_string and test("^https://[^[:space:]]+$")) and
+      (.release | clean_string) and
+      (.commit | hex40) and
+      (.source | type == "object" and keys_are(["path", "blob", "mode"])) and
+      (.source.path | clean_string) and
+      (.source.blob | hex40) and
+      (.source.mode | git_mode) and
+      (.snapshot | clean_string) and
+      (.destination | (home_destination or reference_destination)) and
+      (.transform | valid_transform) and
+      ((.destination.root == "home") or (.transform == "none"));
+    def valid_artifact:
+      type == "object" and
+      keys_are(["id", "release", "snapshot", "destination", "sha256", "provenance"]) and
+      (.id | clean_string and test("^[a-z0-9]+(-[a-z0-9]+)*$")) and
+      (.release | clean_string) and
+      (.snapshot | clean_string) and
+      (.destination | home_destination) and
+      (.sha256 | hex64) and
+      (.provenance | type == "object" and
+        keys_are(["artifact", "artifact_sha256", "build_date", "extracted", "trust", "record"]) and
+        (.artifact | clean_string) and
+        (.artifact_sha256 | hex64) and
+        (.build_date | clean_string) and
+        (.extracted | clean_string) and
+        (.trust | clean_string) and
+        (.record | clean_string));
+    type == "object" and
+    ((keys - ["artifacts"]) | sort) == (["$schema", "schema_version", "snapshot_root", "sources"] | sort) and
+    .["$schema"] == "../schemas/source-manifest-v1.schema.json" and
+    .schema_version == 1 and
+    .snapshot_root == "packages/upstream" and
+    (.sources | type == "array" and length > 0 and all(.[]; valid_source)) and
+    ((has("artifacts") | not) or
+      (.artifacts | type == "array" and length > 0 and all(.[]; valid_artifact))) and
+    (([.sources[].id] + [(.artifacts // [])[].id]) as $ids |
+      ($ids | length) == ($ids | unique | length)) and
+    (([.sources[].snapshot] + [(.artifacts // [])[].snapshot]) as $snapshots |
+      ($snapshots | length) == ($snapshots | unique | length)) and
+    (([.sources[] | select(.destination.root == "home") | .destination.path] +
+      [(.artifacts // [])[].destination.path]) as $targets |
+      ($targets | length) == ($targets | unique | length))
+  ' "$manifest" >/dev/null || die 'source manifest does not conform to schema version 1'
+}
+
+# Verify one checkout-shaped tree (the active checkout or a sync candidate)
+# against its own manifest, fully offline. Prints the recorded pins unless the
+# second argument is 'quiet'.
+verify_tree() {
+  local root="$1"
+  local report="${2:-report}"
+  local schema="$root/schemas/source-manifest-v1.schema.json"
+  local manifest="$root/manifests/sources.json"
+
+  validate_schema_file "$schema"
+  validate_manifest_file "$manifest"
+
+  local snapshot_root_rel snapshot_root
+  snapshot_root_rel="$(jq -r '.snapshot_root' "$manifest")"
+  is_safe_relative_path "$snapshot_root_rel" || die 'snapshot root is not a safe relative path'
+  snapshot_root="$root/$snapshot_root_rel"
+  [[ -d "$snapshot_root" && ! -L "$snapshot_root" ]] || \
+    die 'snapshot root is missing or is not a directory'
+
+  local -a ids=() repositories=() releases=() commits=() source_paths=() blobs=() source_modes=()
+  local -a snapshot_paths=() destination_roots=() destination_paths=() destination_modes=()
+  local -a transform_types=() appended_b64s=() output_blobs=()
+  local id repository release commit source_path blob source_mode snapshot_path
+  local destination_root destination_path destination_mode transform_type appended_b64 output_blob
+  local replaces_path
+  while IFS=$'\t' read -r id repository release commit source_path blob source_mode \
+    snapshot_path destination_root destination_path destination_mode \
+    transform_type appended_b64 output_blob replaces_path; do
+    is_safe_relative_path "$source_path" || die "unsafe source path for $id: $source_path"
+    is_safe_relative_path "$snapshot_path" || die "unsafe snapshot path for $id: $snapshot_path"
+    [[ "$snapshot_path" == "$snapshot_root_rel/"* ]] || \
+      die "snapshot path is outside $snapshot_root_rel for $id: $snapshot_path"
+    case "$destination_root" in
+      home)
+        is_safe_relative_path "$destination_path" || \
+          die "unsafe home-relative destination path for $id: $destination_path"
+        [[ "$source_mode" == "$destination_mode" ]] || \
+          die "source and destination modes differ for source $id"
+        ;;
+      reference) ;;
+      *) die "unsupported destination root for $id" ;;
+    esac
+    case "$transform_type" in
+      none|append|overwrite) ;;
+      *) die "unsupported transform for $id" ;;
+    esac
+    if [[ "$transform_type" == overwrite ]]; then
+      is_safe_relative_path "$replaces_path" || \
+        die "unsafe replaced source path for $id: $replaces_path"
+    fi
+
+    ids+=("$id")
+    repositories+=("$repository")
+    releases+=("$release")
+    commits+=("$commit")
+    source_paths+=("$source_path")
+    blobs+=("$blob")
+    source_modes+=("$source_mode")
+    snapshot_paths+=("$snapshot_path")
+    destination_roots+=("$destination_root")
+    destination_paths+=("$destination_path")
+    destination_modes+=("$destination_mode")
+    transform_types+=("$transform_type")
+    appended_b64s+=("$appended_b64")
+    output_blobs+=("$output_blob")
+  done < <(jq -r '.sources[] | [
+    .id,
+    .repository,
+    .release,
+    .commit,
+    .source.path,
+    .source.blob,
+    .source.mode,
+    .snapshot,
+    .destination.root,
+    (.destination.path // "-"),
+    (.destination.mode // "-"),
+    (if .transform == "none" then "none" else .transform.type end),
+    (if (.transform | type) == "object" and .transform.type == "append"
+      then (.transform.appended | @base64) else "-" end),
+    (if (.transform | type) == "object" and .transform.type == "append"
+      then .transform.output_blob else "-" end),
+    (if (.transform | type) == "object" and .transform.type == "overwrite"
+      then .transform.replaces.path else "-" end)
+  ] | @tsv' "$manifest")
+
+  local -a artifact_ids=() artifact_releases=() artifact_snapshots=()
+  local -a artifact_destinations=() artifact_modes=() artifact_hashes=() artifact_names=()
+  local artifact_hash artifact_name
+  while IFS=$'\t' read -r id release snapshot_path destination_path destination_mode \
+    artifact_hash artifact_name; do
+    is_safe_relative_path "$snapshot_path" || die "unsafe snapshot path for $id: $snapshot_path"
+    [[ "$snapshot_path" == "$snapshot_root_rel/"* ]] || \
+      die "snapshot path is outside $snapshot_root_rel for $id: $snapshot_path"
+    is_safe_relative_path "$destination_path" || \
+      die "unsafe home-relative destination path for $id: $destination_path"
+    artifact_ids+=("$id")
+    artifact_releases+=("$release")
+    artifact_snapshots+=("$snapshot_path")
+    artifact_destinations+=("$destination_path")
+    artifact_modes+=("$destination_mode")
+    artifact_hashes+=("$artifact_hash")
+    artifact_names+=("$artifact_name")
+    if [[ "$id" == "$LAZY_LOCK_ID" ]]; then
+      [[ "$release" == "$LAZY_LOCK_RELEASE" && \
+        "$snapshot_path" == "$LAZY_LOCK_SNAPSHOT" && \
+        "$destination_path" == "$LAZY_LOCK_DESTINATION" && \
+        "$destination_mode" == 100644 && "$artifact_hash" == "$LAZY_LOCK_SHA256" ]] || \
+        die 'released lazy-lock artifact identity does not match the accepted baseline'
+    fi
+  done < <(jq -r '(.artifacts // [])[] | [
+    .id,
+    .release,
+    .snapshot,
+    .destination.path,
+    .destination.mode,
+    .sha256,
+    .provenance.artifact
+  ] | @tsv' "$manifest")
+
+  local absolute_path relative_path package_file declared
+  shopt -s nullglob dotglob globstar
+  for absolute_path in "$snapshot_root"/**; do
+    [[ -d "$absolute_path" && ! -L "$absolute_path" ]] && continue
+    relative_path="${absolute_path#"$root/"}"
+    # Deployment-framework package markers required by deployment.md live at the
+    # top level of each upstream package root and are never snapshot content.
+    package_file="${relative_path#"$snapshot_root_rel/"}"
+    if [[ "$package_file" =~ ^[a-z0-9-]+/\.(stow-local-ignore|empty-package)$ ]]; then
+      continue
+    fi
+    declared=false
+    for snapshot_path in "${snapshot_paths[@]}" "${artifact_snapshots[@]}"; do
+      if [[ "$relative_path" == "$snapshot_path" ]]; then
+        declared=true
+        break
+      fi
+    done
+    [[ "$declared" == true ]] || die "undeclared snapshot inventory path: $relative_path"
+  done
+  shopt -u nullglob dotglob globstar
+
+  local index actual_mode expected_mode actual_blob expected_blob
+  local suffix_size file_size head_blob
+  for index in "${!snapshot_paths[@]}"; do
+    snapshot_path="${snapshot_paths[$index]}"
+    absolute_path="$root/$snapshot_path"
+    [[ -f "$absolute_path" && ! -L "$absolute_path" ]] || \
+      die "missing or non-regular snapshot: $snapshot_path"
+
+    if [[ "${destination_roots[$index]}" == home ]]; then
+      expected_mode="${destination_modes[$index]#100}"
+    else
+      expected_mode="${source_modes[$index]#100}"
+    fi
+    actual_mode="$(stat -c '%a' -- "$absolute_path")"
+    [[ "$actual_mode" == "$expected_mode" ]] || \
+      die "snapshot mode drift for $snapshot_path: expected $expected_mode, found $actual_mode"
+
+    case "${transform_types[$index]}" in
+      append) expected_blob="${output_blobs[$index]}" ;;
+      *) expected_blob="${blobs[$index]}" ;;
+    esac
+    actual_blob="$(hash_blob_file "$absolute_path")"
+    [[ "$actual_blob" == "$expected_blob" ]] || \
+      die "snapshot blob drift for $snapshot_path: expected $expected_blob, found $actual_blob"
+
+    if [[ "${transform_types[$index]}" == append ]]; then
+      # Replay the append transform offline: the snapshot must end with the
+      # recorded appended bytes, and stripping them must reproduce the source.
+      suffix_size="$(base64 -d <<< "${appended_b64s[$index]}" | wc -c)" || \
+        die "unreadable appended bytes for ${ids[$index]}"
+      file_size="$(stat -c '%s' -- "$absolute_path")"
+      ((file_size > suffix_size)) || \
+        die "recorded appended bytes are not a strict suffix of $snapshot_path"
+      cmp -s <(tail -c "$suffix_size" -- "$absolute_path") \
+        <(base64 -d <<< "${appended_b64s[$index]}") || \
+        die "snapshot does not end with the recorded appended bytes: $snapshot_path"
+      head_blob="$(head -c $((file_size - suffix_size)) -- "$absolute_path" | hash_blob_stdin)"
+      [[ "$head_blob" == "${blobs[$index]}" ]] || \
+        die "append transform replay drift for $snapshot_path: expected source blob ${blobs[$index]}, found $head_blob"
+    fi
+  done
+
+  local actual_hash
+  for index in "${!artifact_snapshots[@]}"; do
+    snapshot_path="${artifact_snapshots[$index]}"
+    absolute_path="$root/$snapshot_path"
+    [[ -f "$absolute_path" && ! -L "$absolute_path" ]] || \
+      die "missing or non-regular snapshot: $snapshot_path"
+    expected_mode="${artifact_modes[$index]#100}"
+    actual_mode="$(stat -c '%a' -- "$absolute_path")"
+    [[ "$actual_mode" == "$expected_mode" ]] || \
+      die "snapshot mode drift for $snapshot_path: expected $expected_mode, found $actual_mode"
+    actual_hash="$(sha256_file "$absolute_path")"
+    [[ "$actual_hash" == "${artifact_hashes[$index]}" ]] || \
+      die "artifact hash drift for $snapshot_path: expected ${artifact_hashes[$index]}, found $actual_hash"
+  done
+
+  [[ "$report" != quiet ]] || return 0
+
+  printf '[%s] verified %d pinned snapshot file(s)\n' "$SCRIPT_NAME" \
+    "$((${#snapshot_paths[@]} + ${#artifact_snapshots[@]}))"
+  for index in "${!ids[@]}"; do
+    printf '[%s] pin %s: %s %s %s\n' \
+      "$SCRIPT_NAME" "${ids[$index]}" "${repositories[$index]}" \
+      "${releases[$index]}" "${commits[$index]}"
+    printf '[%s] source %s: %s blob %s mode %s -> %s mode %s (transform: %s)\n' \
+      "$SCRIPT_NAME" "${ids[$index]}" "${source_paths[$index]}" \
+      "${blobs[$index]}" "${source_modes[$index]}" \
+      "$(destination_label "${destination_roots[$index]}" "${destination_paths[$index]}")" \
+      "${destination_modes[$index]}" "${transform_types[$index]}"
+  done
+  for index in "${!artifact_ids[@]}"; do
+    printf '[%s] artifact %s: %s sha256 %s -> ~/%s (provenance: %s)\n' \
+      "$SCRIPT_NAME" "${artifact_ids[$index]}" "${artifact_snapshots[$index]}" \
+      "${artifact_hashes[$index]}" "${artifact_destinations[$index]}" \
+      "${artifact_names[$index]}"
+  done
+}
+
+destination_label() {
+  local root="$1" path="$2"
+  if [[ "$root" == home ]]; then
+    printf '~/%s' "$path"
+  else
+    printf 'reference'
+  fi
+}
+
+# --- synchronization -------------------------------------------------------
+
+STAGING=""
+PROPOSAL=""
+UPSTREAM_SWAP_ACTIVE=false
+UPSTREAM_SWAP_OLD_TREE=""
+UPSTREAM_SWAP_OLD_MANIFEST=""
+
+declare -A PIN_COMMIT=()
+declare -A PIN_RELEASE=()
+declare -A PIN_GIT_DIR=()
+
+REC_COUNT=0
+declare -a REC_ID=() REC_REPOSITORY=() REC_RELEASE=() REC_COMMIT=()
+declare -a REC_SOURCE_PATH=() REC_SOURCE_BLOB=() REC_SOURCE_MODE=()
+declare -a REC_SNAPSHOT=() REC_DEST_ROOT=() REC_DEST_PATH=()
+declare -a REC_TRANSFORM=() REC_GIT_DIR=() REC_OUTPUT_BLOB=()
+declare -a REC_REPLACES_REPOSITORY=() REC_REPLACES_COMMIT=() REC_REPLACES_PATH=()
+declare -a REC_REPLACES_BLOB=() REC_REPLACES_MODE=()
+declare -A SEEN_RECORD_IDS=()
+declare -A SEEN_RECORD_SNAPSHOTS=()
+
+validate_sync_test_overrides() {
+  if [[ -n "${DOTFILES_TEST_GIT_INSTEADOF:-}" && "${DOTFILES_TESTING:-}" != 1 ]]; then
+    die 'DOTFILES_TEST_GIT_INSTEADOF requires DOTFILES_TESTING=1'
+  fi
+}
+
+expected_pin_repository() {
+  case "$1" in
+    omarchy) printf '%s' "$OMARCHY_REPOSITORY" ;;
+    lazyvim-starter) printf '%s' "$STARTER_REPOSITORY" ;;
+    omarchy-pkgs) printf '%s' "$PKGS_REPOSITORY" ;;
+    *) return 1 ;;
+  esac
+}
+
+validate_proposal() {
+  [[ -f "$PROPOSAL" && ! -L "$PROPOSAL" ]] || die 'source proposal is missing or is not a regular file'
+  jq empty "$PROPOSAL" >/dev/null 2>&1 || die 'source proposal is malformed'
+  jq -e '
+    def clean_string:
+      type == "string" and length > 0 and (test("[[:cntrl:]]") | not);
+    type == "object" and
+    (keys | sort) == (["pins", "schema_version"]) and
+    .schema_version == 1 and
+    (.pins | type == "array" and length > 0 and all(.[];
+      type == "object" and
+      ((keys - ["package_identity"]) | sort) == (["commit", "id", "repository", "version"]) and
+      (.id | clean_string) and
+      (.repository | clean_string) and
+      (.version | clean_string) and
+      (.commit | type == "string") and
+      ((has("package_identity") | not) or (.package_identity | clean_string))))
+  ' "$PROPOSAL" >/dev/null || die 'source proposal does not conform to proposal schema version 1'
+
+  local id repository version commit package_identity expected
+  while IFS=$'\t' read -r id repository version commit package_identity; do
+    expected="$(expected_pin_repository "$id")" || die "unknown proposal pin '$id'"
+    [[ "$repository" == "$expected" ]] || \
+      die "unexpected repository for pin '$id': $repository"
+    [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || \
+      die "proposal pin '$id' must map its version to an immutable commit; version-only inputs are refused"
+    [[ -z "${PIN_COMMIT[$id]+x}" ]] || die "duplicate proposal pin '$id'"
+    PIN_COMMIT[$id]="$commit"
+    case "$id" in
+      omarchy)
+        PIN_RELEASE[$id]="$version"
+        ;;
+      lazyvim-starter|omarchy-pkgs)
+        [[ "$package_identity" != '-' ]] || \
+          die "proposal pin '$id' must record the released package identity"
+        PIN_RELEASE[$id]="$package_identity"
+        ;;
+    esac
+  done < <(jq -r '.pins[] | [
+    .id, .repository, .version, .commit, (.package_identity // "-")
+  ] | @tsv' "$PROPOSAL")
+
+  local required
+  for required in omarchy lazyvim-starter omarchy-pkgs; do
+    [[ -n "${PIN_COMMIT[$required]+x}" ]] || \
+      die "proposal must pin exactly: omarchy, lazyvim-starter, omarchy-pkgs (missing '$required')"
+  done
+  fault sync-proposal
+}
+
+fetch_pin() {
+  local id="$1"
+  local repository commit git_dir allow='https' pair output
+  local -a fetch_config=(-c transfer.fsckObjects=true)
+  local -a pairs=()
+
+  repository="$(expected_pin_repository "$id")"
+  commit="${PIN_COMMIT[$id]}"
+  git_dir="$STAGING/pins/$id.git"
+
+  if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
+    allow='https:file'
+    if [[ -n "${DOTFILES_TEST_GIT_INSTEADOF:-}" ]]; then
+      IFS=';' read -r -a pairs <<< "$DOTFILES_TEST_GIT_INSTEADOF"
+      for pair in "${pairs[@]}"; do
+        [[ "$pair" == https://*=* ]] || die 'malformed DOTFILES_TEST_GIT_INSTEADOF pair'
+        fetch_config+=(-c "url.${pair#*=}.insteadOf=${pair%%=*}")
+      done
+    fi
+  fi
+
+  mkdir -p -- "$git_dir"
+  git_quiet init --quiet --bare -- "$git_dir" || die "unable to prepare staging repository for pin '$id'"
+  if ! output="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+    GIT_ALLOW_PROTOCOL="$allow" git --git-dir="$git_dir" "${fetch_config[@]}" \
+    fetch --quiet --depth=1 --no-tags -- "$repository" "$commit" 2>&1)"; then
+    die "unable to fetch commit $commit from $repository for pin '$id': $output"
+  fi
+  git_quiet --git-dir="$git_dir" rev-parse --verify --quiet "$commit^{commit}" >/dev/null || \
+    die "fetched history for pin '$id' does not contain commit $commit"
+  PIN_GIT_DIR[$id]="$git_dir"
+  log "fetched pin $id: $repository ${PIN_RELEASE[$id]} $commit"
+}
+
+slug_from_path() {
+  local slug
+  slug="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-')"
+  while [[ "$slug" == *--* ]]; do slug="${slug//--/-}"; done
+  slug="${slug#-}"
+  slug="${slug%-}"
+  [[ -n "$slug" ]] || die "unable to derive a manifest id from path: $1"
+  printf '%s' "$slug"
+}
+
+add_record() {
+  local id="$1" pin="$2" source_path="$3" source_blob="$4" source_mode="$5"
+  local snapshot="$6" destination_root="$7" destination_path="$8"
+
+  [[ -z "${SEEN_RECORD_IDS[$id]+x}" ]] || die "duplicate generated manifest id: $id"
+  SEEN_RECORD_IDS[$id]=1
+  [[ -z "${SEEN_RECORD_SNAPSHOTS[$snapshot]+x}" ]] || \
+    die "duplicate generated snapshot path: $snapshot"
+  SEEN_RECORD_SNAPSHOTS[$snapshot]=1
+
+  REC_ID[REC_COUNT]="$id"
+  REC_REPOSITORY[REC_COUNT]="$(expected_pin_repository "$pin")"
+  REC_RELEASE[REC_COUNT]="${PIN_RELEASE[$pin]}"
+  REC_COMMIT[REC_COUNT]="${PIN_COMMIT[$pin]}"
+  REC_SOURCE_PATH[REC_COUNT]="$source_path"
+  REC_SOURCE_BLOB[REC_COUNT]="$source_blob"
+  REC_SOURCE_MODE[REC_COUNT]="$source_mode"
+  REC_SNAPSHOT[REC_COUNT]="$snapshot"
+  REC_DEST_ROOT[REC_COUNT]="$destination_root"
+  REC_DEST_PATH[REC_COUNT]="$destination_path"
+  REC_TRANSFORM[REC_COUNT]='none'
+  REC_GIT_DIR[REC_COUNT]="${PIN_GIT_DIR[$pin]}"
+  REC_OUTPUT_BLOB[REC_COUNT]='-'
+  REC_REPLACES_REPOSITORY[REC_COUNT]='-'
+  REC_REPLACES_COMMIT[REC_COUNT]='-'
+  REC_REPLACES_PATH[REC_COUNT]='-'
+  REC_REPLACES_BLOB[REC_COUNT]='-'
+  REC_REPLACES_MODE[REC_COUNT]='-'
+  ((REC_COUNT += 1))
+}
+
+lookup_tree_entry() {
+  local pin="$1" path="$2"
+  local raw mode object_type rest
+
+  ENTRY_MODE=""
+  ENTRY_BLOB=""
+  raw="$(git_quiet --git-dir="${PIN_GIT_DIR[$pin]}" ls-tree -z --full-tree \
+    "${PIN_COMMIT[$pin]}" -- "$path" | head -z -n 1 | tr -d '\0')"
+  [[ -n "$raw" ]] || return 1
+  mode="${raw%% *}"
+  rest="${raw#* }"
+  object_type="${rest%% *}"
+  rest="${rest#* }"
+  [[ "$object_type" == blob ]] || \
+    die "source path is not a regular file: $path"
+  case "$mode" in
+    100644|100755) ;;
+    *) die "unsupported source mode $mode for $path" ;;
+  esac
+  ENTRY_MODE="$mode"
+  ENTRY_BLOB="${rest%%$'\t'*}"
+}
+
+# Emits "mode<TAB>blob<TAB>path" lines for every regular file under the given
+# tree prefix ('' means the whole tree), NUL-safe and refusing non-file modes.
+enumerate_tree() {
+  local pin="$1" prefix="$2"
+  local entry mode object_type blob path rest
+  local -a pathspec=()
+
+  [[ -z "$prefix" ]] || pathspec=(-- "$prefix")
+  while IFS= read -r -d '' entry; do
+    mode="${entry%% *}"
+    rest="${entry#* }"
+    object_type="${rest%% *}"
+    rest="${rest#* }"
+    blob="${rest%%$'\t'*}"
+    path="${rest#*$'\t'}"
+    [[ "$object_type" == blob ]] || \
+      die "unsupported source object $object_type at $path in pin '$pin'"
+    case "$mode" in
+      100644|100755) ;;
+      *) die "unsupported source mode $mode for $path" ;;
+    esac
+    is_safe_relative_path "$path" || die "unsafe source path in pin '$pin': $path"
+    printf '%s\t%s\t%s\n' "$mode" "$blob" "$path"
+  done < <(git_quiet --git-dir="${PIN_GIT_DIR[$pin]}" ls-tree -r -z --full-tree \
+    "${PIN_COMMIT[$pin]}" ${pathspec[@]+"${pathspec[@]}"})
+}
+
+enumerate_scope() {
+  local row id source_path snapshot destination_root destination_path
+  local mode blob path relative
+
+  for row in "${OMARCHY_FILES[@]}"; do
+    IFS='|' read -r id source_path snapshot destination_root destination_path <<< "$row"
+    lookup_tree_entry omarchy "$source_path" || \
+      die "missing source path in pin 'omarchy': $source_path"
+    add_record "$id" omarchy "$source_path" "$ENTRY_BLOB" "$ENTRY_MODE" \
+      "$snapshot" "$destination_root" "$destination_path"
+  done
+
+  # Capture enumeration before iterating so a refusal inside enumerate_tree
+  # fails this shell instead of truncating a process-substitution stream.
+  local rows
+  rows="$(enumerate_tree omarchy "$OMARCHY_TREE_PREFIX")"
+  [[ -n "$rows" ]] || die "missing source path in pin 'omarchy': $OMARCHY_TREE_PREFIX"
+  while IFS=$'\t' read -r mode blob path; do
+    relative="${path#"$OMARCHY_TREE_PREFIX/"}"
+    add_record "$OMARCHY_TREE_ID_PREFIX-$(slug_from_path "$relative")" omarchy \
+      "$path" "$blob" "$mode" "$OMARCHY_TREE_SNAPSHOT_PREFIX/$relative" reference '-'
+  done <<< "$rows"
+
+  enumerate_nvim_assembly
+  fault sync-enumerate
+}
+
+declare -A NVIM_RECORD_INDEX=()
+
+enumerate_nvim_assembly() {
+  local mode blob path relative index subtree rows
+
+  rows="$(enumerate_tree lazyvim-starter '')"
+  [[ -n "$rows" ]] || die "missing source tree in pin 'lazyvim-starter'"
+  while IFS=$'\t' read -r mode blob path; do
+    NVIM_RECORD_INDEX[$path]="$REC_COUNT"
+    add_record "$STARTER_ID_PREFIX-$(slug_from_path "$path")" lazyvim-starter \
+      "$path" "$blob" "$mode" "$NVIM_SNAPSHOT_PREFIX/$path" home \
+      "$NVIM_DESTINATION_PREFIX/$path"
+  done <<< "$rows"
+
+  local -a overlay_rows=()
+  for subtree in "${OVERLAY_SUBTREES[@]}"; do
+    rows="$(enumerate_tree omarchy-pkgs "$OVERLAY_PREFIX/$subtree")"
+    [[ -n "$rows" ]] || \
+      die "missing source path in pin 'omarchy-pkgs': $OVERLAY_PREFIX/$subtree"
+    while IFS=$'\t' read -r mode blob path; do
+      overlay_rows+=("$mode"$'\t'"$blob"$'\t'"$path")
+    done <<< "$rows"
+  done
+  for path in "${OVERLAY_FILES[@]}"; do
+    lookup_tree_entry omarchy-pkgs "$OVERLAY_PREFIX/$path" || \
+      die "missing source path in pin 'omarchy-pkgs': $OVERLAY_PREFIX/$path"
+    overlay_rows+=("$ENTRY_MODE"$'\t'"$ENTRY_BLOB"$'\t'"$OVERLAY_PREFIX/$path")
+  done
+
+  local row
+  for row in "${overlay_rows[@]}"; do
+    IFS=$'\t' read -r mode blob path <<< "$row"
+    relative="${path#"$OVERLAY_PREFIX/"}"
+    is_safe_relative_path "$relative" || die "unsafe source path in pin 'omarchy-pkgs': $path"
+    if [[ -n "${NVIM_RECORD_INDEX[$relative]+x}" ]]; then
+      # The overlay file replaces the starter file at the same relative path;
+      # record the replaced input so the assembly order stays reviewable.
+      index="${NVIM_RECORD_INDEX[$relative]}"
+      REC_REPLACES_REPOSITORY[index]="${REC_REPOSITORY[$index]}"
+      REC_REPLACES_COMMIT[index]="${REC_COMMIT[$index]}"
+      REC_REPLACES_PATH[index]="${REC_SOURCE_PATH[$index]}"
+      REC_REPLACES_BLOB[index]="${REC_SOURCE_BLOB[$index]}"
+      REC_REPLACES_MODE[index]="${REC_SOURCE_MODE[$index]}"
+      unset "SEEN_RECORD_IDS[${REC_ID[$index]}]"
+      REC_ID[index]="$OVERLAY_ID_PREFIX-$(slug_from_path "$relative")"
+      [[ -z "${SEEN_RECORD_IDS[${REC_ID[$index]}]+x}" ]] || \
+        die "duplicate generated manifest id: ${REC_ID[$index]}"
+      SEEN_RECORD_IDS[${REC_ID[$index]}]=1
+      REC_REPOSITORY[index]="$PKGS_REPOSITORY"
+      REC_RELEASE[index]="${PIN_RELEASE[omarchy-pkgs]}"
+      REC_COMMIT[index]="${PIN_COMMIT[omarchy-pkgs]}"
+      REC_SOURCE_PATH[index]="$path"
+      REC_SOURCE_BLOB[index]="$blob"
+      REC_SOURCE_MODE[index]="$mode"
+      REC_GIT_DIR[index]="${PIN_GIT_DIR[omarchy-pkgs]}"
+      REC_TRANSFORM[index]='overwrite'
+    else
+      NVIM_RECORD_INDEX[$relative]="$REC_COUNT"
+      add_record "$OVERLAY_ID_PREFIX-$(slug_from_path "$relative")" omarchy-pkgs \
+        "$path" "$blob" "$mode" "$NVIM_SNAPSHOT_PREFIX/$relative" home \
+        "$NVIM_DESTINATION_PREFIX/$relative"
+    fi
+  done
+
+  [[ -n "${NVIM_RECORD_INDEX[$NVIM_APPEND_TARGET]+x}" ]] || \
+    die "missing source path in pin 'lazyvim-starter': $NVIM_APPEND_TARGET"
+  index="${NVIM_RECORD_INDEX[$NVIM_APPEND_TARGET]}"
+  [[ "${REC_TRANSFORM[$index]}" == none ]] || \
+    die "append target $NVIM_APPEND_TARGET is overlaid; unsupported assembly"
+  REC_TRANSFORM[index]='append'
+}
+
+extract_records() {
+  local index snapshot_file mode actual_blob
+
+  for index in $(seq 0 $((REC_COUNT - 1))); do
+    snapshot_file="$STAGING/candidate/${REC_SNAPSHOT[$index]}"
+    mkdir -p -- "${snapshot_file%/*}"
+    git_quiet --git-dir="${REC_GIT_DIR[$index]}" cat-file blob \
+      "${REC_SOURCE_BLOB[$index]}" > "$snapshot_file" || \
+      die "unable to extract blob ${REC_SOURCE_BLOB[$index]} for ${REC_ID[$index]}"
+    case "${REC_SOURCE_MODE[$index]}" in
+      100755) chmod 0755 -- "$snapshot_file" ;;
+      *) chmod 0644 -- "$snapshot_file" ;;
+    esac
+  done
+
+  test_hold sync-extracted
+  for index in $(seq 0 $((REC_COUNT - 1))); do
+    snapshot_file="$STAGING/candidate/${REC_SNAPSHOT[$index]}"
+    actual_blob="$(hash_blob_file "$snapshot_file")"
+    [[ "$actual_blob" == "${REC_SOURCE_BLOB[$index]}" ]] || \
+      die "extracted blob mismatch for ${REC_SNAPSHOT[$index]}: expected ${REC_SOURCE_BLOB[$index]}, found $actual_blob"
+  done
+}
+
+apply_append_transforms() {
+  local index snapshot_file
+
+  for index in $(seq 0 $((REC_COUNT - 1))); do
+    [[ "${REC_TRANSFORM[$index]}" == append ]] || continue
+    snapshot_file="$STAGING/candidate/${REC_SNAPSHOT[$index]}"
+    printf '%s' "$NVIM_OPTIONS_APPEND" >> "$snapshot_file"
+    REC_OUTPUT_BLOB[index]="$(hash_blob_file "$snapshot_file")"
+  done
+  fault sync-assemble
+}
+
+preserve_artifacts() {
+  local active_snapshot candidate_file snapshot_path expected_hash actual_hash mode
+
+  jq -e \
+    --arg id "$LAZY_LOCK_ID" \
+    --arg release "$LAZY_LOCK_RELEASE" \
+    --arg snapshot "$LAZY_LOCK_SNAPSHOT" \
+    --arg destination "$LAZY_LOCK_DESTINATION" \
+    --arg sha256 "$LAZY_LOCK_SHA256" '
+      (.artifacts // []) | length == 1 and
+      .[0].id == $id and .[0].release == $release and
+      .[0].snapshot == $snapshot and
+      .[0].destination == {root: "home", path: $destination, mode: "100644"} and
+      .[0].sha256 == $sha256
+    ' "$REPO_DIR/manifests/sources.json" >/dev/null || \
+    die 'active manifest does not record the accepted released lazy-lock artifact'
+  while IFS=$'\t' read -r snapshot_path expected_hash mode; do
+    is_safe_relative_path "$snapshot_path" || die "unsafe snapshot path in active artifacts: $snapshot_path"
+    [[ "$snapshot_path" == packages/upstream/* ]] || \
+      die "artifact snapshot path is outside packages/upstream: $snapshot_path"
+    active_snapshot="$REPO_DIR/$snapshot_path"
+    [[ -f "$active_snapshot" && ! -L "$active_snapshot" ]] || \
+      die "missing or non-regular snapshot: $snapshot_path"
+    actual_hash="$(sha256_file "$active_snapshot")"
+    [[ "$actual_hash" == "$expected_hash" ]] || \
+      die "artifact hash drift for $snapshot_path: expected $expected_hash, found $actual_hash"
+    candidate_file="$STAGING/candidate/$snapshot_path"
+    mkdir -p -- "${candidate_file%/*}"
+    cp -- "$active_snapshot" "$candidate_file"
+    case "$mode" in
+      100755) chmod 0755 -- "$candidate_file" ;;
+      *) chmod 0644 -- "$candidate_file" ;;
+    esac
+  done < <(jq -r '.artifacts[] | [.snapshot, .sha256, .destination.mode] | @tsv' \
+    "$REPO_DIR/manifests/sources.json")
+  fault sync-artifact
+}
+
+# Packages whose payload stage has not landed keep their framework markers so
+# every closure-listed package root continues to exist after replacement.
+preserve_framework_markers() {
+  local package_dir name marker
+
+  for package_dir in "$REPO_DIR/packages/upstream"/*/; do
+    name="$(basename -- "$package_dir")"
+    [[ ! -d "$STAGING/candidate/packages/upstream/$name" ]] || continue
+    for marker in .empty-package .stow-local-ignore; do
+      [[ -f "$package_dir$marker" && ! -L "$package_dir$marker" ]] || continue
+      mkdir -p -- "$STAGING/candidate/packages/upstream/$name"
+      cp -p -- "$package_dir$marker" "$STAGING/candidate/packages/upstream/$name/$marker"
+    done
+  done
+}
+
+emit_transform_json() {
+  local index="$1"
+
+  case "${REC_TRANSFORM[$index]}" in
+    none)
+      printf '"none"'
+      ;;
+    append)
+      jq -cn --rawfile appended "$STAGING/appended-bytes" \
+        --arg output_blob "${REC_OUTPUT_BLOB[$index]}" \
+        '{type: "append", appended: $appended, output_blob: $output_blob}'
+      ;;
+    overwrite)
+      jq -cn --arg repository "${REC_REPLACES_REPOSITORY[$index]}" \
+        --arg commit "${REC_REPLACES_COMMIT[$index]}" \
+        --arg path "${REC_REPLACES_PATH[$index]}" \
+        --arg blob "${REC_REPLACES_BLOB[$index]}" \
+        --arg mode "${REC_REPLACES_MODE[$index]}" \
+        '{type: "overwrite", replaces: {repository: $repository, commit: $commit,
+          path: $path, blob: $blob, mode: $mode}}'
+      ;;
+  esac
+}
+
+generate_candidate_manifest() {
+  local index transform_json entries="$STAGING/entries.jsonl"
+
+  printf '%s' "$NVIM_OPTIONS_APPEND" > "$STAGING/appended-bytes"
+  : > "$entries"
+  for index in $(seq 0 $((REC_COUNT - 1))); do
+    transform_json="$(emit_transform_json "$index")"
+    jq -cn \
+      --arg id "${REC_ID[$index]}" \
+      --arg repository "${REC_REPOSITORY[$index]}" \
+      --arg release "${REC_RELEASE[$index]}" \
+      --arg commit "${REC_COMMIT[$index]}" \
+      --arg source_path "${REC_SOURCE_PATH[$index]}" \
+      --arg source_blob "${REC_SOURCE_BLOB[$index]}" \
+      --arg source_mode "${REC_SOURCE_MODE[$index]}" \
+      --arg snapshot "${REC_SNAPSHOT[$index]}" \
+      --arg destination_root "${REC_DEST_ROOT[$index]}" \
+      --arg destination_path "${REC_DEST_PATH[$index]}" \
+      --argjson transform "$transform_json" \
+      '{id: $id, repository: $repository, release: $release, commit: $commit,
+        source: {path: $source_path, blob: $source_blob, mode: $source_mode},
+        snapshot: $snapshot,
+        destination: (if $destination_root == "home"
+          then {root: "home", path: $destination_path, mode: $source_mode}
+          else {root: "reference"} end),
+        transform: $transform}' >> "$entries"
+  done
+
+  jq -c '.artifacts[]' "$REPO_DIR/manifests/sources.json" > "$STAGING/artifacts.jsonl"
+  mkdir -p -- "$STAGING/candidate/manifests"
+  jq -n --slurpfile sources "$entries" --slurpfile artifacts "$STAGING/artifacts.jsonl" \
+    '{"$schema": "../schemas/source-manifest-v1.schema.json",
+      schema_version: 1,
+      snapshot_root: "packages/upstream",
+      sources: $sources,
+      artifacts: $artifacts}' > "$STAGING/candidate/manifests/sources.json"
+  fault sync-manifest
+}
+
+replace_active_snapshot() {
+  local active="$REPO_DIR/packages/upstream"
+  local manifest="$REPO_DIR/manifests/sources.json"
+
+  fault sync-replace
+  UPSTREAM_SWAP_OLD_TREE="$STAGING/replaced-upstream"
+  UPSTREAM_SWAP_OLD_MANIFEST="$STAGING/replaced-sources.json"
+  cp -p -- "$manifest" "$UPSTREAM_SWAP_OLD_MANIFEST" || \
+    die 'unable to preserve the active manifest for replacement'
+  mv -- "$active" "$UPSTREAM_SWAP_OLD_TREE" || \
+    die 'unable to stage the active snapshot for replacement'
+  UPSTREAM_SWAP_ACTIVE=true
+  if ! mv -- "$STAGING/candidate/packages/upstream" "$active"; then
+    die 'snapshot replacement failed'
+  fi
+  fault sync-replaced-tree
+  mv -- "$STAGING/candidate/manifests/sources.json" "$manifest" || \
+    die 'manifest replacement failed after the snapshot swap'
+  UPSTREAM_SWAP_ACTIVE=false
+}
+
+# The common EXIT trap invokes this before deleting staging. If replacement is
+# interrupted, restore the old tree and manifest from staging as one unit.
+cleanup_before_temp_paths() {
+  [[ "$UPSTREAM_SWAP_ACTIVE" == true ]] || return 0
+
+  local active="$REPO_DIR/packages/upstream"
+  local failed_tree="$STAGING/failed-candidate-upstream"
+  if [[ -e "$active" || -L "$active" ]]; then
+    mv -- "$active" "$failed_tree" || {
+      TEMP_PATHS=()
+      printf '[%s] error: interrupted snapshot swap requires manual recovery from %s\n' \
+        "$SCRIPT_NAME" "$STAGING" >&2
+      return 1
+    }
+  fi
+  mv -- "$UPSTREAM_SWAP_OLD_TREE" "$active" && \
+    mv -- "$UPSTREAM_SWAP_OLD_MANIFEST" "$REPO_DIR/manifests/sources.json" || {
+      TEMP_PATHS=()
+      printf '[%s] error: interrupted snapshot swap requires manual recovery from %s\n' \
+        "$SCRIPT_NAME" "$STAGING" >&2
+      return 1
+    }
+  UPSTREAM_SWAP_ACTIVE=false
+  log 'restored the active snapshot after an interrupted replacement'
+}
+
+run_sync() {
+  validate_sync_test_overrides
+  validate_schema_file "$REPO_DIR/schemas/source-manifest-v1.schema.json"
+  validate_manifest_file "$REPO_DIR/manifests/sources.json"
+  validate_proposal
+
+  STAGING="$(mktemp -d "$REPO_DIR/.upstream-staging.XXXXXX")"
+  TEMP_PATHS+=("$STAGING")
+
+  local pin
+  for pin in omarchy lazyvim-starter omarchy-pkgs; do
+    fetch_pin "$pin"
+  done
+  fault sync-fetch
+
+  enumerate_scope
+  log "enumerated $REC_COUNT pinned source file(s)"
+  extract_records
+  apply_append_transforms
+  preserve_artifacts
+  preserve_framework_markers
+  generate_candidate_manifest
+
+  cp -a -- "$REPO_DIR/schemas" "$STAGING/candidate/schemas"
+  verify_tree "$STAGING/candidate" quiet
+  log 'candidate snapshot verified offline against the candidate manifest'
+  fault sync-candidate-verify
+
+  replace_active_snapshot
+  log 'replaced the active snapshot and manifest'
+
+  verify_tree "$REPO_DIR"
+  log "review 'git diff' before accepting the synchronized baseline"
+}
+
+# --- entry point -----------------------------------------------------------
 
 command -v jq >/dev/null 2>&1 || die 'jq is required'
 command -v git >/dev/null 2>&1 || die 'git is required'
-[[ -f "$SCHEMA" && ! -L "$SCHEMA" ]] || die 'source manifest schema is missing or is not a regular file'
-[[ -f "$MANIFEST" && ! -L "$MANIFEST" ]] || die 'source manifest is missing or is not a regular file'
 
-jq empty "$SCHEMA" >/dev/null 2>&1 || die 'source manifest schema is malformed'
-jq -e --arg schema_id "$SCHEMA_ID" '
-  .["$schema"] == "https://json-schema.org/draft/2020-12/schema" and
-  .["$id"] == $schema_id and
-  .type == "object" and
-  .additionalProperties == false and
-  .properties["$schema"].const == "../schemas/source-manifest-v1.schema.json" and
-  .properties.schema_version.const == 1 and
-  .properties.snapshot_root.const == "packages/upstream"
-' "$SCHEMA" >/dev/null || die 'source manifest schema is unsupported'
-
-jq empty "$MANIFEST" >/dev/null 2>&1 || die 'source manifest is malformed'
-jq -e '
-  def keys_are($allowed): (keys | sort) == ($allowed | sort);
-  def clean_string:
-    type == "string" and length > 0 and (test("[[:cntrl:]]") | not);
-  def git_mode: type == "string" and test("^100(644|755)$");
-  type == "object" and
-  keys_are(["$schema", "schema_version", "snapshot_root", "sources"]) and
-  .["$schema"] == "../schemas/source-manifest-v1.schema.json" and
-  .schema_version == 1 and
-  .snapshot_root == "packages/upstream" and
-  (.sources | type == "array" and length > 0) and
-  (.sources | all(.[];
-    type == "object" and
-    keys_are(["id", "repository", "release", "commit", "source", "snapshot", "destination", "transform"]) and
-    (.id | clean_string and test("^[a-z0-9]+(-[a-z0-9]+)*$")) and
-    (.repository | clean_string and test("^https://[^[:space:]]+$")) and
-    (.release | clean_string) and
-    (.commit | type == "string" and test("^[0-9a-f]{40}$")) and
-    (.source | type == "object" and keys_are(["path", "blob", "mode"])) and
-    (.source.path | clean_string) and
-    (.source.blob | type == "string" and test("^[0-9a-f]{40}$")) and
-    (.source.mode | git_mode) and
-    (.snapshot | clean_string) and
-    (.destination | type == "object" and keys_are(["root", "path", "mode"])) and
-    .destination.root == "home" and
-    (.destination.path | clean_string) and
-    (.destination.mode | git_mode) and
-    .transform == "none"
-  )) and
-  ([.sources[].id] | length) == ([.sources[].id] | unique | length) and
-  ([.sources[].snapshot] | length) == ([.sources[].snapshot] | unique | length) and
-  ([.sources[].destination.path] | length) == ([.sources[].destination.path] | unique | length)
-' "$MANIFEST" >/dev/null || die 'source manifest does not conform to schema version 1'
-
-readonly SNAPSHOT_ROOT_REL="$(jq -r '.snapshot_root' "$MANIFEST")"
-is_safe_relative_path "$SNAPSHOT_ROOT_REL" || die 'snapshot root is not a safe relative path'
-readonly SNAPSHOT_ROOT="$REPO_DIR/$SNAPSHOT_ROOT_REL"
-[[ -d "$SNAPSHOT_ROOT" && ! -L "$SNAPSHOT_ROOT" ]] || \
-  die 'snapshot root is missing or is not a directory'
-
-declare -a ids repositories releases commits source_paths blobs source_modes
-declare -a snapshot_paths destination_paths destination_modes
-while IFS=$'\t' read -r id repository release commit source_path blob source_mode \
-  snapshot_path destination_root destination_path destination_mode transform; do
-  is_safe_relative_path "$source_path" || die "unsafe source path for $id: $source_path"
-  is_safe_relative_path "$snapshot_path" || die "unsafe snapshot path for $id: $snapshot_path"
-  [[ "$snapshot_path" == "$SNAPSHOT_ROOT_REL/"* ]] || \
-    die "snapshot path is outside $SNAPSHOT_ROOT_REL for $id: $snapshot_path"
-  is_safe_relative_path "$destination_path" || \
-    die "unsafe home-relative destination path for $id: $destination_path"
-  [[ "$destination_root" == 'home' ]] || die "unsupported destination root for $id"
-  [[ "$transform" == 'none' ]] || die "unsupported transform for $id"
-  [[ "$source_mode" == "$destination_mode" ]] || \
-    die "source and destination modes differ for untransformed source $id"
-
-  ids+=("$id")
-  repositories+=("$repository")
-  releases+=("$release")
-  commits+=("$commit")
-  source_paths+=("$source_path")
-  blobs+=("$blob")
-  source_modes+=("$source_mode")
-  snapshot_paths+=("$snapshot_path")
-  destination_paths+=("$destination_path")
-  destination_modes+=("$destination_mode")
-done < <(jq -r '.sources[] | [
-  .id,
-  .repository,
-  .release,
-  .commit,
-  .source.path,
-  .source.blob,
-  .source.mode,
-  .snapshot,
-  .destination.root,
-  .destination.path,
-  .destination.mode,
-  .transform
-] | @tsv' "$MANIFEST")
-
-shopt -s nullglob dotglob globstar
-for absolute_path in "$SNAPSHOT_ROOT"/**; do
-  [[ -d "$absolute_path" && ! -L "$absolute_path" ]] && continue
-  relative_path="${absolute_path#"$REPO_DIR/"}"
-  declared=false
-  for snapshot_path in "${snapshot_paths[@]}"; do
-    if [[ "$relative_path" == "$snapshot_path" ]]; then
-      declared=true
-      break
-    fi
-  done
-  [[ "$declared" == true ]] || die "undeclared snapshot inventory path: $relative_path"
-done
-
-for index in "${!snapshot_paths[@]}"; do
-  snapshot_path="${snapshot_paths[$index]}"
-  absolute_path="$REPO_DIR/$snapshot_path"
-  [[ -f "$absolute_path" && ! -L "$absolute_path" ]] || \
-    die "missing or non-regular snapshot: $snapshot_path"
-
-  actual_mode="$(stat -c '%a' -- "$absolute_path")"
-  expected_mode="${destination_modes[$index]#100}"
-  [[ "$actual_mode" == "$expected_mode" ]] || \
-    die "snapshot mode drift for $snapshot_path: expected $expected_mode, found $actual_mode"
-
-  actual_blob="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
-    git hash-object --no-filters -- "$absolute_path")"
-  [[ "$actual_blob" == "${blobs[$index]}" ]] || \
-    die "snapshot blob drift for $snapshot_path: expected ${blobs[$index]}, found $actual_blob"
-done
-
-printf '[%s] verified %d pinned snapshot file(s)\n' "$SCRIPT_NAME" "${#snapshot_paths[@]}"
-for index in "${!ids[@]}"; do
-  printf '[%s] pin %s: %s %s %s\n' \
-    "$SCRIPT_NAME" "${ids[$index]}" "${repositories[$index]}" \
-    "${releases[$index]}" "${commits[$index]}"
-  printf '[%s] source %s: %s blob %s mode %s -> ~/%s mode %s (transform: none)\n' \
-    "$SCRIPT_NAME" "${ids[$index]}" "${source_paths[$index]}" \
-    "${blobs[$index]}" "${source_modes[$index]}" \
-    "${destination_paths[$index]}" "${destination_modes[$index]}"
-done
+(($# >= 1)) || usage
+case "$1" in
+  verify)
+    (($# == 1)) || usage
+    validate_test_environment
+    verify_tree "$REPO_DIR"
+    ;;
+  sync)
+    (($# == 3)) && [[ "$2" == '--proposal' ]] || usage
+    PROPOSAL="$3"
+    validate_test_environment
+    run_sync
+    ;;
+  *)
+    usage
+    ;;
+esac
