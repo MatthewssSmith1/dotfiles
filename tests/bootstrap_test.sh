@@ -11,8 +11,19 @@ fail() {
   exit 1
 }
 
+readonly BOOTSTRAP_SOURCES=(
+  "$REPO_DIR/bootstrap.sh"
+  "$REPO_DIR/lib/common.sh"
+  "$REPO_DIR/lib/host.sh"
+  "$REPO_DIR/lib/engine.sh"
+  "$REPO_DIR/lib/areas/git.sh"
+)
+for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
+  [[ -f "$source_file" ]] || fail "missing bootstrap source file: $source_file"
+done
+
 bash -n \
-  "$REPO_DIR/bootstrap.sh" \
+  "${BOOTSTRAP_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
   "$TEST_DIR/stage2_bootstrap_test.sh" \
   "$TEST_DIR/upstream_test.sh" || fail 'a Stage 2 Bash file has invalid syntax'
@@ -54,7 +65,7 @@ zoxide_line="$(grep -n 'zoxide init' "$REPO_DIR/.zshrc" | cut -d: -f1)"
 ((mise_line < zoxide_line)) || fail 'zoxide initializes before mise activation'
 
 if grep -Eq '(^|[[:space:]])stow([[:space:]]+[^-][^[:space:]]*)?[[:space:]]+\.' \
-  "$REPO_DIR/bootstrap.sh"; then
+  "${BOOTSTRAP_SOURCES[@]}"; then
   fail 'bootstrap can invoke the retired root Stow package'
 fi
 

@@ -101,11 +101,21 @@ prepare_omarchy() {
   cp "$REPO_DIR/packages/upstream/git/.config/git/config" "$home/.config/git/config"
 }
 
-bash -n "$BOOTSTRAP" || fail 'bootstrap.sh has invalid Bash syntax'
+readonly BOOTSTRAP_SOURCES=(
+  "$BOOTSTRAP"
+  "$REPO_DIR/lib/common.sh"
+  "$REPO_DIR/lib/host.sh"
+  "$REPO_DIR/lib/engine.sh"
+  "$REPO_DIR/lib/areas/git.sh"
+)
+for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
+  [[ -f "$source_file" ]] || fail "missing bootstrap source file: $source_file"
+done
+bash -n "${BOOTSTRAP_SOURCES[@]}" || fail 'a bootstrap source file has invalid Bash syntax'
 jq empty "$REPO_DIR/schemas/deployment-state-v1.schema.json" || \
   fail 'Stage 2 JSON is invalid'
 grep -Fq 'set -Eeuo pipefail' "$BOOTSTRAP" || fail 'bootstrap strict mode is missing'
-if grep -Eq '(^|[[:space:]])stow([[:space:]]+[^-][^[:space:]]*)?[[:space:]]+\.' "$BOOTSTRAP"; then
+if grep -Eq '(^|[[:space:]])stow([[:space:]]+[^-][^[:space:]]*)?[[:space:]]+\.' "${BOOTSTRAP_SOURCES[@]}"; then
   fail 'root Stow is reachable'
 fi
 pass
