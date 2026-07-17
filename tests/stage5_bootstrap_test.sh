@@ -129,6 +129,13 @@ jq empty "$REPO_DIR/schemas/provisioning-manifest-v1.schema.json" \
   "$REPO_DIR/schemas/provisioning-receipt-v1.schema.json" || fail 'provisioning schema JSON is invalid'
 pass
 
+# Mise stores core backend links under the canonical tool name.
+core_link="$(HOME="$TEST_ROOT/core-link-home" DOTFILES_DIR="$REPO_DIR" bash -c \
+  'source "$DOTFILES_DIR/lib/provisioning.sh"; mise_link_path core:node 24.18.0')"
+[[ "$core_link" == "$TEST_ROOT/core-link-home/.local/share/mise/installs/node/24.18.0" ]] || \
+  fail 'core mise backend path was not canonicalized'
+pass
+
 # CLI intent is explicit and area selection does not pull in the core set.
 home="$(new_home cli)"
 capture "$home" --provision --remove
@@ -306,6 +313,27 @@ HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DI
 TEST_RC=$?
 set -e
 ((TEST_RC == 1)) || fail 'unexpected archive inventory was accepted'
+pass
+
+# Locked archives may contain relative symlinks, but extracted links cannot escape the install root.
+symlink_archive_root="$TEST_ROOT/symlink-archive"
+mkdir -p "$symlink_archive_root/bin" "$symlink_archive_root/lib"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$symlink_archive_root/lib/tool"
+ln -s ../lib/tool "$symlink_archive_root/bin/tool"
+tar -czf "$TEST_ROOT/symlink-tool.tar.gz" -C "$symlink_archive_root" bin lib
+symlink_inventory="$(tar -tzf "$TEST_ROOT/symlink-tool.tar.gz" | sha256sum)"
+symlink_inventory="${symlink_inventory%% *}"
+HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage5-test \
+  bash -c 'source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/provisioning.sh"; archive_members_safe "$1" tar.gz "$2"' \
+  _ "$TEST_ROOT/symlink-tool.tar.gz" "$symlink_inventory" || fail 'safe archived symlink was rejected'
+ln -s /tmp "$symlink_archive_root/escape"
+set +e
+HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage5-test \
+  bash -c 'source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/provisioning.sh"; extracted_links_safe "$1"' \
+  _ "$symlink_archive_root" >/dev/null 2>&1
+TEST_RC=$?
+set -e
+((TEST_RC == 1)) || fail 'symlink escaping an extracted root was accepted'
 pass
 
 # Missing dependencies fail only their owning area; an unrelated selected area still applies.

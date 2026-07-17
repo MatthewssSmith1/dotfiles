@@ -263,8 +263,12 @@ run_mise_isolated() {
 
 mise_link_path() {
   local backend="$1" version="$2"
-  backend="${backend//:/-}"
-  backend="${backend//\//-}"
+  if [[ "$backend" == core:* ]]; then
+    backend="${backend#core:}"
+  else
+    backend="${backend//:/-}"
+    backend="${backend//\//-}"
+  fi
   printf '%s/.local/share/mise/installs/%s/%s' "$HOME" "$backend" "$version"
 }
 
@@ -369,8 +373,21 @@ archive_members_safe() {
   done < <(tar "${tar_args[@]}" "$archive")
   details="$(tar "${tar_args[@]/-t/-tv}" "$archive")" || return 1
   while IFS= read -r member || [[ -n "$member" ]]; do
-    case "${member:0:1}" in -|d) ;; *) return 1 ;; esac
+    case "${member:0:1}" in -|d|l) ;; *) return 1 ;; esac
   done <<< "$details"
+}
+
+extracted_links_safe() {
+  local root="$1" canonical path resolved
+  canonical="$(realpath -e -- "$root")" || return 1
+  (
+    shopt -s dotglob globstar nullglob
+    for path in "$root"/**; do
+      [[ -L "$path" ]] || continue
+      resolved="$(realpath -m -- "$path")" || return 1
+      [[ "$resolved" == "$canonical"/* ]] || return 1
+    done
+  )
 }
 
 extract_locked_artifact() {
@@ -394,6 +411,7 @@ extract_locked_artifact() {
       else
         tar -xJf "$archive" --no-same-owner --no-same-permissions --strip-components="$strip" -C "$root"
       fi
+      extracted_links_safe "$root" || die 'artifact contains a symlink outside its install root'
       ;;
   esac
   [[ -f "$root/$executable" && ! -L "$root/$executable" && -x "$root/$executable" ]] || \
