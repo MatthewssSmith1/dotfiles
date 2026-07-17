@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "status": "accepted-for-preverified-link-installation",
+  "accepted_manifest": "manifests/provisioning.json",
+  "accepted_on": "2026-07-17",
+  "previous_manifest_sha256s": [],
+  "platforms": ["linux-x86_64"],
+  "strategy": "Download each immutable version URL, restrict redirects to recorded origins, verify the repository SHA-256, extract without unsafe archive paths into a retained root, verify the executable, then register that root with the fully qualified backend using offline mise link.",
+  "notes": [
+    "Node 24.18.0 is the reviewed LTS and satisfies pnpm 11.13.1's Node >=22.13 requirement.",
+    "pnpm is independently owned; Corepack must not activate a second pnpm owner.",
+    "The direct preverification strategy is mandatory because Aqua metadata does not enforce the repository digest for every selected tool.",
+    "OpenCode, opencode-openai-codex-auth, and Vite+ are outside this manifest by design.",
+    "Omarchy retains native ownership; Stage 5 does not install this generic/WSL personal suite there."
+  ],
+  "omarchy_owners": [
+    {"id": "node", "owner": "omarchy-managed global mise selection", "evidence": "install/config/mise-work.sh at Omarchy v3.8.3"},
+    {"id": "pnpm", "owner": "host-owned; no Omarchy v3.8.3 baseline owner", "evidence": "absent from the pinned base package and npx inventories"},
+    {"id": "claude-code", "owner": "pacman package claude-code", "evidence": "install/omarchy-base.packages at Omarchy v3.8.3"},
+    {"id": "worktrunk", "owner": "host-owned; no Omarchy v3.8.3 baseline owner", "evidence": "absent from the pinned base package and npx inventories"}
+  ],
+  "research_sources": [
+    "https://github.com/jdx/mise/releases/tag/v2026.7.7",
+    "https://nodejs.org/dist/v24.18.0/SHASUMS256.txt",
+    "https://github.com/pnpm/pnpm/releases/tag/v11.13.1",
+    "https://downloads.claude.ai/claude-code-releases/2.1.212/manifest.json",
+    "https://github.com/max-sixty/worktrunk/releases/tag/v0.68.0",
+    "https://github.com/tmux/tmux-builds/releases/tag/v3.7b",
+    "https://github.com/neovim/neovim/releases/tag/v0.12.4",
+    "https://github.com/starship/starship/releases/tag/v1.26.0"
+  ]
+}

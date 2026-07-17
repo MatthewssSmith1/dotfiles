@@ -8,15 +8,18 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/host.sh"
 source "$SCRIPT_DIR/lib/engine.sh"
+source "$SCRIPT_DIR/lib/provisioning.sh"
 source "$SCRIPT_DIR/lib/areas/git.sh"
 source "$SCRIPT_DIR/lib/areas/generic.sh"
 
 MODE=apply
 PROFILE_OVERRIDE=""
 AREAS=()
+PROVISION=false
+EXPLICIT_AREA_SELECTION=false
 
 usage() {
-  printf 'usage: %s [apply|--check|--remove] [--profile omarchy|generic|wsl] [--area <area> ...]\n' "$SCRIPT_NAME" >&2
+  printf 'usage: %s [apply|--check|--remove] [--provision] [--profile omarchy|generic|wsl] [--area <area> ...]\n' "$SCRIPT_NAME" >&2
   exit 1
 }
 
@@ -32,7 +35,7 @@ add_area() {
 }
 
 parse_cli() {
-  local operation_seen=false
+  local operation_seen=false provision_seen=false profile_seen=false
 
   while (($# > 0)); do
     case "$1" in
@@ -51,26 +54,39 @@ parse_cli() {
         MODE=remove
         operation_seen=true
         ;;
+      --provision)
+        [[ "$provision_seen" == false ]] || usage
+        PROVISION=true
+        provision_seen=true
+        ;;
       --profile)
         (($# >= 2)) || usage
+        [[ "$profile_seen" == false ]] || usage
         PROFILE_OVERRIDE="$2"
+        profile_seen=true
         shift
         ;;
       --profile=*)
+        [[ "$profile_seen" == false ]] || usage
         PROFILE_OVERRIDE="${1#*=}"
+        profile_seen=true
         ;;
       --area)
         (($# >= 2)) || usage
+        EXPLICIT_AREA_SELECTION=true
         add_area "$2"
         shift
         ;;
       --area=*)
+        EXPLICIT_AREA_SELECTION=true
         add_area "${1#*=}"
         ;;
       *) usage ;;
     esac
     shift
   done
+
+  [[ "$MODE" != remove || "$PROVISION" == false ]] || die '--provision is invalid with --remove'
 
   if [[ -n "$PROFILE_OVERRIDE" ]]; then
     [[ "$MODE" != remove ]] || die '--profile is invalid with --remove'
@@ -178,6 +194,10 @@ prune_state_chain_if_unrecorded() {
 run_selected_areas() {
   local area status overall=0
   for area in "${AREAS[@]}"; do
+    if [[ "${AREA_DEPENDENCY_OK[$area]:-true}" != true || "${AREA_PREFLIGHT_OK[$area]:-true}" != true ]]; then
+      overall=1
+      continue
+    fi
     # A subshell in a condition context silently loses errexit, so run it as a
     # plain command with errexit paused; run_area rearms strict mode itself.
     set +e
@@ -196,7 +216,37 @@ run_selected_areas() {
   ((overall == 0)) || exit 1
 }
 
+preflight_selected_areas() {
+  local area status overall=0
+  AREA_PREFLIGHT_OK=()
+  for area in "${AREAS[@]}"; do
+    if [[ "${AREA_DEPENDENCY_OK[$area]:-true}" != true ]]; then
+      AREA_PREFLIGHT_OK["$area"]=false
+      continue
+    fi
+    set +e
+    (
+      set -Eeuo pipefail
+      trap cleanup EXIT
+      case "$area" in
+        git) preflight_git ;;
+        *) preflight_generic "$area" ;;
+      esac
+    )
+    status=$?
+    set -e
+    if ((status == 0)); then
+      AREA_PREFLIGHT_OK["$area"]=true
+    else
+      AREA_PREFLIGHT_OK["$area"]=false
+      overall=1
+    fi
+  done
+  ((overall == 0))
+}
+
 main() {
+  local dependency_status=0 provisioning_status=0 area_status=0 run_status=0 native_status=0 area
   parse_cli "$@"
   ((EUID != 0)) || die 'run bootstrap as the non-root workstation user'
   [[ -n "${HOME:-}" && -d "$HOME" ]] || die 'HOME must refer to an existing directory'
@@ -233,12 +283,35 @@ main() {
   validate_selected_areas
   detect_host
   select_profile
-  check_manifest_dependencies "$MODE" "$SELECTED_PROFILE" true || exit 1
+  check_manifest_dependencies "$MODE" "$SELECTED_PROFILE" true || dependency_status=1
+  [[ "$DEPENDENCY_CRITICAL_MISSING" == false ]] || exit 1
+  validate_provisioning_manifest
+  detect_provisioning_platform
   acquire_lock
   validate_all_state
   validate_migrations_ledger
   refuse_profile_mismatch
-  run_selected_areas
+  validate_provisioning_receipt
+  check_omarchy_core_drift || native_status=1
+  if ((native_status != 0)); then
+    for area in "${AREAS[@]}"; do AREA_DEPENDENCY_OK["$area"]=false; done
+  fi
+  preflight_selected_areas || area_status=1
+  if [[ "$PROVISION" == true ]]; then
+    if [[ "$PROVISION_DEPENDENCY_MISSING" == true ]]; then
+      provisioning_status=1
+    else
+      select_provisioning_tools
+      run_provisioning || provisioning_status=1
+    fi
+  fi
+  set +e
+  ( run_selected_areas )
+  run_status=$?
+  set -e
+  ((run_status != 70)) || exit 70
+  ((run_status == 0)) || area_status=1
+  ((dependency_status == 0 && provisioning_status == 0 && native_status == 0 && area_status == 0)) || exit 1
 }
 
 main "$@"

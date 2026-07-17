@@ -58,7 +58,7 @@ validate_test_environment() {
         -d "$DOTFILES_TEST_HOLD_DIR" && ! -L "$DOTFILES_TEST_HOLD_DIR" ]] || \
         die 'test hold requires a point and an absolute existing regular directory'
     fi
-  elif [[ -n "${DOTFILES_TEST_HOST_ROOT:-}${DOTFILES_TEST_UNAME:-}" ]]; then
+  elif [[ -n "${DOTFILES_TEST_HOST_ROOT:-}${DOTFILES_TEST_UNAME:-}${DOTFILES_TEST_ARCH:-}" ]]; then
     die 'test host overrides require DOTFILES_TESTING=1'
   fi
 }

@@ -69,11 +69,12 @@ Shell startup activates the shared mise fragments after environment setup and
 before mise-provided tools are initialized. Executable ownership and locking
 are defined in [Deployment](../deployment.md#mise).
 
-Core personal tools have separate capability-guarded hooks:
-
-- Source the Vite+ environment when installed.
-- Initialize Worktrunk shell behavior when available.
-- Preserve existing OpenCode configuration and authentication.
+Worktrunk has a separate capability-guarded initialization hook when available.
+Vite+ remains project-owned through project mise files; the Bash migration must
+not add a global Vite+ environment hook. Stage 5 does not install, update,
+configure, or inspect OpenCode or `opencode-openai-codex-auth`, and unrelated
+shell deployment preserves the existing executable, configuration, plugins,
+and authentication state.
 
 No new Bash or personal-tool hook may install, update, authenticate, or use the
 network during shell startup. The canonical exceptions are documented in

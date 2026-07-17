@@ -52,8 +52,9 @@ final tmux action.
 ## Plugin Lifecycle
 
 Record each plugin repository URL, exact commit, and expected directory in
-`tmux-plugins.lock`. Bootstrap installs missing locked plugins explicitly and
-verifies existing checkouts. Updating a pin is a separate reviewable operation.
+`tmux-plugins.lock`. The Stage 7 explicit plugin-provisioning operation installs
+missing locked plugins and verifies existing checkouts. Updating a pin is a
+separate reviewable operation; ordinary configuration apply stays offline.
 
 tmux startup must never clone, update, or otherwise access the network.
 
@@ -62,6 +63,10 @@ tmux startup must never clone, update, or otherwise access the network.
 The baseline is written for tmux 3.5. The intended owner is a distro package
 at 3.5 or newer, or locked `aqua:tmux/tmux-builds` through mise
 (see [Deployment](../deployment.md#executable-ownership)).
+Only explicit provisioning apply may fetch the fallback. No-area `--provision`
+includes tmux as a platform foundation even while its configuration area is
+framework-only; explicit `--area tmux` remains refused until the tmux payload
+stage lands.
 
 Interim behavior on hosts that have not converged is tolerate-and-report.
 The baseline config loads and works on older tmux, but unknown options print

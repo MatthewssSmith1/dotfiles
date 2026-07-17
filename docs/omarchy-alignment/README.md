@@ -67,10 +67,16 @@ the packet.
   runtimes and approved user-scoped tools. Lean into mise wherever it can
   absorb tool-management complexity; tmux uses locked
   `aqua:tmux/tmux-builds` when the distro package is older than 3.5.
-- Keep `--check`, removal, Bash startup, and tmux startup offline. Apply may
-  fetch pinned runtime tools and locked tmux plugins but never Neovim plugins,
-  runtime assets, or baselines; transitional zsh retains its documented
-  first-start exception.
+- Keep both `--check` forms, ordinary apply, removal, Bash startup, and tmux
+  startup offline. Only explicit `--provision` apply may fetch its printed,
+  locked runtime-tool plan; transitional zsh retains its documented first-start
+  exception.
+- Define full provisioning as no-area `--provision`: Node, pnpm, Claude Code,
+  Worktrunk, and platform foundations. Area-scoped provisioning selects only
+  area dependencies and does not make framework-only areas selectable.
+- Defer OpenCode and `opencode-openai-codex-auth` while preserving the existing
+  executable, configuration, plugins, and authentication. Keep Vite+ owned and
+  locked by project mise files, never by a global installer or shell hook.
 - Refuse profile changes until all existing deployment state is removed
   explicitly.
 - Preserve existing Git credential helpers in the host-local layer.
@@ -90,8 +96,8 @@ the packet.
   run from the native machine.
 - Keep native Omarchy theme selection authoritative and defer portable,
   coordinated themes.
-- Report version drift between installed native Omarchy and the recorded pin
-  as a non-blocking warning.
+- Report native Omarchy core and Neovim package drift as separate non-blocking
+  warnings while missing owners and forbidden shadows remain blocking.
 
 The linked documents are canonical for the details behind these summaries.
 
@@ -102,10 +108,8 @@ before implementation reaches the affected stage:
 
 1. Specify the native Neovim personal loader and refresh-recovery behavior
    during the Omarchy native integration stage.
-2. Select exact mise-managed tool versions and generate their lockfiles.
-3. Select exact TPM and persistence plugin commits.
-4. Define update policy for Vite+ and the OpenCode Codex plugin outside mise.
-5. Record the tested Windows Terminal version before closing the tmux gate.
+2. Select exact TPM and persistence plugin commits.
+3. Record the tested Windows Terminal version before closing the tmux gate.
 
 Tool-specific implications are recorded in [Deployment](deployment.md),
 [tmux](tools/tmux.md), and [Neovim](tools/neovim.md).

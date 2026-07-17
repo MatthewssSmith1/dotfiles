@@ -126,17 +126,24 @@ Tests added in this stage cover:
 Gate: all committed baseline files reproduce from explicit pinned inputs during
 sync, and the accepted snapshots verify offline against the manifest.
 
-## 5. Ownership-Aware Provisioning
+## 5. Ownership-Aware Provisioning (Status: Implemented)
 
-- Add profile-aware and area-aware dependency checks generated from manifests.
+- Added profile-aware and area-aware dependency checks generated from manifests.
 - Print exact manual package commands without invoking `sudo`.
-- Add pinned generic mise installation and additive configuration fragments.
-- Select exact tool versions, backends, and lockfiles.
+- Added pinned generic mise installation and additive configuration fragments.
+- Selected exact tool versions, backends, artifacts, hashes, and origins.
 - Use locked `aqua:tmux/tmux-builds` when the distro tmux is older than 3.5.
-- Define and implement reviewed Vite+ and OpenCode Codex plugin update policy.
-- Provision core personal applications only during full networked apply.
-- Add separate native Omarchy core and Neovim package drift warnings.
-- Reject forbidden executable shadows.
+- Added explicit `--provision`; ordinary apply remains configuration-only, while
+  `--check --provision` remains offline and non-mutating.
+- Provision Node, pnpm, Claude Code, and Worktrunk only through no-area
+  `--provision`; area-scoped provisioning selects only area dependencies.
+- Keep OpenCode and `opencode-openai-codex-auth` outside Stage 5 and preserve
+  their executable, configuration, plugins, and authentication state.
+- Keep Vite+ project-owned and locked through project mise files, with no
+  global installer, executable, or shell hook.
+- Added separate native Omarchy core and Neovim package drift warnings.
+- Reject forbidden executable shadows within the observable ownership boundary;
+  Stage 6 invokes the reusable resolver inside the managed interactive shell.
 
 Tests added in this stage cover:
 
@@ -145,7 +152,11 @@ Tests added in this stage cover:
 - Pinned apply under controlled network access and denied baseline sync.
 - Mise lock state, backend identity, and PATH ownership from multiple working
   directories.
-- Native command shadowing by aliases, functions, shims, and user-local bins.
+- Exported-function, shim, user-local-bin, and project shadowing through normal
+  bootstrap; alias and non-exported-function cases through the reusable
+  resolver in a controlled shell.
+- Temporary homes, XDG roots, fixture mise/OpenCode installations, and
+  controlled paths; automated gates perform no real provisioning apply.
 
 Gate: generic systems converge using approved owners, missing distro packages
 are reported exactly, runtime pins do not advance silently, and Omarchy keeps
@@ -181,7 +192,8 @@ available without a login-shell change.
 - Deploy or attach the pinned Omarchy baseline.
 - Add minimal generic and WSL adapters.
 - Select exact TPM and persistence-plugin commits.
-- Install and verify locked plugins during networked apply, never startup.
+- Install and verify locked plugins through the Stage 7 explicit networked
+  plugin-provisioning operation, never ordinary apply or startup.
 - Preserve existing Resurrect state.
 - Apply the documented manual Windows Terminal setup.
 - Detect selected client, active server, and isolated server versions

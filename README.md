@@ -31,11 +31,25 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
   ~/dotfiles/bootstrap.sh --check --area git
 ```
 
-Bootstrap is user-scoped, refuses to run as root, stays offline, and does not
-install packages or change the login shell. Stage 2 deploys only Git. It leaves
+Bootstrap is user-scoped, refuses to run as root, never installs distro
+packages, and does not change the login shell. Ordinary apply, check, and
+removal stay offline. The current ready configuration area is Git. Bootstrap leaves
 existing shell, tmux, Neovim, zsh, agent, application, and authentication state
 untouched. Do not run Stow against the repository root; that package is
 permanently retired and inert.
+
+Stage 5 adds explicit, ownership-aware retained-tool provisioning:
+
+```bash
+~/dotfiles/bootstrap.sh --check --provision
+~/dotfiles/bootstrap.sh --provision
+```
+
+Only the second command may fetch the complete printed, checksum-locked plan.
+Ordinary apply remains configuration-only and both check forms remain offline.
+Area-scoped `--provision --area <area>` never selects the core personal tool
+set. See the
+[deployment contract](docs/omarchy-alignment/deployment.md#bootstrap-contract).
 
 To make zsh the login shell, run this separately and start a new login session:
 

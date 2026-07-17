@@ -155,9 +155,9 @@ Synchronization must never:
 - Run during bootstrap or shell startup.
 
 This is consistent with the canonical operation matrix in
-[Deployment](deployment.md#operation-and-network-policy): bootstrap apply may
-fetch locked runtime tools and tmux plugins, but it never fetches Neovim
-plugins or synchronizes baselines.
+[Deployment](deployment.md#operation-and-network-policy): ordinary bootstrap
+apply is offline and configuration-only. Explicit provisioning apply may fetch
+only its printed, locked runtime-tool plan and never synchronizes baselines.
 
 Selected upstream files are committed directly so ordinary Git diffs show
 baseline changes during review.

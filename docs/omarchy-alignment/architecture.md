@@ -167,11 +167,20 @@ deployed independently.
   regular files.
 - Platform package managers own stable generic CLI dependencies where
   practical.
-- Mise owns language runtimes and approved user-scoped tools. Lean into mise
-  wherever it can absorb tool-management complexity, including locked
-  versions, user-scoped installs without `sudo`, and verified prebuilt tools,
-  rather than inventing bespoke installers.
+- Mise owns workstation language runtimes and approved user-scoped tools. Lean
+  into mise wherever it can absorb tool-management complexity, including
+  locked versions, user-scoped installs without `sudo`, and verified prebuilt
+  tools, rather than inventing bespoke installers.
 - Projects retain higher precedence through their own mise and tool files.
+  Vite+ is project-owned through those files and has no global bootstrap owner.
+- OpenCode and `opencode-openai-codex-auth` remain host-owned and untouched,
+  pending a separately reviewed later lifecycle and preservation proof.
+
+Executable ownership checks cover inherited exported functions, candidates on
+bootstrap's effective `PATH`, mise resolution from neutral and controlled
+project directories, and, after Stage 6, the managed interactive shell.
+Unexported aliases and functions in an arbitrary parent shell are not inherited;
+bootstrap does not parse unrelated startup files in an attempt to infer them.
 
 Native refresh-managed destinations must remain regular files rather than
 links into this checkout. Concrete attachment and executable rules are in

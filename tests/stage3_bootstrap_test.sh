@@ -8,6 +8,13 @@ readonly TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
 readonly BOOTSTRAP="$REPO_DIR/bootstrap.sh"
 TEST_ROOT="$(mktemp -d)"
+TEST_BIN="$TEST_ROOT/bin"
+mkdir "$TEST_BIN"
+for command_name in eza bat; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$TEST_BIN/$command_name"
+  chmod +x "$TEST_BIN/$command_name"
+done
+export PATH="$TEST_BIN:$PATH"
 TEST_COUNT=0
 TEST_OUTPUT=""
 TEST_RC=0
@@ -77,7 +84,7 @@ new_home() {
 capture() {
   local home="$1" host="$2" bootstrap="$3"
   shift 3
-  if TEST_OUTPUT="$(HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
+  if TEST_OUTPUT="$(HOME="$home" PATH="$TEST_BIN:$PATH" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
     GIT_USER_NAME='Stage Three User' GIT_USER_EMAIL='stage3@example.com' "$bootstrap" "$@" 2>&1)"; then
     TEST_RC=0
   else
@@ -183,13 +190,19 @@ for profile in omarchy generic wsl; do
   [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 5 ]] || \
     fail "profile $profile does not list exactly five area closures"
 done
-for package in common/bash common/tmux common/nvim common/zsh upstream/bash \
-  generic/git generic/bash generic/tmux generic/nvim wsl/bash wsl/tmux; do
+for package in common/tmux common/nvim common/zsh upstream/bash \
+  generic/git generic/tmux generic/nvim wsl/bash wsl/tmux; do
   root="$REPO_DIR/packages/$package"
   [[ -d "$root" && ! -L "$root" ]] || fail "missing committed package root: packages/$package"
   entries="$(cd "$root" && find . -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
   [[ "$entries" == './.empty-package ./.stow-local-ignore ' ]] || \
     fail "packages/$package is not an empty placeholder: $entries"
+done
+for fragment in \
+  common/bash/.config/mise/conf.d/20-dotfiles-common.toml \
+  generic/bash/.config/mise/conf.d/30-dotfiles-profile.toml; do
+  [[ -f "$REPO_DIR/packages/$fragment" && ! -L "$REPO_DIR/packages/$fragment" ]] || \
+    fail "missing staged mise fragment: packages/$fragment"
 done
 for package in upstream/starship upstream/tmux upstream/nvim; do
   root="$REPO_DIR/packages/$package"

@@ -94,3 +94,6 @@ Bootstrap never uses `sudo`; it prints the exact command for missing
 dependencies. The expected set on a fresh WSL host matches
 [generic Linux](generic.md#manual-package-step). The locked Aqua tmux fallback
 uses a verified prebuilt artifact and adds no source-build dependencies.
+Ordinary apply remains offline and configuration-only. Only explicit
+`--provision` apply may fetch locked runtime tools; `--check --provision`
+reports that plan without network access or mutation.

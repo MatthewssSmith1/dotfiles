@@ -1,0 +1,4 @@
+# Stage 5 installs reviewed artifacts before linking them into mise.
+locked = true
+not_found_auto_install = false
+idiomatic_version_file_enable_tools = []

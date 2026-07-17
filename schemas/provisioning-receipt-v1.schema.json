@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dotfiles/provisioning-receipt-v1.schema.json",
+  "title": "Dotfiles retained provisioning receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "manifest_sha256", "tools", "launchers"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tools": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "backend", "version", "platform", "install_root", "executable", "executable_sha256"], "properties": {"id": {"type": "string"}, "backend": {"type": "string"}, "version": {"type": "string"}, "platform": {"type": "string"}, "install_root": {"type": "string"}, "executable": {"type": "string"}, "executable_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}},
+    "launchers": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["tool_id", "destination", "content_sha256"], "properties": {"tool_id": {"type": "string"}, "destination": {"type": "string"}, "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}}
+  }
+}

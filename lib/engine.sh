@@ -9,7 +9,10 @@ AREA_STATE=""
 AREA_JOURNAL_PATHS=()
 AREA_ATTACHMENT_VALIDATOR=""
 AREA_ORDER=()
+MANAGED_DIRS=()
 declare -A AREA_STATUS=()
+declare -A AREA_DEPENDENCY_OK=()
+declare -A AREA_PREFLIGHT_OK=()
 DEPENDENCY_APT_INSTALL=()
 DEPENDENCY_AREAS=()
 DEPENDENCY_MODES=()
@@ -17,6 +20,7 @@ DEPENDENCY_PROFILES=()
 DEPENDENCY_COMMANDS=()
 DEPENDENCY_MANAGERS=()
 DEPENDENCY_PACKAGES=()
+DEPENDENCY_CLASSES=()
 
 validate_area_manifest() {
   local manifest="$DOTFILES_DIR/manifests/areas.tsv"
@@ -52,7 +56,7 @@ validate_area_manifest() {
 
 validate_dependency_manifest() {
   local manifest="$DOTFILES_DIR/manifests/dependencies.tsv"
-  local line kind area modes profiles command manager package entry
+  local line kind area modes profiles command manager package class entry alias
   local fields=() schema_count=0 apt_count=0 native_count=0
   [[ -f "$manifest" && ! -L "$manifest" ]] || die 'missing manifests/dependencies.tsv'
   DEPENDENCY_APT_INSTALL=()
@@ -62,6 +66,7 @@ validate_dependency_manifest() {
   DEPENDENCY_COMMANDS=()
   DEPENDENCY_MANAGERS=()
   DEPENDENCY_PACKAGES=()
+  DEPENDENCY_CLASSES=()
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -n "$line" && "$line" != *$'\t'* && "$line" != *' '* ]] || die 'invalid dependency manifest'
@@ -69,7 +74,7 @@ validate_dependency_manifest() {
     kind="${fields[0]}"
     case "$kind" in
       schema)
-        ((${#fields[@]} == 2)) && [[ "${fields[1]}" == 1 ]] || die 'invalid dependency manifest'
+        ((${#fields[@]} == 2)) && [[ "${fields[1]}" == 2 ]] || die 'invalid dependency manifest'
         ((schema_count += 1))
         ;;
       manager)
@@ -86,24 +91,28 @@ validate_dependency_manifest() {
         fi
         ;;
       require)
-        ((${#fields[@]} == 7)) || die 'invalid dependency manifest'
+        ((${#fields[@]} == 8)) || die 'invalid dependency manifest'
         area="${fields[1]}"; modes="${fields[2]}"; profiles="${fields[3]}"
-        command="${fields[4]}"; manager="${fields[5]}"; package="${fields[6]}"
-        [[ "$command" =~ ^[a-z0-9-]+$ ]] || die 'invalid dependency manifest'
+        command="${fields[4]}"; manager="${fields[5]}"; package="${fields[6]}"; class="${fields[7]}"
+        IFS='+' read -r -a aliases <<< "$command"
+        ((${#aliases[@]} > 0)) || die 'invalid dependency manifest'
+        for alias in "${aliases[@]}"; do [[ "$alias" =~ ^[a-z0-9-]+$ ]] || die 'invalid dependency manifest'; done
         for entry in ${area//,/ }; do [[ -n "${AREA_STATUS[$entry]+x}" ]] || die 'invalid dependency manifest'; done
-        for entry in ${modes//,/ }; do [[ "$entry" == apply || "$entry" == check || "$entry" == remove ]] || die 'invalid dependency manifest'; done
+        for entry in ${modes//,/ }; do [[ "$entry" == apply || "$entry" == check || "$entry" == remove || "$entry" == provision ]] || die 'invalid dependency manifest'; done
         for entry in ${profiles//,/ }; do [[ "$entry" == all || "$entry" == generic || "$entry" == wsl || "$entry" == omarchy ]] || die 'invalid dependency manifest'; done
-        if [[ "$manager" == apt ]]; then
+        if [[ "$manager" == apt-package ]]; then
           [[ "$package" =~ ^[a-z0-9+.-]+$ ]] || die 'invalid dependency manifest'
         else
-          [[ "$manager" == native && "$package" == - ]] || die 'invalid dependency manifest'
+          [[ "$manager" == omarchy-native && "$package" == - ]] || die 'invalid dependency manifest'
         fi
+        [[ "$class" == bootstrap-critical || "$class" == area || "$class" == provision ]] || die 'invalid dependency manifest'
         DEPENDENCY_AREAS+=("$area")
         DEPENDENCY_MODES+=("$modes")
         DEPENDENCY_PROFILES+=("$profiles")
         DEPENDENCY_COMMANDS+=("$command")
         DEPENDENCY_MANAGERS+=("$manager")
         DEPENDENCY_PACKAGES+=("$package")
+        DEPENDENCY_CLASSES+=("$class")
         ;;
       *) die 'invalid dependency manifest' ;;
     esac
@@ -112,10 +121,24 @@ validate_dependency_manifest() {
     die 'invalid dependency manifest'
 }
 
+command_capability_exists() {
+  local capability="$1" candidate
+  local candidates=()
+  IFS='+' read -r -a candidates <<< "$capability"
+  for candidate in "${candidates[@]}"; do
+    [[ "$(type -t -- "$candidate" 2>/dev/null || true)" == file ]] && return 0
+  done
+  return 1
+}
+
 check_manifest_dependencies() {
   local mode="$1" profile="$2" guidance="$3"
-  local command manager package entry existing install_word index selected
+  local command manager package class entry existing install_word index selected
   local missing_commands=() missing_packages=() native_missing=() row_areas=()
+  DEPENDENCY_CRITICAL_MISSING=false
+  PROVISION_DEPENDENCY_MISSING=false
+  AREA_DEPENDENCY_OK=()
+  for entry in "${AREAS[@]}"; do AREA_DEPENDENCY_OK["$entry"]=true; done
 
   for index in "${!DEPENDENCY_AREAS[@]}"; do
     selected=false
@@ -127,7 +150,9 @@ check_manifest_dependencies() {
       fi
     done
     [[ "$selected" == true ]] || continue
-    csv_contains "${DEPENDENCY_MODES[index]}" "$mode" || continue
+    if ! csv_contains "${DEPENDENCY_MODES[index]}" "$mode"; then
+      [[ "${PROVISION:-false}" == true ]] && csv_contains "${DEPENDENCY_MODES[index]}" provision || continue
+    fi
     if ! csv_contains "${DEPENDENCY_PROFILES[index]}" all &&
       ! csv_contains "${DEPENDENCY_PROFILES[index]}" "$profile"; then
       continue
@@ -135,14 +160,22 @@ check_manifest_dependencies() {
     command="${DEPENDENCY_COMMANDS[index]}"
     manager="${DEPENDENCY_MANAGERS[index]}"
     package="${DEPENDENCY_PACKAGES[index]}"
+    class="${DEPENDENCY_CLASSES[index]}"
     [[ -n "$command" ]] || continue
-    command -v "$command" >/dev/null 2>&1 && continue
+    command_capability_exists "$command" && continue
     array_contains "$command" "${missing_commands[@]}" || missing_commands+=("$command")
-    if [[ "$manager" == apt && "$guidance" == true ]]; then
+    [[ "$class" != bootstrap-critical ]] || DEPENDENCY_CRITICAL_MISSING=true
+    [[ "$class" != provision ]] || PROVISION_DEPENDENCY_MISSING=true
+    if [[ "$class" != provision ]]; then
+      for entry in "${row_areas[@]}"; do
+        if array_contains "$entry" "${AREAS[@]}"; then AREA_DEPENDENCY_OK["$entry"]=false; fi
+      done
+    fi
+    if [[ "$manager" == apt-package && "$guidance" == true ]]; then
       existing=false
       for entry in "${missing_packages[@]}"; do [[ "$entry" != "$package" ]] || existing=true; done
       [[ "$existing" == true ]] || missing_packages+=("$package")
-    elif [[ "$manager" == native ]]; then
+    elif [[ "$manager" == omarchy-native ]]; then
       native_missing+=("$command")
     fi
   done
@@ -505,7 +538,7 @@ begin_transaction() {
 }
 
 rollback_transaction() {
-  local index path dir failed=false
+  local index path dir round failed=false
   test_hold before-rollback
   TRANSACTION_ROLLING_BACK=true
   set +e
@@ -521,7 +554,9 @@ rollback_transaction() {
       cp -a -- "${TX_SNAPSHOTS[index]}" "$path" || failed=true
     fi
   done
-  for dir in "${MANAGED_DIRS[@]:-}"; do [[ -n "$dir" ]] && rmdir -- "$HOME/$dir" 2>/dev/null || true; done
+  for ((round=0; round<${#MANAGED_DIRS[@]}; round++)); do
+    for dir in "${MANAGED_DIRS[@]:-}"; do [[ -n "$dir" ]] && rmdir -- "$HOME/$dir" 2>/dev/null || true; done
+  done
   for ((index=${#TX_CREATED_DIRS[@]}-1; index>=0; index--)); do
     rmdir -- "${TX_CREATED_DIRS[index]}" 2>/dev/null || true
   done

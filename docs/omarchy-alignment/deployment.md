@@ -130,6 +130,8 @@ Bootstrap must:
   explicitly selecting a `framework` area is refused until its payload stage
   lands. Removal ignores readiness because it is state-driven.
 - Provide a non-mutating `--check` mode.
+- Support explicit `--provision` intent. Provisioning never follows merely from
+  omitting `--area`; ordinary apply remains configuration-only.
 - Support `--remove` with optional repeated `--area` arguments. `--profile` is
   invalid with `--remove`; removal uses recorded state. With no areas,
   `--remove` selects every recorded area.
@@ -144,11 +146,43 @@ Bootstrap must:
   errors; parseable version mismatches produce separate non-blocking warnings.
   Drift is expected, and updating a pin is a separate explicit operation.
 - Never change the login shell.
-- Avoid authentication prompts and preserve existing OpenCode authentication.
+- Do not install, remove, upgrade, reconfigure, or inspect OpenCode or
+  `opencode-openai-codex-auth`. Unrelated operations preserve the active
+  executable; `~/.config/opencode/opencode.json` or `opencode.jsonc`;
+  `package.json`, lockfiles, plugins, and `node_modules` under that directory;
+  the unpinned auth-plugin declaration; credentials; sessions; and provider
+  state.
 - Be convergent and safe to run repeatedly.
 
-A full bootstrap installs core personal applications. An area-scoped run
-installs only dependencies relevant to its selected areas.
+Accepted forms are:
+
+```text
+bootstrap.sh
+bootstrap.sh --check
+bootstrap.sh --provision
+bootstrap.sh --check --provision
+bootstrap.sh --area <area> [--area <area> ...]
+bootstrap.sh --check --area <area> [--area <area> ...]
+bootstrap.sh --provision --area <area> [--area <area> ...]
+bootstrap.sh --check --provision --area <area> [--area <area> ...]
+bootstrap.sh --remove [--area <area> ...]
+```
+
+Every non-remove form also accepts the existing validated `--profile` override
+in any parser-supported order. `--provision` without `--check` means
+configuration apply plus approved provisioning. `--check --provision` reports
+configuration and provisioning convergence but remains offline and
+non-mutating. `--provision` is invalid with `--remove`.
+
+No-area `--provision` is the only full provisioning operation. It selects the
+core personal application set (Node, pnpm, Claude Code, and Worktrunk) plus
+platform foundations for every eventual default area, including tmux, Neovim,
+and Starship, even while their configuration areas are framework-only. An
+area-scoped provisioning run selects only dependencies assigned to the
+explicit areas and never the core set. Framework-only areas remain
+unselectable until their payload stages land, so full provisioning does not
+imply that unfinished configuration is ready. Without `--provision`, a no-area
+run still selects only the currently `ready` configuration areas.
 
 ## Operation And Network Policy
 
@@ -158,17 +192,21 @@ claims.
 | Operation | Mutation | Network policy |
 |-----------|----------|----------------|
 | `bootstrap.sh --check` | None | Forbidden |
-| Bootstrap apply | Selected home and state files | Allowed for pinned runtime tools and locked tmux plugins; never for Neovim plugins/assets or baseline synchronization |
+| `bootstrap.sh --check --provision` | None | Forbidden; reports the same locked provisioning set the corresponding provisioning apply would select |
+| Ordinary bootstrap apply | Selected configuration and deployment state files | Forbidden; configuration-only |
+| `bootstrap.sh --provision` apply | Selected configuration, deployment state, and retained provisioning roots | Allowed only for the printed, locked runtime-tool plan; no baseline, Neovim asset/plugin, OpenCode, Codex auth, or Vite+ operation |
 | Bootstrap `--remove` | Selected home and state files | Forbidden |
 | `scripts/upstream verify` | None | Forbidden |
 | `scripts/upstream sync` | Resolved checkout manifest and snapshots plus same-filesystem staging | Allowed for pinned baseline inputs |
 | Bash and tmux startup | Runtime process state only | Forbidden |
 | Transitional zsh first start | Zinit runtime state | Existing first-start fetch behavior allowed |
+| Explicit tmux plugin provisioning (Stage 7) | Locked plugin checkouts | Allowed only for the printed plugin plan |
 | First explicit generic Neovim launch | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim restore after a lock change | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim runtime-asset provisioning | Declared Mason, Treesitter, rock, or build state | Allowed only under the asset policy accepted in Stage 8 |
 
-Apply must print planned networked actions before executing them. Startup must
+Provisioning apply must print every planned networked action before the first
+network-capable command executes. Startup must
 never install or update tools implicitly except for the documented transitional
 zsh first-start behavior. Neovim plugin installation occurs only during the
 first explicit launch or a later explicit restore after a lock change. Upstream
@@ -255,6 +293,11 @@ data and backups, migration backups, credentials, and every host-local file.
 It also retains `migrations.json`. Those resources may be reported but are
 never deleted by configuration removal.
 
+Retained provisioning is not recorded as removable area deployment state.
+Installed tools and their manifest-owned launchers survive `--remove`; checks
+derive expected resources from the active provisioning manifest and compare
+that contract with retained provisioning metadata and the actual installation.
+
 ## Native Omarchy Attachments
 
 Omarchy refresh or reinstall operations can replace Bash, tmux, Starship, and
@@ -305,19 +348,27 @@ timestamped renames for runtime state — is recorded in
 
 | Tool category | Omarchy | Generic and WSL |
 |---------------|---------|-----------------|
-| Git, fzf, zoxide, fd, eza, bat, rg, jq, GitHub CLI | Native packages | Distro packages |
+| Git, fzf, zoxide, fd, eza, bat, rg, jq | Native packages | Distro packages |
 | tmux | Native package | Distro package when 3.5 or newer, else locked `aqua:tmux/tmux-builds` via mise |
 | Neovim, Starship | Native packages | Suitable package or locked mise fallback |
 | mise | Native package | Pinned user-scoped install when absent |
-| Node and pnpm | mise | mise |
-| Claude Code | Native package | mise |
-| OpenCode and Worktrunk | mise when needed | mise |
-| Vite+ | Official user-scoped installer | Official user-scoped installer |
+| Node and pnpm | Host-owned and retained; Stage 5 does not replace them | Locked mise artifacts |
+| Claude Code | Host-owned and retained; Stage 5 does not replace it | Locked mise artifact |
+| Worktrunk | Host-owned and retained; Stage 5 does not replace it | Locked mise artifact |
+| OpenCode and `opencode-openai-codex-auth` | Deferred; preserve existing installation and auth state | Deferred; preserve existing installation and auth state |
+| Vite+ | Project-local mise files | Project-local mise files |
 
 On Omarchy, bootstrap must fail if a prohibited command such as Neovim
 resolves through a mise shim instead of the native package. Alignment does not
 require identical installation mechanisms, but it does require unambiguous
 owners and compatible behavior.
+
+Vite+ is intentionally project-owned. Projects declare and lock it in their
+own mise files; bootstrap never invokes the official installer, creates or
+updates a global executable, or treats Vite+ as a protected profile command.
+Project precedence is expected for it. OpenCode and its Codex auth plugin are
+outside Stage 5 until a separately reviewed change defines a locked plugin
+lifecycle and proves preservation of configuration and authentication.
 
 The Omarchy tmux baseline is written for tmux 3.5. Ubuntu's distro packages
 lag (22.04 ships 3.2a, 24.04 ships 3.4), so the mise fallback is the expected
@@ -332,10 +383,12 @@ Interim behavior on hosts that have not converged is defined in
 The general principle: lean into mise wherever it can absorb tool-management
 complexity, instead of writing bespoke install, pin, or update logic.
 
-On generic systems, networked bootstrap apply may install a known,
-checksum-verified mise version when mise is absent. It must accept a newer
-compatible existing version and never downgrade it. `--check` only reports the
-missing tool and the planned installation.
+On generic and WSL systems, only explicit provisioning apply may install a
+known, checksum-verified mise version when mise is absent. It must accept a
+newer compatible existing version and never downgrade it.
+`--check --provision` reports the missing tool and planned installation without
+network access or mutation; ordinary check and apply do not select optional
+core applications.
 
 Use additive fragments:
 
@@ -345,21 +398,48 @@ Use additive fragments:
   30-dotfiles-profile.toml
 ```
 
-Loose selectors express maintenance intent. Committed adjacent lockfiles hold
-the exact versions, backends, and artifacts installed by ordinary bootstrap.
+Loose selectors express maintenance intent. The committed
+`manifests/provisioning.json` lock holds the exact versions, backends,
+artifacts, inventory identities, hashes, and origins used by explicit provisioning.
 Project mise files retain higher precedence for project runtimes, but may not
 silently shadow profile-owned commands such as tmux or native Omarchy Neovim.
 Bootstrap must not silently advance locked versions.
 
-## Open Questions
+### Observable Ownership Boundary
 
-Before ownership-aware bootstrap is implemented:
+Bootstrap checks its inherited environment, including exported shell
+functions, and every executable candidate found through its effective `PATH`.
+It also checks mise resolution from a neutral directory and controlled project
+directories so intentional project runtime precedence can be distinguished
+from forbidden shadows of protected profile commands. Once Stage 6 deploys the
+managed shell, the same resolver runs in that interactive-shell context and can
+also inspect aliases and non-exported functions.
 
-1. Select the exact mise-managed tool versions and generate lockfiles.
-2. Define how Vite+ is checked and updated outside mise.
-3. Define how the OpenCode Codex plugin is checked and updated outside mise.
+An arbitrary unexported alias or function in an already-running parent shell is
+not inherited and cannot be inspected reliably. Bootstrap does not parse
+unrelated startup files to guess at those objects. Missing native owners and
+forbidden observable shadows are blocking; an otherwise valid native Omarchy
+owner whose parseable version differs from the recorded core or Neovim pin
+produces a separate non-blocking warning.
 
-These are unresolved decisions, not implementation recommendations.
+## Accepted Pin Record
+
+The reviewed proposal is
+`manifests/proposals/2026-07-17-stage5-tool-pins.json`; the active lock is
+`manifests/provisioning.json`. Bootstrap verifies each artifact itself before
+installing it into a retained root and registering that exact root with its
+fully qualified backend through offline `mise link`. Mise/Aqua is never allowed
+to substitute an unchecked download. Vite+ ownership and the OpenCode/Codex
+deferral remain accepted decisions.
+
+## Test Isolation
+
+Stage 5 automated tests use a temporary `HOME`, temporary XDG roots, fixture
+host and mise roots, controlled `PATH`, and fixture checkouts when manifests or
+area readiness differ. They must not inspect or mutate the developer's real
+home, user executable directories, mise data, or active OpenCode installation.
+Provisioning applies use fake, local artifacts in fixtures; no real
+provisioning apply is part of the automated gate.
 
 ## Acceptance Criteria
 
@@ -367,6 +447,8 @@ These are unresolved decisions, not implementation recommendations.
   mutation, including the exact manual package command when dependencies are
   missing and a non-blocking Omarchy version-drift warning where applicable.
 - Apply and removal obey the canonical network policy.
+- Ordinary apply is configuration-only, and both check forms are offline and
+  non-mutating.
 - Every package for an area passes preflight before that area is changed.
 - Repeated bootstrap converges without adding duplicate attachments.
 - Root metadata, tests, scripts, and docs are never linked into `$HOME`.

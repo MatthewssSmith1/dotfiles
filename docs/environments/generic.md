@@ -23,14 +23,13 @@ pinned Omarchy baseline snapshots plus portability adapters. See
 ## Manual Package Step
 
 Bootstrap checks and reports dependencies but never invokes `sudo`; fresh
-hosts have one explicit manual step, and bootstrap prints the exact command.
-That command will be generated from the selected profile and area manifests.
-Until those manifests exist, this full-profile command is illustrative rather
-than authoritative:
+hosts have one explicit manual step, and bootstrap prints one exact command
+generated from `manifests/dependencies.tsv` for the selected profile, areas,
+operation, and provisioning intent. Review and run that printed command
+separately, then repeat the check. For example:
 
 ```bash
-sudo apt install ca-certificates curl git stow zsh tar unzip \
-  fzf zoxide fd-find eza bat ripgrep jq gh
+./bootstrap.sh --check --provision
 ```
 
 Ubuntu 24.04's tmux is older than the baseline target, so bootstrap uses the
@@ -45,5 +44,9 @@ for interim behavior on unconverged hosts.
 Network behavior is defined by the canonical
 [operation matrix](../omarchy-alignment/deployment.md#operation-and-network-policy).
 In particular, `--check`, removal, Bash startup, and tmux startup are offline;
-apply may fetch pinned runtime tools, and the first explicit `nvim` launch may
-restore locked plugins.
+`--check --provision` is also offline and non-mutating, and ordinary apply is
+configuration-only. Only explicit `--provision` apply may fetch its printed,
+locked runtime-tool plan. No-area provisioning selects Node, pnpm, Claude Code,
+Worktrunk, and platform foundations; area-scoped provisioning selects only
+dependencies for ready selected areas. The first explicit `nvim` launch may
+restore locked plugins under its separate lifecycle.

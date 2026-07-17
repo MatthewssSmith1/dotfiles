@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "platforms": ["linux-x86_64"],
+  "mise": {
+    "version": "2026.7.7",
+    "minimum_version": "2026.7.7",
+    "maximum_version": "2026.12.99",
+    "destination": ".local/bin/mise",
+    "artifact": {
+      "platform": "linux-x86_64",
+      "url": "https://github.com/jdx/mise/releases/download/v2026.7.7/mise-v2026.7.7-linux-x64",
+      "sha256": "429f71e7e989908bf975aafac9066329c16e2d8fc7cd8e74fdf21dd6300ffe7c",
+      "inventory_sha256": "429f71e7e989908bf975aafac9066329c16e2d8fc7cd8e74fdf21dd6300ffe7c",
+      "format": "raw",
+      "executable": "mise",
+      "strip_components": 0,
+      "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
+    }
+  },
+  "tools": [
+    {
+      "id": "node",
+      "scope": "core",
+      "areas": [],
+      "profiles": ["generic", "wsl"],
+      "owner_policy": "locked-mise",
+      "backend": "core:node",
+      "version": "24.18.0",
+      "install_root": ".local/share/dotfiles/provisioning/tools/node/24.18.0",
+      "artifact": {
+        "platform": "linux-x86_64",
+        "url": "https://nodejs.org/dist/v24.18.0/node-v24.18.0-linux-x64.tar.xz",
+        "sha256": "55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742",
+        "inventory_sha256": "fea08173e10299346d8e0d47a580d8b28d860db40b1c333068bc20f58d05e825",
+        "format": "tar.xz",
+        "executable": "bin/node",
+        "strip_components": 1,
+        "allowed_origins": ["nodejs.org"]
+      },
+      "commands": [{"name": "node", "path": "bin/node", "probe_args": ["--version"], "version_pattern": "^v24\\.18\\.0$", "protected": false, "launcher": null}]
+    },
+    {
+      "id": "pnpm",
+      "scope": "core",
+      "areas": [],
+      "profiles": ["generic", "wsl"],
+      "owner_policy": "locked-mise",
+      "backend": "aqua:pnpm/pnpm",
+      "version": "11.13.1",
+      "install_root": ".local/share/dotfiles/provisioning/tools/pnpm/11.13.1",
+      "artifact": {
+        "platform": "linux-x86_64",
+        "url": "https://github.com/pnpm/pnpm/releases/download/v11.13.1/pnpm-linux-x64.tar.gz",
+        "sha256": "bd6d4b0e14536207ad76bc838f5980cecd968da15f69aae0b207380cca3f2e98",
+        "inventory_sha256": "d1e14270b3f43c990216990f2e1350d0e071a3aa31c6e3ff2c1d43aeaba42f40",
+        "format": "tar.gz",
+        "executable": "pnpm",
+        "strip_components": 0,
+        "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
+      },
+      "commands": [{"name": "pnpm", "path": "pnpm", "probe_args": ["--version"], "version_pattern": "^11\\.13\\.1$", "protected": false, "launcher": null}]
+    },
+    {
+      "id": "claude-code",
+      "scope": "core",
+      "areas": [],
+      "profiles": ["generic", "wsl"],
+      "owner_policy": "locked-mise",
+      "backend": "aqua:anthropics/claude-code",
+      "version": "2.1.212",
+      "install_root": ".local/share/dotfiles/provisioning/tools/claude-code/2.1.212",
+      "artifact": {
+        "platform": "linux-x86_64",
+        "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.212/linux-x64/claude",
+        "sha256": "044a88cf3a5180776617fd3da1238dcbf9141ddec449a39cf7d2af1ac78e684e",
+        "inventory_sha256": "044a88cf3a5180776617fd3da1238dcbf9141ddec449a39cf7d2af1ac78e684e",
+        "format": "raw",
+        "executable": "claude",
+        "strip_components": 0,
+        "allowed_origins": ["storage.googleapis.com"]
+      },
+      "commands": [{"name": "claude", "path": "claude", "probe_args": ["--version"], "version_pattern": "^2\\.1\\.212([[:space:]].*)?$", "protected": false, "launcher": null}]
+    },
+    {
+      "id": "worktrunk",
+      "scope": "core",
+      "areas": [],
+      "profiles": ["generic", "wsl"],
+      "owner_policy": "locked-mise",
+      "backend": "aqua:max-sixty/worktrunk",
+      "version": "0.68.0",
+      "install_root": ".local/share/dotfiles/provisioning/tools/worktrunk/0.68.0",
+      "artifact": {
+        "platform": "linux-x86_64",
+        "url": "https://github.com/max-sixty/worktrunk/releases/download/v0.68.0/worktrunk-x86_64-unknown-linux-musl.tar.xz",
+        "sha256": "3378ee6a63ca438ac60687c5e6204e06ce694fed41ad57ef6aa54451b10231ed",
+        "inventory_sha256": "f3ec742ff54d1295fa186f63a9ef6bc15b9ec020fd5c7fb6a7f553a3e7264519",
+        "format": "tar.xz",
+        "executable": "wt",
+        "strip_components": 1,
+        "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
+      },
+      "commands": [{"name": "wt", "path": "wt", "probe_args": ["--version"], "version_pattern": ".*0\\.68\\.0.*", "protected": false, "launcher": null}]
+    },
+    {
+      "id": "tmux",
+      "scope": "foundation",
+      "areas": ["tmux"],
+      "profiles": ["generic", "wsl"],
+      "owner_policy": "native-or-locked-mise",
+      "backend": "aqua:tmux/tmux-builds",
+      "version": "3.7b",
+      "native_minimum": "3.5",
+      "native_package": "tmux",
+      "install_root": ".local/share/dotfiles/provisioning/tools/tmux/3.7b",
+      "artifact": {
+        "platform": "linux-x86_64",
+        "url": "https://github.com/tmux/tmux-builds/releases/download/v3.7b/tmux-3.7b-linux-x86_64.tar.gz",
+        "sha256": "f85e6c1c412750a774eb3f370f33bad05fc726fb8b6a0b174ad6f0b6d954df58",
+        "inventory_sha256": "bdb2da3e07d4deeb97ebe6401bc8f3edf439806cb7b3922d62cc18ee85506f0e",
+        "format": "tar.gz",
+        "executable": "tmux",
+        "strip_components": 0,
+        "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
+      },
+      "commands": [{"name": "tmux", "path": "tmux", "probe_args": ["-V"], "version_pattern": "^tmux 3\\.7b$", "protected": true, "launcher": ".local/bin/tmux"}]
+    },
+    {
+      "id": "neovim",
+      "scope": "foundation",
+      "areas": ["nvim"],
+      "profiles": ["generic", "wsl"],
+      "owner_policy": "native-or-locked-mise",
+      "backend": "aqua:neovim/neovim",
+      "version": "0.12.4",
+      "native_minimum": "0.12.4",
+      "native_package": "neovim",
+      "install_root": ".local/share/dotfiles/provisioning/tools/neovim/0.12.4",
+      "artifact": {
+        "platform": "linux-x86_64",
+        "url": "https://github.com/neovim/neovim/releases/download/v0.12.4/nvim-linux-x86_64.tar.gz",
+        "sha256": "012bf3fcac5ade43914df3f174668bf64d05e049a4f032a388c027b1ebd78628",
+        "inventory_sha256": "13b61242e2f513431d0acf775e28ecf2ac492d1d894f692621b1ce28498d1a71",
+        "format": "tar.gz",
+        "executable": "bin/nvim",
+        "strip_components": 1,
+        "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
+      },
+      "commands": [{"name": "nvim", "path": "bin/nvim", "probe_args": ["--version"], "version_pattern": "^NVIM v0\\.12\\.4([[:space:]].*)?$", "protected": true, "launcher": ".local/bin/nvim"}]
+    },
+    {
+      "id": "starship",
+      "scope": "foundation",
+      "areas": ["bash"],
+      "profiles": ["generic", "wsl"],
+      "owner_policy": "native-or-locked-mise",
+      "backend": "aqua:starship/starship",
+      "version": "1.26.0",
+      "native_minimum": "1.26.0",
+      "native_package": "starship",
+      "install_root": ".local/share/dotfiles/provisioning/tools/starship/1.26.0",
+      "artifact": {
+        "platform": "linux-x86_64",
+        "url": "https://github.com/starship/starship/releases/download/v1.26.0/starship-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "b7c232b0e8249d8e55a40beb79c5c43a7d370f3f9408bd215deb0170daeaadf3",
+        "inventory_sha256": "826c19b15b9c23cb9044536d3a80b84dc625d532a247cdd9dc97453befa13452",
+        "format": "tar.gz",
+        "executable": "starship",
+        "strip_components": 0,
+        "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
+      },
+      "commands": [{"name": "starship", "path": "starship", "probe_args": ["--version"], "version_pattern": "^starship 1\\.26\\.0([[:space:]].*)?$", "protected": true, "launcher": ".local/bin/starship"}]
+    }
+  ]
+}

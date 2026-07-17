@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/dotfiles/provisioning-manifest-v1.schema.json",
+  "title": "Dotfiles provisioning manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "platforms", "mise", "tools"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "platforms": {"type": "array", "items": {"const": "linux-x86_64"}, "minItems": 1, "uniqueItems": true},
+    "mise": {"$ref": "#/$defs/mise"},
+    "tools": {"type": "array", "items": {"$ref": "#/$defs/tool"}, "minItems": 1}
+  },
+  "$defs": {
+    "relativePath": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(/|$))[^\\r\\n]+$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "url", "sha256", "inventory_sha256", "format", "executable", "strip_components", "allowed_origins"],
+      "properties": {
+        "platform": {"const": "linux-x86_64"},
+        "url": {"type": "string", "pattern": "^https://[^[:space:]]+$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "format": {"enum": ["raw", "tar.gz", "tar.xz"]},
+        "executable": {"$ref": "#/$defs/relativePath"},
+        "strip_components": {"type": "integer", "minimum": 0, "maximum": 1},
+        "allowed_origins": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9.-]+$"}, "minItems": 1, "uniqueItems": true}
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "probe_args", "version_pattern", "protected", "launcher"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "probe_args": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "version_pattern": {"type": "string", "minLength": 1},
+        "protected": {"type": "boolean"},
+        "launcher": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/relativePath"}]}
+      }
+    },
+    "mise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "minimum_version", "maximum_version", "destination", "artifact"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "minimum_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "maximum_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "destination": {"$ref": "#/$defs/relativePath"},
+        "artifact": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "scope", "areas", "profiles", "owner_policy", "backend", "version", "install_root", "artifact", "commands"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+        "scope": {"enum": ["core", "foundation"]},
+        "areas": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "uniqueItems": true},
+        "profiles": {"type": "array", "items": {"enum": ["generic", "wsl"]}, "minItems": 1, "uniqueItems": true},
+        "owner_policy": {"enum": ["locked-mise", "native-or-locked-mise"]},
+        "backend": {"type": "string", "pattern": "^(core:[a-z0-9-]+|aqua:[a-z0-9._-]+/[a-z0-9._-]+)$"},
+        "version": {"type": "string", "pattern": "^[0-9][0-9A-Za-z.-]*$"},
+        "native_minimum": {"type": "string", "pattern": "^[0-9][0-9A-Za-z.-]*$"},
+        "native_package": {"type": "string", "pattern": "^[a-z0-9+.-]+$"},
+        "install_root": {"$ref": "#/$defs/relativePath"},
+        "artifact": {"$ref": "#/$defs/artifact"},
+        "commands": {"type": "array", "items": {"$ref": "#/$defs/command"}, "minItems": 1, "maxItems": 1}
+      }
+    }
+  }
+}

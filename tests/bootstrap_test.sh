@@ -16,6 +16,7 @@ readonly BOOTSTRAP_SOURCES=(
   "$REPO_DIR/lib/common.sh"
   "$REPO_DIR/lib/host.sh"
   "$REPO_DIR/lib/engine.sh"
+  "$REPO_DIR/lib/provisioning.sh"
   "$REPO_DIR/lib/areas/git.sh"
   "$REPO_DIR/lib/areas/generic.sh"
 )
@@ -28,6 +29,7 @@ bash -n \
   "$REPO_DIR/scripts/upstream" \
   "$TEST_DIR/stage2_bootstrap_test.sh" \
   "$TEST_DIR/stage3_bootstrap_test.sh" \
+  "$TEST_DIR/stage5_bootstrap_test.sh" \
   "$TEST_DIR/upstream_test.sh" \
   "$TEST_DIR/upstream_sync_test.sh" || fail 'a bootstrap Bash file has invalid syntax'
 
@@ -90,5 +92,6 @@ fi
 "$TEST_DIR/upstream_sync_test.sh"
 "$TEST_DIR/stage2_bootstrap_test.sh"
 "$TEST_DIR/stage3_bootstrap_test.sh"
+"$TEST_DIR/stage5_bootstrap_test.sh"
 
 printf 'PASS: repository bootstrap checks\n'
