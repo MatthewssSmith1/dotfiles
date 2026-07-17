@@ -2,6 +2,8 @@
 
 set -Eeuo pipefail
 
+unset XDG_CONFIG_HOME GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT
+
 readonly TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
 readonly BOOTSTRAP="$REPO_DIR/bootstrap.sh"
@@ -499,6 +501,26 @@ home="$(new_home guarded-link)"
 printf '[core]\n\teditor = false\n' > "$TEST_ROOT/unowned-global"
 ln -s "$TEST_ROOT/unowned-global" "$home/.gitconfig"
 expect_failure 'unknown global-config symlink' "$home" "$wsl_host" "$BOOTSTRAP"
+pass
+
+# Foreign Git environment variables are refused before any mutation.
+home="$(new_home git-environment)"
+for assignment in \
+  'XDG_CONFIG_HOME=/somewhere/else' \
+  'GIT_CONFIG_GLOBAL=/dev/null' \
+  'GIT_CONFIG_GLOBAL=' \
+  'GIT_CONFIG_SYSTEM=/dev/null' \
+  'GIT_CONFIG_COUNT=0'; do
+  variable="${assignment%%=*}"
+  expect_failure "$variable" "$home" "$wsl_host" env "$assignment" "$BOOTSTRAP"
+  assert_empty_home "$home"
+  expect_failure "$variable" "$home" "$wsl_host" env "$assignment" "$BOOTSTRAP" --check
+  assert_empty_home "$home"
+done
+expect_success "$home" "$wsl_host" env "XDG_CONFIG_HOME=$home/.config" "$BOOTSTRAP" --check
+assert_empty_home "$home"
+expect_success "$home" "$wsl_host" "$BOOTSTRAP"
+expect_success "$home" "$wsl_host" env 'GIT_CONFIG_GLOBAL=/dev/null' "$BOOTSTRAP" --remove
 pass
 
 # Existing central local files are not modified and must contain migration values.

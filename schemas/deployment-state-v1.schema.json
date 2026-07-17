@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dotfiles.local/schemas/deployment-state-v1.schema.json",
+  "$comment": "Documentation only: the authoritative validator is the inline jq expression in validate_state_file (lib/engine.sh). Nothing executes this file; keep it aligned manually.",
   "title": "Dotfiles deployment area state v1",
   "type": "object",
   "additionalProperties": false,

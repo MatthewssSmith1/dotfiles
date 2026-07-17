@@ -107,6 +107,7 @@ main() {
     return
   fi
   validate_identity_inputs
+  validate_git_environment
   detect_host
   select_profile
   check_manifest_dependencies "$MODE" "$SELECTED_PROFILE" true || exit 1

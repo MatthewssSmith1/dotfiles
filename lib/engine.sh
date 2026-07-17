@@ -140,6 +140,8 @@ validate_state_file() {
   [[ "$schema" =~ ^[0-9]+$ ]] || die "malformed or unknown deployment state: $file"
   ((schema <= 1)) || die "newer deployment state schema $schema is not supported: $file"
   ((schema == 1)) || die "unknown deployment state schema $schema: $file"
+  # This jq expression is the authoritative v1 state validator; keep
+  # schemas/deployment-state-v1.schema.json (documentation only) aligned with it.
   jq -e '
     type == "object" and
     ((keys - ["area","attachments","backups","checkout_root","managed_directories","packages","profile","schema_version","target_root","targets"]) | length == 0) and

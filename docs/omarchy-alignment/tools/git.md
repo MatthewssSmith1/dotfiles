@@ -47,6 +47,15 @@ Keep `~/.gitconfig` as a regular guarded include entrypoint. This allows native
 sequence loads the shared personal file, external identity file, and optional
 central host-local file in the order shown above.
 
+## Omarchy Baseline Pin
+
+On the `omarchy` profile, apply and `--check` hard-fail during preflight unless
+the native `~/.config/git/config` matches all sixteen required baseline values
+exactly. A new Omarchy release that changes its Git configuration therefore
+blocks deployment until the pin is deliberately reviewed and updated. Stage 2's
+contract is a hard refusal, not reconciliation; Stage 5 layers drift warnings
+on top of this same pin.
+
 ## Personal And Local Layers
 
 - Put `init.defaultBranch = main` in the shared personal layer.

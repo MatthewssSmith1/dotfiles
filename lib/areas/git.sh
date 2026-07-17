@@ -126,6 +126,16 @@ validate_identity_inputs() {
   fi
 }
 
+validate_git_environment() {
+  local name
+  if [[ -n "${XDG_CONFIG_HOME:-}" && "$XDG_CONFIG_HOME" != "$HOME/.config" ]]; then
+    die "XDG_CONFIG_HOME is set to '$XDG_CONFIG_HOME'; unset it or set it to '$HOME/.config' before Git deployment"
+  fi
+  for name in GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT; do
+    [[ -z "${!name+x}" ]] || die "$name is set; unset it before Git deployment"
+  done
+}
+
 preflight_identity() {
   local path="$HOME/.gitconfig.local"
   local expected="$DOTFILES_DIR/.gitconfig.local"
