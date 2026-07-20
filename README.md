@@ -1,15 +1,14 @@
 # Dotfiles
 
 Opinionated Bash, zsh, Git, Neovim, and tmux configuration. Git, Bash, tmux,
-and transitional zsh deploy through profile-aware
-[GNU Stow](https://www.gnu.org/software/stow/) packages; Neovim retains its
-legacy links until its migration stage lands.
+Neovim, and transitional zsh deploy through profile-aware
+[GNU Stow](https://www.gnu.org/software/stow/) packages.
 
 ## Includes
 
 - zsh with vi mode, Zinit, Powerlevel10k, aliases, and tool initialization
 - Git defaults with private identity stored outside the repository
-- Neovim based on Kickstart
+- Neovim based on pinned LazyVim and Omarchy release inputs
 - tmux with persistent layouts and AI assistant session restoration
 
 ## Setup
@@ -34,8 +33,9 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
 
 Bootstrap is user-scoped, refuses to run as root, never installs distro
 packages, and does not change the login shell. Ordinary apply, check, and
-removal stay offline. Git, Bash, tmux, and transitional zsh are ready and are
-selected by default; Neovim remains a framework area. Bootstrap preserves
+removal stay offline. Git, Bash, tmux, Neovim, and transitional zsh are ready
+and selected by default on generic and WSL hosts. Native Omarchy Neovim
+integration remains deferred to Stage 9. Bootstrap preserves
 unrelated shell, agent, application, and authentication state. Do not run Stow
 against the repository root; that package is permanently retired and inert.
 

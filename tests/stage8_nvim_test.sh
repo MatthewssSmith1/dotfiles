@@ -15,7 +15,12 @@ fail() {
 [[ "$(stat -c %a -- "$RESTORE")" == 755 ]] || fail 'restore helper is not executable'
 cmp -s "$REPO_DIR/packages/upstream/reference/omarchy/themes/tokyo-night/neovim.lua" \
   "$REPO_DIR/packages/generic/nvim/.config/nvim/lua/plugins/theme.lua" || fail 'Tokyo Night input drifted'
-grep -F 'install = { missing = false' "$REPO_DIR/packages/upstream/nvim/.config/nvim/lua/config/lazy.lua" >/dev/null || fail 'missing-plugin installs are not disabled'
+grep -F 'install = { missing = vim.env.DOTFILES_NVIM_RESTORING == "1"' \
+  "$REPO_DIR/packages/upstream/nvim/.config/nvim/lua/config/lazy.lua" >/dev/null || \
+  fail 'missing-plugin installs are not limited to explicit restore context'
+grep -F 'require("lazy.manage.lock").update = function() end' \
+  "$REPO_DIR/packages/upstream/nvim/.config/nvim/lua/config/lazy.lua" >/dev/null || \
+  fail 'explicit restore can rewrite the isolated committed lock'
 grep -F 'rocks = { enabled = false }' "$REPO_DIR/packages/upstream/nvim/.config/nvim/lua/config/lazy.lua" >/dev/null || fail 'Lua rocks are not disabled'
 grep -F 'enabled = false, -- updates are checked only' "$REPO_DIR/packages/upstream/nvim/.config/nvim/lua/config/lazy.lua" >/dev/null || fail 'periodic checks are not disabled'
 jq -e '. as $lock |
@@ -48,10 +53,12 @@ make_repo() {
 }
 
 lazy_commit="$(make_repo lazy.nvim)"
+lazyvim_commit="$(make_repo LazyVim)"
 sample_commit="$(make_repo sample.nvim)"
-jq -cn --arg lazy "$lazy_commit" --arg sample "$sample_commit" \
-  '{"lazy.nvim":{branch:"main",commit:$lazy},"sample.nvim":{branch:"main",commit:$sample}}' \
+jq -cn --arg lazy "$lazy_commit" --arg lazyvim "$lazyvim_commit" --arg sample "$sample_commit" \
+  '{"lazy.nvim":{branch:"main",commit:$lazy},LazyVim:{branch:"main",commit:$lazyvim},"sample.nvim":{branch:"main",commit:$sample}}' \
   > "$fixture/deployed-lock.json"
+export DOTFILES_NVIM_LAZYVIM_REPOSITORY="$repos/LazyVim"
 ln -s "$fixture/deployed-lock.json" "$home/.config/nvim/lazy-lock.json"
 lock_before="$(sha256sum "$fixture/deployed-lock.json" | cut -d' ' -f1)"
 mkdir -p "$home/.local/state/dotfiles/v1"
@@ -89,6 +96,7 @@ HOME="$home" FIXTURE_REPOS="$repos" DOTFILES_TESTING=1 DOTFILES_NVIM_LAZY_REPOSI
 [[ "$(jq -r .restored_lock_sha256 "$home/.local/state/dotfiles/v1/nvim.json")" == "$lock_before" ]] || fail 'restore marker was not recorded in nvim.json'
 [[ ! -e "$home/.local/state/dotfiles/nvim-restored-lock" ]] || fail 'restore created a transitional sidecar marker'
 [[ "$(git -C "$home/.local/share/nvim/lazy/lazy.nvim" rev-parse HEAD)" == "$lazy_commit" ]] || fail 'lazy.nvim was not locked'
+[[ "$(git -C "$home/.local/share/nvim/lazy/LazyVim" rev-parse HEAD)" == "$lazyvim_commit" ]] || fail 'LazyVim was not bootstrapped at its locked commit'
 [[ "$(git -C "$home/.local/share/nvim/lazy/sample.nvim" rev-parse HEAD)" == "$sample_commit" ]] || fail 'plugin was not locked'
 
 git -C "$repos/sample.nvim" -c user.name=test -c user.email=test@example.invalid \
@@ -395,11 +403,9 @@ conflict_home="$fixture/legacy-conflict"; mkdir -p "$conflict_home/.config/nvim"
 if run_legacy_area "$conflict_home" check >/dev/null 2>&1; then fail 'unrelated Neovim conflict was accepted'; fi
 [[ "$(<"$conflict_home/.config/nvim/init.lua")" == unrelated ]] || fail 'conflict refusal mutated unrelated data'
 
-# Exercise the same dispatch through bootstrap with an isolated checkout whose
-# test-only area row is ready. The repository row remains framework below.
+# Exercise the ready dispatch through bootstrap with an isolated checkout.
 bootstrap_repo="$fixture/bootstrap-repo"
 cp -a "$REPO_DIR" "$bootstrap_repo"
-perl -0pi -e 's/area\|nvim\|framework/area|nvim|ready/' "$bootstrap_repo/manifests/areas.tsv"
 bootstrap_home="$fixture/bootstrap-home"; host_root="$fixture/host-root"
 mkdir -p "$bootstrap_home" "$host_root/etc" "$host_root/proc/sys/kernel"
 printf 'ID=ubuntu\nVERSION_ID=24.04\n' > "$host_root/etc/os-release"
@@ -440,11 +446,5 @@ HOME="$bootstrap_home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host_root" D
 HOME="$bootstrap_home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host_root" \
   "$bootstrap_repo/bootstrap.sh" --remove --area nvim >/dev/null
 [[ ! -e "$bootstrap_home/.local/state/dotfiles/v1/nvim.json" && -f "$bootstrap_home/.local/state/dotfiles/v1/migrations.json" ]] || fail 'bootstrap lifecycle dispatch did not remove state and retain ledger'
-
-# Framework readiness remains a hard live-rollout gate.
-mkdir "$fixture/framework-home"
-if HOME="$fixture/framework-home" "$REPO_DIR/bootstrap.sh" --profile generic --area nvim >/dev/null 2>&1; then
-  fail 'repository framework manifest allowed Neovim rollout'
-fi
 
 printf 'stage8_nvim_test: PASS\n'

@@ -151,10 +151,10 @@ ordinary startup is offline.
 
 ## Generic/WSL Lifecycle And Restore
 
-The dedicated Neovim area remains framework-gated in `manifests/areas.tsv`.
-Fixture validation can exercise generic and WSL, but native Omarchy is refused
-until Stage 9 defines its refresh-safe attachment. Generic/WSL apply validates
-the exact upstream/generic/common package and target closure before mutation.
+The dedicated Neovim area is ready for generic and WSL in
+`manifests/areas.tsv`; native Omarchy remains refused until Stage 9 defines its
+refresh-safe attachment. Generic/WSL apply validates the exact
+upstream/generic/common package and target closure before mutation.
 It retires only exact reviewed individual or folded Kickstart links, including
 reviewed broken links whose lexical non-dereferencing normalization and resolved
 normalization both match the reviewed source. Only exact reviewed container
@@ -175,9 +175,11 @@ checkouts, credentials, and the migration ledger.
 The generic adapter invokes `~/.local/share/dotfiles/bin/nvim-restore
 --first-launch` only when `nvim.json` has no `restored_lock_sha256`. A stale
 value means the deployed lock changed and startup refuses with guidance to run
-`nvim-restore` explicitly. The helper runs headless `Lazy! restore`, verifies
-every applicable checkout, and verifies both lockfile copies byte-for-byte
-before invoking:
+`nvim-restore` explicitly. During that explicit restore process only, lazy.nvim
+may install missing plugins incrementally from its isolated copy of the
+committed lock; lock regeneration is disabled. The helper then runs headless
+`Lazy! restore`, verifies every applicable checkout, and verifies both lockfile
+copies byte-for-byte before invoking:
 
 ```text
 ${DOTFILES_NVIM_RESTORE_CALLBACK:-~/.local/share/dotfiles/bin/nvim-record-restore} <64-lowercase-hex-lock-sha256>
@@ -208,12 +210,12 @@ trusted or imported; malformed or unsafe sidecars cause preflight refusal.
 3. Run `~/.local/share/dotfiles/bin/nvim-restore` explicitly with connectivity.
    It verifies all applicable checkouts and unchanged lock bytes before the
    state marker can be committed.
-4. After readiness is enabled, run `./bootstrap.sh --check --area nvim`, then
-   launch Neovim normally. Never delete `migrations.json` to force another
+4. Run `./bootstrap.sh --check --area nvim`, then launch Neovim normally. Never
+   delete `migrations.json` to force another
    runtime rename.
 
 The downloader policy in the generic Lua layer is explicit: lazy periodic
-checks, startup installation, and Lua rocks are disabled; Mason registry and
+checks, ordinary-startup installation, and Lua rocks are disabled; Mason registry and
 package work is limited to explicit `:Mason` actions; Treesitter's automatic
 ensure list is empty and parser work is limited to explicit `:TSInstall` or
 `:TSUpdate`; project-local specs remain discoverable but missing checkouts are

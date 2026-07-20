@@ -181,8 +181,9 @@ conflict in one selected area must not prevent an unrelated area from being
 deployed independently.
 
 The manifest, not this conceptual list, controls readiness. Git, Bash, tmux,
-and transitional zsh are ready and default-selected after their isolated gates;
-Neovim remains a framework area.
+Neovim, and transitional zsh are ready and default-selected after their
+isolated gates. Neovim readiness currently covers generic and WSL; native
+Omarchy integration remains Stage 9 work.
 
 ## Ownership Boundaries
 

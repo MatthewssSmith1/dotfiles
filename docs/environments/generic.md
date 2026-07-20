@@ -16,8 +16,7 @@ preserved legacy remainder, while a state-stable login block uses the first
 existing `.bash_profile`, `.bash_login`, or `.profile`. Removal restores
 pre-existing bytes and modes exactly. The detailed attachment and load-order
 contract is in [Shell](../omarchy-alignment/tools/shell.md). Git, Bash, tmux,
-and transitional zsh are ready and default-selected; Neovim remains a framework
-area.
+Neovim, and transitional zsh are ready and default-selected.
 
 The ready Stage 7 tmux package uses
 `~/.config/tmux/tmux.conf` as an XDG

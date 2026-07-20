@@ -19,6 +19,7 @@ fixture="$TEST_ROOT/repo"
 repos="$TEST_ROOT/repos"
 mkdir "$fixture" "$repos"
 cp -a "$REPO_DIR/." "$fixture/"
+sed -i 's/^area|nvim|ready$/area|nvim|framework/' "$fixture/manifests/areas.tsv"
 
 git_fixture_config() {
   /usr/bin/git -C "$1" config user.name 'Stage Seven Fixture'

@@ -114,8 +114,9 @@ make_stage3_fixture() {
   local area bash_fixture=false tmux_fixture=false zsh_fixture=false
   mkdir "$fixture"
   cp -a "$REPO_DIR/." "$fixture/"
-  # Historical Stage 3 fixtures opt into tmux explicitly; production is ready now.
-  sed -i 's/^area|tmux|ready$/area|tmux|framework/' "$fixture/manifests/areas.tsv"
+  # Historical Stage 3 fixtures opt into later areas explicitly.
+  sed -i 's/^area|tmux|ready$/area|tmux|framework/; s/^area|nvim|ready$/area|nvim|framework/' \
+    "$fixture/manifests/areas.tsv"
   if [[ "$name" != real-baselines && "$name" != default-ready ]]; then
     for area in starship tmux nvim; do
       rm -rf -- "$fixture/packages/upstream/$area"
@@ -199,12 +200,12 @@ bash -n "${BOOTSTRAP_SOURCES[@]}" || fail 'a bootstrap source file has invalid B
 wsl_host="$(make_host stage3-wsl wsl)"
 
 # Committed statics: the area manifest, the canonical profile closure table,
-# populated snapshots and package layers, with Neovim still lifecycle-gated.
+# populated snapshots and package layers.
 expected_areas='schema|1
 area|git|ready
 area|bash|ready
 area|tmux|ready
-area|nvim|framework
+area|nvim|ready
 area|zsh|ready'
 [[ "$(cat "$REPO_DIR/manifests/areas.tsv")" == "$expected_areas" ]] || \
   fail 'manifests/areas.tsv does not record the current readiness table'
@@ -312,11 +313,9 @@ assert_empty_home "$home"
   fail 'ready-flipped fixture changed committed area readiness'
 pass
 
-# Framework areas refuse apply and check symmetrically; a focused fixture proves
-# the Git/Bash/zsh default-ready selection without invoking later area behavior.
+# A focused historical fixture proves the Git/Bash/zsh default-ready selection
+# without invoking later area behavior.
 home="$(new_home framework-refusal)"
-expect_failure "area 'nvim' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --check --area nvim
-assert_empty_home "$home"
 expect_failure "unknown area 'python'" "$home" "$wsl_host" "$BOOTSTRAP" --area python
 
 default_fixture="$(make_stage3_fixture default-ready bash zsh)"
@@ -325,6 +324,7 @@ assert_contains "$TEST_OUTPUT" "area 'git' preflight passed"
 assert_contains "$TEST_OUTPUT" "area 'bash' preflight passed"
 assert_contains "$TEST_OUTPUT" "area 'zsh' preflight passed"
 assert_not_contains "$TEST_OUTPUT" "area 'tmux'"
+assert_not_contains "$TEST_OUTPUT" "area 'nvim'"
 assert_empty_home "$home"
 expect_failure 'first WSL Bash deployment must explicitly select --area bash without zsh' \
   "$home" "$wsl_host" "$default_fixture/bootstrap.sh"

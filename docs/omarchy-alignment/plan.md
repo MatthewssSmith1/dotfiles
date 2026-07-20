@@ -271,7 +271,7 @@ and restored deliberately; terminal limitations are recorded against tested
 versions. Stage 7 marked tmux ready only after the automated gate passed;
 package and manifest presence alone never changes readiness.
 
-## 8. Generic And WSL Neovim Migration
+## 8. Generic And WSL Neovim Migration (Status: Complete; Ready; WSL Operational Acceptance Passed)
 
 - Use the completed 2026-07-20 stable-channel reevaluation: authoritative
   stable remains `omarchy-nvim 2026.6.17-1`; do not substitute edge releases.

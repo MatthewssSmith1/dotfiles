@@ -5,11 +5,11 @@ set -Eeuo pipefail
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 fail() { printf 'stage8_nvim_readiness_test: %s\n' "$1" >&2; exit 1; }
 
-[[ "$(awk -F'|' '$1 == "area" && $2 == "nvim" {print $3}' "$REPO_DIR/manifests/areas.tsv")" == framework ]] ||
-  fail 'the live Neovim readiness row is not framework'
+[[ "$(awk -F'|' '$1 == "area" && $2 == "nvim" {print $3}' "$REPO_DIR/manifests/areas.tsv")" == ready ]] ||
+  fail 'the live Neovim readiness row is not ready'
 for profile in generic wsl; do
   [[ "$(awk '$1 == "nvim" {print $2}' "$REPO_DIR/profiles/$profile.conf")" == \
-    upstream/nvim,generic/nvim,common/nvim ]] || fail "$profile future-ready closure is incomplete"
+    upstream/nvim,generic/nvim,common/nvim ]] || fail "$profile ready closure is incomplete"
 done
 [[ "$(awk '$1 == "nvim" {print $2}' "$REPO_DIR/profiles/omarchy.conf")" == common/nvim ]] ||
   fail 'native profile unexpectedly includes the deferred upstream/generic adapter'
@@ -101,13 +101,13 @@ HOME="$home" XDG_CONFIG_HOME="$home/xdg/config" XDG_DATA_HOME="$home/xdg/data" \
 [[ "$(< "$fixture/report")" == runtime-policy-ok ]] || fail 'real startup did not evaluate runtime policy'
 [[ ! -s "$fixture/network.log" ]] || fail 'ordinary restored startup attempted a network-capable command'
 
-# Native remains deferred even in a synthetic future-ready manifest.
+# Native remains deferred even though the area is ready for generic and WSL.
 if HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
   SCRIPT_NAME=stage8-ready SELECTED_PROFILE=omarchy DOTFILES_TESTING=1 DOTFILES_TEST_NVIM_BIN="$(command -v nvim)" \
   bash -c 'set -Eeuo pipefail; source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh";
     source "$DOTFILES_DIR/lib/provisioning.sh"; source "$DOTFILES_DIR/lib/areas/nvim.sh"; preflight_nvim' \
   >/dev/null 2>&1; then
-  fail 'future readiness admitted native Omarchy Neovim before Stage 9'
+  fail 'ready Neovim area admitted native Omarchy before Stage 9'
 fi
 
 printf 'stage8_nvim_readiness_test: PASS\n'

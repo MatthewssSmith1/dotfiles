@@ -183,7 +183,6 @@ pass
 # Stage 2 CLI and deduplication.
 home="$(new_home cli)"
 expect_success "$home" "$wsl_host" "$BOOTSTRAP" --check --area git --area git
-expect_failure "area 'nvim' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --check --area nvim
 expect_failure 'invalid profile' "$home" "$wsl_host" "$BOOTSTRAP" --check --profile Generic
 expect_failure '--profile is invalid with --remove' "$home" "$wsl_host" "$BOOTSTRAP" --remove --profile wsl
 expect_failure 'usage:' "$home" "$wsl_host" "$BOOTSTRAP" --unknown

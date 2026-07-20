@@ -7,7 +7,8 @@ readonly SOURCE_REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "$TEST_ROOT"' EXIT
 cp -a "$SOURCE_REPO_DIR/." "$TEST_ROOT/repo/"
-sed -i 's/^area|tmux|ready$/area|tmux|framework/' "$TEST_ROOT/repo/manifests/areas.tsv"
+sed -i 's/^area|tmux|ready$/area|tmux|framework/; s/^area|nvim|ready$/area|nvim|framework/' \
+  "$TEST_ROOT/repo/manifests/areas.tsv"
 readonly REPO_DIR="$TEST_ROOT/repo"
 
 fail() { printf 'FAIL: %s\n%s\n' "$*" "${TEST_OUTPUT:-}" >&2; exit 1; }

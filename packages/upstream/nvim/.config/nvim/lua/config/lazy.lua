@@ -3,6 +3,9 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
   error("locked lazy.nvim checkout is missing; run nvim-restore")
 end
 vim.opt.rtp:prepend(lazypath)
+if vim.env.DOTFILES_NVIM_RESTORING == "1" then
+  require("lazy.manage.lock").update = function() end
+end
 
 require("lazy").setup({
   lockfile = vim.env.DOTFILES_NVIM_RESTORE_LOCKFILE or (vim.fn.stdpath("config") .. "/lazy-lock.json"),
@@ -22,7 +25,7 @@ require("lazy").setup({
     -- version = "*", -- try installing the latest stable version for plugins that support semver
   },
   local_spec = true,
-  install = { missing = false, colorscheme = { "tokyonight", "habamax" } },
+  install = { missing = vim.env.DOTFILES_NVIM_RESTORING == "1", colorscheme = { "tokyonight", "habamax" } },
   pkg = { sources = { "lazy", "packspec" } },
   rocks = { enabled = false },
   checker = {

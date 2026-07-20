@@ -24,7 +24,7 @@ fixture="$TEST_ROOT/repo"
 mkdir "$fixture"
 cp -a "$REPO_DIR/." "$fixture/"
 # Stage 5 exercises provisioning independently of later default-ready areas.
-sed -i 's/^area|bash|ready$/area|bash|framework/; s/^area|tmux|ready$/area|tmux|framework/; s/^area|zsh|ready$/area|zsh|framework/' \
+sed -i 's/^area|bash|ready$/area|bash|framework/; s/^area|tmux|ready$/area|tmux|framework/; s/^area|nvim|ready$/area|nvim|framework/; s/^area|zsh|ready$/area|zsh|framework/' \
   "$fixture/manifests/areas.tsv"
 
 mise_artifact="$TEST_ROOT/mise-artifact"

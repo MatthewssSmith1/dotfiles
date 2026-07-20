@@ -17,14 +17,19 @@ This repository is not a fork of either project.
 
 ## Setup
 
-This is the retained legacy configuration. Existing links remain usable, but
-the retired repository-root Stow package must not be run. Fresh deployment is
-deferred until the generic and WSL Neovim migration stage.
+This is retained legacy migration input and is no longer deployed. The retired
+repository-root Stow package must not be run. Deploy the managed generic or WSL
+configuration with:
 
-Start Neovim and let lazy.nvim install plugins:
+```bash
+~/dotfiles/bootstrap.sh --area nvim
+```
+
+The first explicit launch restores plugins at the committed lock:
 
 ```bash
 nvim
 ```
 
-Use `:Lazy` to inspect plugin status.
+Use `:Lazy` to inspect plugin status. Later lock changes require an explicit
+`~/.local/share/dotfiles/bin/nvim-restore` before ordinary startup.
