@@ -41,8 +41,11 @@ profiles/
 
 Every package listed in the profile closure must exist, even when its payload
 is empty during framework tests. Stage 4 populated the real `upstream/starship`,
-`upstream/tmux`, and `upstream/nvim` snapshots; `upstream/bash` alone retains
-framework markers. Snapshot presence does not change area readiness in
+`upstream/tmux`, and `upstream/nvim` snapshots, and Stage 6 materialized the
+selected deployable Bash snapshots and managed common, generic, and WSL Bash
+layers plus the transitional common zsh package. Stage 7 implements the complete
+tmux package layout without changing tmux readiness. Payload presence does not
+change area readiness in
 `manifests/areas.tsv`. Package IDs are stable, qualified
 paths such as `common/git`, `upstream/git`, and `generic/git`; state never
 records an unqualified name.
@@ -66,11 +69,22 @@ packages. Packages must use include/source boundaries rather than target the
 same path. Manifest expansion rejects duplicate payload destinations before
 Stow runs.
 
-The generic and WSL baseline mappings are XDG-native: Starship links
-`~/.config/starship.toml` from `upstream/starship`, and tmux links
-`~/.config/tmux/tmux.conf` from `upstream/tmux`. Their areas remain
-framework-only until the shell and tmux migration stages make the complete
-closures ready.
+The generic and WSL mappings are XDG-native. Starship links
+`~/.config/starship.toml` from `upstream/starship`. For tmux,
+`generic/tmux` owns the XDG dispatcher at `~/.config/tmux/tmux.conf`, while
+`upstream/tmux` owns the private byte-identical baseline at
+`~/.config/dotfiles/upstream/tmux/tmux.conf`. The generic, command-empty WSL,
+and common persistence fragments have distinct targets under
+`~/.config/dotfiles/tmux/`; runtime source order is defined by the dispatcher,
+not package order. tmux is ready after its automated Stage 7 gates passed.
+
+For Bash, package order is deployment order, not startup order. The stable
+common dispatcher owns runtime ordering: generic portable initialization,
+then the WSL adapter when selected, then common personal integrations and the
+host-local layer. Native Omarchy has no generic or WSL payload and reaches only
+the common layers after its native `.bashrc`. The exact runtime order and
+profile-specific attachment strategies are defined in
+[Shell](tools/shell.md#managed-bash-load-order).
 
 ## Stow Rules
 
@@ -174,15 +188,22 @@ configuration apply plus approved provisioning. `--check --provision` reports
 configuration and provisioning convergence but remains offline and
 non-mutating. `--provision` is invalid with `--remove`.
 
-No-area `--provision` is the only full provisioning operation. It selects the
+No-area `--provision` is the only full runtime-tool provisioning operation. It selects the
 core personal application set (Node, pnpm, Claude Code, and Worktrunk) plus
 platform foundations for every eventual default area, including tmux, Neovim,
-and Starship, even while their configuration areas are framework-only. An
+and Starship, even while some configuration areas are framework-only. An
 area-scoped provisioning run selects only dependencies assigned to the
 explicit areas and never the core set. Framework-only areas remain
-unselectable until their payload stages land, so full provisioning does not
-imply that unfinished configuration is ready. Without `--provision`, a no-area
-run still selects only the currently `ready` configuration areas.
+unselectable until their payload stages land except for the exact tmux lifecycle
+below, so full provisioning does not imply that unfinished configuration is
+ready. Without `--provision`, a no-area run still selects only the currently
+`ready` configuration areas.
+
+tmux plugins are a separate Stage 7 lifecycle. No-area provisioning may
+provision the tmux executable foundation but never plugins. The only plugin
+provisioning apply interface is exactly
+`bootstrap.sh --provision --area tmux`; the corresponding check remains offline
+and non-mutating. See [tmux](tools/tmux.md#plugin-lifecycle).
 
 ## Operation And Network Policy
 
@@ -198,21 +219,46 @@ claims.
 | Bootstrap `--remove` | Selected home and state files | Forbidden |
 | `scripts/upstream verify` | None | Forbidden |
 | `scripts/upstream sync` | Resolved checkout manifest and snapshots plus same-filesystem staging | Allowed for pinned baseline inputs |
+| `scripts/tmux-parser-fixtures validate-lock` or `verify --root <cache-root>` | None | Forbidden |
+| `scripts/tmux-parser-fixtures sync --root <cache-root>` | Test-only archive cache, same-parent extraction staging, and the managed parser-fixture root under the caller-selected cache | Allowed only for the complete HTTPS package plan printed before download; never installs the package or changes deployment state |
 | Bash and tmux startup | Runtime process state only | Forbidden |
-| Transitional zsh first start | Zinit runtime state | Existing first-start fetch behavior allowed |
-| Explicit tmux plugin provisioning (Stage 7) | Locked plugin checkouts | Allowed only for the printed plugin plan |
+| Transitional zsh first start with no readable Zinit entrypoint | Zinit runtime state | The only startup network exception: the existing Zinit clone is allowed |
+| Transitional zsh startup with an existing readable Zinit entrypoint | Runtime process state only | Forbidden; plugins load only from a complete local closure under local-only Git policy |
+| `bootstrap.sh --provision --area tmux` plugin provisioning | Locked plugin checkouts | Allowed only for the complete printed lock plan |
 | First explicit generic Neovim launch | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim restore after a lock change | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim runtime-asset provisioning | Declared Mason, Treesitter, rock, or build state | Allowed only under the asset policy accepted in Stage 8 |
 
 Provisioning apply must print every planned networked action before the first
-network-capable command executes. Startup must
-never install or update tools implicitly except for the documented transitional
-zsh first-start behavior. Neovim plugin installation occurs only during the
+network-capable command executes. Startup must never install or update tools
+implicitly except for the documented missing-Zinit first-start behavior.
+Neovim plugin installation occurs only during the
 first explicit launch or a later explicit restore after a lock change. Upstream
 sync never deploys configuration. Within `$HOME`, it may touch only the
 resolved checkout and a same-filesystem staging directory beside the content it
 will atomically replace; all unrelated home paths are forbidden.
+
+Ordinary tmux apply and both check forms verify the exact plugin closure
+offline and refuse incomplete or drifted state. Only the explicit area-scoped
+plugin provisioning apply may stage missing or clean-drift replacements.
+Dirty, ambiguous, non-owned, linked-worktree, and symlinked managed objects
+refuse without mutation. Eligible replacements are assembled and verified in
+same-filesystem staging and swapped transactionally rather than modified in
+place. The machine contract and exact pins are in
+`manifests/tmux-plugins.lock.json`.
+
+The plugin receipt is retained separately at
+`~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. Its v1 schema
+records the active lock hash and the ordered repository, commit, tree, and
+directory identity of every checkout. The atomically compare-and-swapped full
+receipt is the plugin transaction's commit point; it is not incrementally
+updated and is not area-removal ownership.
+Runtime provisioning, plugin provisioning, tmux configuration preflight, and
+tmux configuration apply are ordered gates. A failure or terminal signal in
+either provisioning layer prevents both tmux configuration stages; statuses
+`70`, `130`, and `143` remain distinct rather than being collapsed into an
+aggregate failure. This ordering also applies if tmux later becomes a default
+ready area; the readiness manifest is not changed by provisioning.
 
 ## Deployment State
 
@@ -241,11 +287,38 @@ expected lexical source, every managed directory created by deployment,
 managed attachment IDs, destinations, and expected content hashes, and any
 backup paths created by that area. State exists only for exact cleanup and
 mismatch refusal; it never reconciles profiles or overrides detection.
+State and migration-ledger files must be regular, non-symlink, EUID-owned
+files. Recorded, desired, and legacy package links are accepted or removed only
+while their symlink ownership is also EUID-safe, including a recheck at the
+mutation point.
+
+Concurrency protection covers normal cooperative edits by the same user. Every
+journaled mutation compares the current object with the transaction-start
+identity, or with this transaction's latest recorded post-state, and
+read-modify-write files require the identity of the exact version read.
+Temporary cleanup and quarantine discard likewise require the tracked object
+identity. Bootstrap does not claim to defend against a malicious same-UID
+process deliberately guessing and replacing private random quarantine names or
+swapping parent directories between individual system calls; that stronger
+boundary would require privileged or descriptor-relative filesystem mediation.
+
+Bash state also records the selected login path, whether bootstrap created its
+attachment-only file, and exact attachment identities and hashes. Generic and
+WSL select the first already-existing `.bash_profile`, `.bash_login`, or
+`.profile` once, in that order, and retain that choice across reapply. A newly
+created `.bash_profile` is removable only while state and exact content prove
+bootstrap created it. Existing startup files remain host-owned bytes around
+the reversible managed blocks.
 
 `migrations.json` is a retained host ledger for destructive one-time migrations.
 It records migration ID, source fingerprint, completion time, and backup paths.
 Removal never deletes this ledger, so reapply cannot repeat Neovim runtime
-renames or another completed one-time migration.
+renames or another completed one-time migration. Stage 6 uses separate stable
+records for zsh local-alias relocation and global Vite+ hook retirement.
+Retained zsh backups are no-clobber mode-`0600` files; every check/reapply
+verifies owner, mode, and content hash against the recorded source fingerprint.
+Initial migration performs the same verification immediately after creation and
+again before the original source is destructively rewritten or removed.
 
 All modes open the already-existing `$HOME` directory read-only and take an
 advisory `flock` on that file descriptor before reading state. `--check` uses a
@@ -293,6 +366,18 @@ data and backups, migration backups, credentials, and every host-local file.
 It also retains `migrations.json`. Those resources may be reported but are
 never deleted by configuration removal.
 
+For tmux this retention is also declarative: removal keeps both
+`~/.tmux/plugins/` and `~/.tmux/resurrect/`. Plugin provisioning state is not
+area deployment state and is never inferred as removable ownership.
+
+For generic and WSL Bash, removal restores the bytes and mode of every
+pre-existing startup file and deletes a login file only when state proves it was
+created as an exact attachment-only file. Native removal deletes only its exact
+appended block. Shell removal retains `~/.config/dotfiles/local/bash.sh`,
+`~/.config/dotfiles/local/zsh_aliases.zsh`, Zinit data and plugins, shell
+history, migration backups and ledger entries, and the completed Vite+
+retirement; it never recreates `.zsh_aliases.local` or changes the login shell.
+
 Retained provisioning is not recorded as removable area deployment state.
 Installed tools and their manifest-owned launchers survive `--remove`; checks
 derive expected resources from the active provisioning manifest and compare
@@ -323,6 +408,19 @@ Attachment operations must:
 - Report drift instead of guessing how to repair it.
 - Reapply safely after supported native refresh operations.
 
+The native Bash block is additive and sources only the common dispatcher after
+the authoritative native baseline. It is not the generic/WSL bypass block.
+Generic and WSL prepend a block that returns immediately for non-interactive
+Bash and otherwise runs the managed dispatcher before returning past the
+preserved legacy remainder. Their separately selected login block is also
+prepended. See [Shell](tools/shell.md#generic-and-wsl-attachments).
+
+The native tmux block is also additive, but sources only the guarded common
+persistence path after the native baseline. It never sources or deploys the
+private generic baseline, generic adapter, command-empty WSL adapter, or a
+host-local file. The final command inside common persistence is guarded TPM
+initialization.
+
 ## Legacy Migration Safety
 
 The current repository has root-package links and repo-backed local files.
@@ -330,7 +428,15 @@ Migration must:
 
 - Convert `~/.gitconfig.local` to an external regular file with mode `0600`
   without following the legacy symlink during writes or permission changes.
-- Move current zsh-local content under `~/.config/dotfiles/local/`.
+- Relocate a recognized `.zsh_aliases.local` link transactionally to the real,
+  retained `~/.config/dotfiles/local/zsh_aliases.zsh`; reuse only a
+  byte-identical regular destination, never merge divergent content, and remove
+  the old link only after active `.zshrc` reads the new path.
+- Remove only the exact reviewed Vite+ block from host-owned `.zshenv`, preserve
+  Cargo, OpenCode, and unrelated bytes, and retain its rollback backup and
+  completed ledger record. Configuration removal does not reverse this
+  retirement, and the Vite+ installation remains untouched.
+- Leave `.zshrc.local` entirely unowned and untouched.
 - Remove a legacy symlink only when both its recorded lexical target and its
   normalized resolved destination match the known old path in this checkout.
   Broken links use a non-dereferencing normalized destination for the second
@@ -348,7 +454,8 @@ timestamped renames for runtime state — is recorded in
 
 | Tool category | Omarchy | Generic and WSL |
 |---------------|---------|-----------------|
-| Git, fzf, zoxide, fd, eza, bat, rg, jq | Native packages | Distro packages |
+| Git, fzf, zoxide, eza, rg, jq | Native packages | Distro packages |
+| `bat` and `fd` command names | Native packages | Managed private wrappers selecting the distro-owned `bat`/`batcat` and `fd`/`fdfind` commands |
 | tmux | Native package | Distro package when 3.5 or newer, else locked `aqua:tmux/tmux-builds` via mise |
 | Neovim, Starship | Native packages | Suitable package or locked mise fallback |
 | mise | Native package | Pinned user-scoped install when absent |
@@ -365,7 +472,9 @@ owners and compatible behavior.
 
 Vite+ is intentionally project-owned. Projects declare and lock it in their
 own mise files; bootstrap never invokes the official installer, creates or
-updates a global executable, or treats Vite+ as a protected profile command.
+updates a global executable, treats Vite+ as a protected profile command, or
+initializes it globally from managed Bash or zsh. Stage 6 durably retires the
+reviewed existing global zsh hook.
 Project precedence is expected for it. OpenCode and its Codex auth plugin are
 outside Stage 5 until a separately reviewed change defines a locked plugin
 lifecycle and proves preservation of configuration and authentication.
@@ -405,6 +514,35 @@ Project mise files retain higher precedence for project runtimes, but may not
 silently shadow profile-owned commands such as tmux or native Omarchy Neovim.
 Bootstrap must not silently advance locked versions.
 
+The retained provisioning receipt is a regular non-symlinked EUID-owned
+mode-`0600` file. Validation captures the exact identity whose contents were
+checked. Every later read-modify-write parses one stable version and compares
+and swaps against that same version, then verifies exact bytes, owner, mode,
+and post-write identity. A retained tool root, its mise link, protected
+launcher, tool receipt row, and launcher receipt row are one transaction. The
+launcher installs before one combined receipt update; commit is not declared
+until every filesystem post-state and both exact receipt rows reverify.
+Initial mise installation uses the same combined receipt transaction: verified
+binary installation and a quarantined compare-and-swap receipt update either
+commit together or roll back together on failure or signal, so no stale mise
+receipt can survive without its binary.
+Launcher-only repair uses the same combined receipt boundary. Rollback removes
+only the exact transaction-installed launcher and restores an exact prior
+receipted launcher without clobbering a concurrent replacement. Mise files and retained tool directories likewise
+capture destination absence before network or staging begins. Files install by
+same-directory no-clobber linking; directories install with no-clobber,
+no-nesting rename semantics and explicit source/destination postconditions.
+Failure removes only unchanged transaction-created destinations and links;
+detected changed or appeared same-UID objects are retained at the path named in
+the recovery diagnostic. This remains subject to the malicious same-UID
+between-syscall boundary documented below.
+
+Verified installation of the new combined receipt is the commit point. The
+transaction marks itself committed before best-effort deletion of old receipt
+or launcher quarantines and never deletes rollback state first. A cleanup
+failure does not revert the committed root, link, launcher, or receipt; it
+retains and reports each exact old-object recovery path.
+
 ### Observable Ownership Boundary
 
 Bootstrap checks its inherited environment, including exported shell
@@ -413,7 +551,19 @@ It also checks mise resolution from a neutral directory and controlled project
 directories so intentional project runtime precedence can be distinguished
 from forbidden shadows of protected profile commands. Once Stage 6 deploys the
 managed shell, the same resolver runs in that interactive-shell context and can
-also inspect aliases and non-exported functions.
+also inspect aliases and non-exported functions. The controlled shell uses the
+managed dispatcher, suppresses the prompt, returns machine-readable status,
+inspects every candidate without executing rejected shadows, and validates
+private `bat` and `fd` wrappers through their ultimate distro-owned commands.
+It disables host-local sourcing for executable ownership. A separate copied
+HOME inspection sources host-local Bash inside a denied-network mount namespace
+with command sentinels and the real HOME bind-mounted read-only. Bootstrap first
+proves the required `util-linux` `unshare`, `mount`, and `setpriv` contract, then
+drops all capabilities and enables no-new-privileges before copied host-local
+code executes. Bash Worktrunk initialization uses the same capability-free
+denied-network child boundary and is skipped silently at startup if that child
+cannot be created; apply and check fail closed when the required isolation probe
+is unavailable.
 
 An arbitrary unexported alias or function in an already-running parent shell is
 not inherited and cannot be inspected reliably. Bootstrap does not parse

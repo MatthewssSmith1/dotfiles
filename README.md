@@ -1,8 +1,9 @@
 # Dotfiles
 
-Opinionated zsh, Git, Neovim, and tmux configuration. Git is deployed through
-profile-aware [GNU Stow](https://www.gnu.org/software/stow/) packages; the
-remaining areas retain their legacy links until their migration stages land.
+Opinionated Bash, zsh, Git, Neovim, and tmux configuration. Git, Bash, tmux,
+and transitional zsh deploy through profile-aware
+[GNU Stow](https://www.gnu.org/software/stow/) packages; Neovim retains its
+legacy links until its migration stage lands.
 
 ## Includes
 
@@ -33,10 +34,22 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
 
 Bootstrap is user-scoped, refuses to run as root, never installs distro
 packages, and does not change the login shell. Ordinary apply, check, and
-removal stay offline. The current ready configuration area is Git. Bootstrap leaves
-existing shell, tmux, Neovim, zsh, agent, application, and authentication state
-untouched. Do not run Stow against the repository root; that package is
-permanently retired and inert.
+removal stay offline. Git, Bash, tmux, and transitional zsh are ready and are
+selected by default; Neovim remains a framework area. Bootstrap preserves
+unrelated shell, agent, application, and authentication state. Do not run Stow
+against the repository root; that package is permanently retired and inert.
+
+The accepted Stage 6 contract makes Bash with Starship the primary configured
+workflow without changing the account's current zsh login shell. Generic and
+WSL Bash use byte-reversible startup-file blocks; native Omarchy uses a
+separate additive attachment. Shell rollout is Bash-first and remains gated on
+isolated tests and live smoke checks. See the
+[shell contract](docs/omarchy-alignment/tools/shell.md).
+
+On a first WSL deployment, bootstrap enforces that operational order: apply
+`--area bash`, smoke-test it from a separate process, then apply `--area zsh`.
+A default or combined apply cannot perform both first-time shell deployments;
+later default applies converge normally after both areas have state.
 
 Stage 5 adds explicit, ownership-aware retained-tool provisioning:
 
@@ -51,43 +64,37 @@ Area-scoped `--provision --area <area>` never selects the core personal tool
 set. See the
 [deployment contract](docs/omarchy-alignment/deployment.md#bootstrap-contract).
 
-To make zsh the login shell, run this separately and start a new login session:
-
-```bash
-chsh -s "$(command -v zsh)"
-```
-
 Neovim requires version 0.11 or newer and works best with a Nerd Font and a
 clipboard provider. See [the Neovim README](.config/nvim/README.md) for details.
 
-## Tmux
+## Tmux Stage 7 Contract
 
-Tmux uses [TPM](https://github.com/tmux-plugins/tpm) with
-[Resurrect](https://github.com/tmux-plugins/tmux-resurrect),
-[Continuum](https://github.com/tmux-plugins/tmux-continuum), and
-[Assistant Resurrect](https://github.com/timvw/tmux-assistant-resurrect).
-Plugins install automatically on first start, which requires network access.
+tmux is ready after its lifecycle, adversarial, denied-network, and real-parser
+automated gates passed. WSL operational acceptance passed after the manual
+server transition and Windows Terminal checks. A fresh host must first run the complete
+`--provision --area tmux` lifecycle, which provisions the runtime and receipted
+plugin closure before configuration preflight and apply. The reviewed root
+`.tmux.conf` remains migration input until that first apply.
 
-Sessions save every five minutes and restore when the tmux server starts:
+The implemented generic and WSL design puts the dispatcher at
+`~/.config/tmux/tmux.conf`, loads a private byte-identical Omarchy baseline,
+generic adapter, command-empty WSL adapter where present, and common persistence,
+then performs guarded TPM initialization as the final action. Native Omarchy
+keeps its regular baseline and receives only a guarded common-persistence
+attachment. tmux has no host-local layer.
 
-| Key | Action |
-|-----|--------|
-| `prefix` + `Ctrl-s` | Save manually |
-| `prefix` + `Ctrl-r` | Restore manually |
-| `prefix` + `U` | Update plugins |
+The exact TPM, Resurrect, Assistant Resurrect, and Continuum commits are in
+`manifests/tmux-plugins.lock.json`. Startup and ordinary apply/check are offline
+and never install or update plugins. The sole plugin provisioning apply command
+is:
 
-Neovim relaunches in its restored pane and working directory, but editor state
-is not preserved. Claude Code, OpenCode, and Codex conversations resume from
-their saved session IDs; in-flight work is not restored.
+```bash
+~/dotfiles/bootstrap.sh --provision --area tmux
+```
 
-Copy mode uses Vim keys, mouse support, extended scrollback, and OSC 52:
-
-| Key | Action |
-|-----|--------|
-| `prefix` + `[` | Enter copy mode |
-| `v` | Begin selection |
-| `y` or `Enter` | Copy selection |
-| `prefix` + `]` | Paste the tmux buffer |
+Removal retains `~/.tmux/plugins/` and `~/.tmux/resurrect/`. See the full
+[tmux contract](docs/omarchy-alignment/tools/tmux.md) and manual
+[Windows Terminal unbinds](docs/environments/windows-terminal.md).
 
 ## Git Identity
 
@@ -107,5 +114,8 @@ Use `.gitconfig.local.example` as the template, or provide `GIT_USER_NAME` and
 | `bootstrap.sh --check --area git` | Check Git deployment without mutation |
 | `bootstrap.sh --area git` | Apply the Git area |
 | `bootstrap.sh --remove --area git` | Remove managed Git links and includes |
-| `scripts/upstream verify` | Verify the pinned Git snapshot offline |
+| `scripts/upstream verify` | Verify all pinned upstream snapshots offline |
+| `scripts/tmux-parser-fixtures validate-lock` | Validate the test-only tmux parser fixture pin offline |
+| `scripts/tmux-parser-fixtures sync --root <cache-root>` | Explicitly prepare the locked real tmux 3.2a parser fixture without package installation |
+| `tests/stage7_tmux_parser_compatibility_test.sh --fixture-root <cache-root>` | Run the opt-in real 3.2a/3.4/3.7b parser gate |
 | `tests/bootstrap_test.sh` | Run repository checks |

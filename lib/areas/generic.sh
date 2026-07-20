@@ -45,7 +45,7 @@ apply_generic() {
   fault after-stow
   fault before-state
   state_json="$(build_generic_state_json)"
-  write_string_atomic "$state_json" "$AREA_STATE" 0600
+  write_transaction_string_atomic "$state_json" "$AREA_STATE" 0600
   TRANSACTION_ACTIVE=false
   fault after-state-commit
   log "applied $AREA area for profile '$SELECTED_PROFILE'"
@@ -77,11 +77,10 @@ remove_generic() {
   while IFS= read -r relative; do TARGET_PATHS+=("$relative"); done < <(jq -r '.targets[].path' "$state")
   begin_transaction
   for ((index=0; index<count; index++)); do
-    relative="$(jq -r ".targets[$index].path" "$state")"
-    rm -- "$HOME/$relative"
+    remove_recorded_target "$state" "$index"
   done
   fault remove-after-links
-  rm -- "$state"
+  remove_current_regular_path "$state" "area '$AREA' state"
   prune_managed_directories "${managed_directories[@]}"
   TRANSACTION_ACTIVE=false
   log "removed managed $AREA links and state"

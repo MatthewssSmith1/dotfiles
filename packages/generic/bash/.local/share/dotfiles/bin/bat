@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+roots=(/usr/bin /bin)
+if [[ ${DOTFILES_TESTING:-} == 1 && ${DOTFILES_TEST_BASH_DISTRO_BIN:-} == /* ]]; then
+  roots=("${DOTFILES_TEST_BASH_DISTRO_BIN%/}")
+fi
+for name in bat batcat; do
+  for root in "${roots[@]}"; do
+    candidate="$root/$name"
+    [[ -f "$candidate" && -x "$candidate" ]] || continue
+    [[ "$(realpath -e -- "$candidate" 2>/dev/null)" != "$(realpath -e -- "$0" 2>/dev/null)" ]] || continue
+    exec "$candidate" "$@"
+  done
+done
+printf 'bat: no distro bat or batcat executable found\n' >&2
+exit 127

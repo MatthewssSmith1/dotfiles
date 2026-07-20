@@ -31,10 +31,10 @@
         "blob": "470040a3bcc3f22e7b4c3ff32ff641198b487f8e",
         "mode": "100644"
       },
-      "snapshot": "packages/upstream/tmux/.config/tmux/tmux.conf",
+      "snapshot": "packages/upstream/tmux/.config/dotfiles/upstream/tmux/tmux.conf",
       "destination": {
         "root": "home",
-        "path": ".config/tmux/tmux.conf",
+        "path": ".config/dotfiles/upstream/tmux/tmux.conf",
         "mode": "100644"
       },
       "transform": "none"
@@ -294,6 +294,78 @@
       "snapshot": "packages/upstream/reference/omarchy/default/bash/shell",
       "destination": {
         "root": "reference"
+      },
+      "transform": "none"
+    },
+    {
+      "id": "omarchy-bash-deployable-shell",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v3.8.3",
+      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "source": {
+        "path": "default/bash/shell",
+        "blob": "7eb48672bf1d635026a44372a7a4dd6f4db6f7bb",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/bash/.config/dotfiles/upstream/bash/shell",
+      "destination": {
+        "root": "home",
+        "path": ".config/dotfiles/upstream/bash/shell",
+        "mode": "100644"
+      },
+      "transform": "none"
+    },
+    {
+      "id": "omarchy-bash-deployable-aliases",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v3.8.3",
+      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "source": {
+        "path": "default/bash/aliases",
+        "blob": "8bbfa5f54302df1bcdba30e24d5822e065b700d6",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/bash/.config/dotfiles/upstream/bash/aliases",
+      "destination": {
+        "root": "home",
+        "path": ".config/dotfiles/upstream/bash/aliases",
+        "mode": "100644"
+      },
+      "transform": "none"
+    },
+    {
+      "id": "omarchy-bash-deployable-fns-tmux",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v3.8.3",
+      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "source": {
+        "path": "default/bash/fns/tmux",
+        "blob": "0144f2ebba7143ac1c1eab277c0fc0443331b3ce",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/bash/.config/dotfiles/upstream/bash/fns/tmux",
+      "destination": {
+        "root": "home",
+        "path": ".config/dotfiles/upstream/bash/fns/tmux",
+        "mode": "100644"
+      },
+      "transform": "none"
+    },
+    {
+      "id": "omarchy-bash-deployable-inputrc",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v3.8.3",
+      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "source": {
+        "path": "default/bash/inputrc",
+        "blob": "3b48e55447a6afbb1b86b30ecd46d533652c416e",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/bash/.config/dotfiles/upstream/bash/inputrc",
+      "destination": {
+        "root": "home",
+        "path": ".config/dotfiles/upstream/bash/inputrc",
+        "mode": "100644"
       },
       "transform": "none"
     },

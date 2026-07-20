@@ -1,0 +1,27 @@
+{
+  "$schema": "../schemas/tmux-parser-fixture-lock-v1.schema.json",
+  "schema_version": 1,
+  "managed_root": "tmux-parser-fixtures-v1",
+  "extractor": ["dpkg-deb", "--extract"],
+  "fixtures": [
+    {
+      "id": "ubuntu-jammy-tmux-3-2a-amd64",
+      "package": {
+        "name": "tmux",
+        "architecture": "amd64",
+        "version": "3.2a-4ubuntu0.2",
+        "url": "https://security.ubuntu.com/ubuntu/pool/main/t/tmux/tmux_3.2a-4ubuntu0.2_amd64.deb",
+        "archive": "tmux_3.2a-4ubuntu0.2_amd64.deb",
+        "size": 428388,
+        "sha256": "b51865a24b78d68459421ee68e1e35d53112d9c08c4e823b241141342efb21dd"
+      },
+      "executable": {
+        "path": "usr/bin/tmux",
+        "mode": "0755",
+        "size": 971320,
+        "sha256": "6684c9b0bd4af08461f9e476e0abee9c3f08daa5d55ed6fb7c663c000e09f83d",
+        "version_output": "tmux 3.2a"
+      }
+    }
+  ]
+}

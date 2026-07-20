@@ -162,17 +162,48 @@ Gate: generic systems converge using approved owners, missing distro packages
 are reported exactly, runtime pins do not advance silently, and Omarchy keeps
 native ownership.
 
-## 6. Shell Migration
+## 6. Shell Migration (Status: Complete; Ready; WSL Operational Acceptance Passed)
 
-- Add generic Bash loaders and native Omarchy attachments.
-- Add Starship, fzf, zoxide, and mise initialization in documented order.
-- Add generic compatibility commands, login hooks, and personal-tool hooks.
-- Preserve zsh as a behaviorally frozen transitional default.
-- Move zsh-local content to the central local directory and update zsh's source
-  path in the same preflighted transaction; never relocate the file while the
-  active configuration still references its old path.
-- Preserve zsh's existing first-start Zinit behavior without adding new
-  startup installation or update paths.
+Phase 1 closes and reviews the documentation contract before code, payload,
+readiness, or live-home changes. Its accepted design is in
+[Shell](tools/shell.md): reversible generic/WSL bypass blocks and stable login
+selection, a distinct additive native attachment, exact runtime order and WSL
+adapter boundary, private `bat`/`fd` wrappers, actual conditional aliases, and
+the retained host-local Bash layer.
+
+No implementation phase may begin until the Phase 1 documentation diff has
+been reviewed and the active documents pass the contract gate.
+
+Implementation then proceeds in separate gated phases:
+
+1. Generalize guarded regular-file blocks, migration-ledger handling, and
+   narrowly approved legacy-link replacement; prove byte, mode, marker, ledger,
+   and rollback behavior without changing shell readiness.
+2. Materialize only the pinned upstream shell, aliases, tmux helper, and
+   Readline payloads and verify their byte identity offline.
+3. Implement managed Bash payloads and lifecycle, including controlled
+   interactive ownership validation, while Bash remains `framework`.
+4. Package behaviorally frozen transitional zsh and transactionally relocate
+   `.zsh_aliases.local`; retire global Vite+ from managed `.zshrc` and the exact
+   reviewed host `.zshenv` block. `.zshrc.local` remains untouched. The only
+   startup network exception is a missing-Zinit first start.
+5. Complete isolated startup, attachment, ownership, denied-network, migration,
+   removal, retention, rollback, and earlier-stage regression tests.
+
+The reusable engine primitives, selected upstream Bash payloads, managed Bash
+payload/lifecycle, and transitional zsh packaging/migrations are implemented.
+The complete combined Stage 6 matrix passed before both shell areas changed to
+`ready`; WSL operational rollout acceptance passed after the ordered live
+deployment and smoke checks.
+
+The implementation enforces the WSL operational sequence: first Bash apply is
+explicit and excludes zsh; first zsh apply is a later explicit command after
+Bash state exists and excludes Bash. Full checks remain available before
+rollout, and default apply is restored after both shell states exist.
+
+Shell removal is state-driven and reversible for managed attachments. It
+retains host-local files, tools, Zinit, history, migration backups and ledger
+records, and the durable Vite+ retirement, and never changes the login shell.
 
 Tests added in this stage cover:
 
@@ -182,38 +213,63 @@ Tests added in this stage cover:
 - Denied-network Bash startup.
 - Transitional zsh before and after Zinit exists.
 - Native Bash attachments against isolated fixtures.
+- Byte-exact generic/WSL startup-file restoration and native refresh recovery.
+- Alias and non-exported-function shadows observed without execution.
+- zsh local-file collisions, exact `.zshenv` retirement, retained migrations,
+  and `.zshrc.local` non-ownership.
 
 Gate: Bash behavior is predictable across generic, WSL, SSH, and missing-tool
 scenarios; Bash startup remains offline; transitional zsh behavior remains
-available without a login-shell change.
+available without a login-shell change. Only after the full isolated gate passes
+may Bash and zsh change from `framework` to `ready`; that flip occurs immediately
+before live rollout. On WSL, apply and smoke-test Bash first while current zsh
+remains the login-shell recovery path, then apply zsh separately. Operational
+acceptance completes only after both explicit checks and smoke tests pass. A
+rollout failure is fixed and regated rather than bypassing readiness checks.
 
-## 7. tmux Migration
+## 7. tmux Migration (Status: Complete; Ready; WSL Operational Acceptance Passed)
 
-- Deploy or attach the pinned Omarchy baseline.
-- Add minimal generic and WSL adapters.
-- Select exact TPM and persistence-plugin commits.
-- Install and verify locked plugins through the Stage 7 explicit networked
-  plugin-provisioning operation, never ordinary apply or startup.
-- Preserve existing Resurrect state.
-- Apply the documented manual Windows Terminal setup.
-- Detect selected client, active server, and isolated server versions
-  independently.
-- Exercise the manual save, server restart, and restore path after an executable
-  upgrade.
+The documentation, package layout, relocated byte-identical baseline,
+schema-backed locks, area lifecycle, migration, native attachment, isolated
+validation, active-server inspection, parser fixtures, and transactional plugin
+provisioning are implemented. tmux is `ready` after the automated Stage 7 gates
+passed. WSL operational acceptance passed after the explicit live rollout,
+server transition, restore, and Windows Terminal 1.24.11911.0 checks. The
+accepted design is in [tmux](tools/tmux.md).
+
+Implemented lifecycle coverage includes:
+
+1. Add tmux area lifecycle code and the native guarded source attachment
+   without changing readiness.
+2. Implement offline exact-closure checks and the sole networked plugin apply
+   interface, `bootstrap.sh --provision --area tmux`.
+3. Permit only missing or clean-drift plugin staging/replacement, transactionally;
+   refuse dirty, ambiguous, non-owned, linked-worktree, or symlinked state.
+4. Prove removal retains both plugin checkouts and Resurrect data.
+5. Validate selected client identity, socket-reported active-server versions,
+   `/proc` owner/path identity, and denied-network isolated servers independently.
+
+The final manual gates completed with save/restart/restore after the executable
+transition and the documented Windows Terminal unbind/version acceptance.
 
 Tests added in this stage cover:
 
 - Effective options and key tables on isolated homes and sockets.
 - tmux 3.2a, 3.4, and 3.5-or-newer parsing against the committed baseline.
-- Terminfo, truecolor, clipboard, plugin order, lock state, and denied-network
+- Terminfo, truecolor, clipboard, plugin order, exact lock closure, every
+  provisioning refusal/rollback path, and denied-network apply, check, and
   startup.
 - Existing-server mismatch reporting without automatic reload or restart.
+- Native attachment refresh, drift, exact removal, and absence of generic, WSL,
+  or host-local sources.
+- Duplicate Stow target refusal and removal retention for plugins and Resurrect.
 - Manual Windows Terminal key checks on a recorded client version.
 
 Gate: prefixes, bindings, indexes, status, key protocol, plugin order, and
 persistence validate on generic and WSL; an upgraded active server is restarted
 and restored deliberately; terminal limitations are recorded against tested
-versions.
+versions. Stage 7 marked tmux ready only after the automated gate passed;
+package and manifest presence alone never changes readiness.
 
 ## 8. Generic And WSL Neovim Migration
 

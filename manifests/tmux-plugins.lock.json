@@ -1,0 +1,50 @@
+{
+  "$schema": "../schemas/tmux-plugin-lock-v1.schema.json",
+  "schema_version": 1,
+  "area": "tmux",
+  "plugin_root": ".tmux/plugins",
+  "resurrect_root": ".tmux/resurrect",
+  "provision_command": ["bootstrap.sh", "--provision", "--area", "tmux"],
+  "plugins": [
+    {
+      "id": "tpm",
+      "role": "manager",
+      "loading": "tpm",
+      "declaration": "tmux-plugins/tpm",
+      "repository": "https://github.com/tmux-plugins/tpm",
+      "commit": "e261deb1b47614eed3400089ce7197dc68acc4eb",
+      "directory": "tpm"
+    },
+    {
+      "id": "tmux-resurrect",
+      "role": "plugin",
+      "loading": "tpm",
+      "declaration": "tmux-plugins/tmux-resurrect",
+      "repository": "https://github.com/tmux-plugins/tmux-resurrect",
+      "commit": "cff343cf9e81983d3da0c8562b01616f12e8d548",
+      "directory": "tmux-resurrect"
+    },
+    {
+      "id": "tmux-assistant-resurrect",
+      "role": "plugin",
+      "loading": "managed-hooks",
+      "hooks": {
+        "@resurrect-hook-post-save-all": "scripts/save-assistant-sessions.sh",
+        "@resurrect-hook-post-restore-all": "scripts/restore-assistant-sessions.sh"
+      },
+      "repository": "https://github.com/timvw/tmux-assistant-resurrect",
+      "commit": "9ea274cc91b64ad0360f1a827950381e637f39a7",
+      "directory": "tmux-assistant-resurrect"
+    },
+    {
+      "id": "tmux-continuum",
+      "role": "plugin",
+      "loading": "tpm",
+      "declaration": "tmux-plugins/tmux-continuum",
+      "repository": "https://github.com/tmux-plugins/tmux-continuum",
+      "commit": "0698e8f4b17d6454c71bf5212895ec055c578da0",
+      "directory": "tmux-continuum"
+    }
+  ],
+  "retained_paths": [".tmux/plugins", ".tmux/resurrect"]
+}

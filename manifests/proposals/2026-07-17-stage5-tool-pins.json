@@ -3,7 +3,7 @@
   "status": "accepted-for-preverified-link-installation",
   "accepted_manifest": "manifests/provisioning.json",
   "accepted_on": "2026-07-17",
-  "previous_manifest_sha256s": [],
+  "previous_manifest_sha256s": ["c59ff0355557d999812cf0b080754cb3d9957ce97b7f3dba71b29b3b35d54087"],
   "platforms": ["linux-x86_64"],
   "strategy": "Download each immutable version URL, restrict redirects to recorded origins, verify the repository SHA-256, extract without unsafe archive paths into a retained root, verify the executable, then register that root with the fully qualified backend using offline mise link.",
   "notes": [

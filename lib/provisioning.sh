@@ -6,9 +6,160 @@ PROVISIONING_MANIFEST_SHA=""
 PROVISIONING_PLATFORM=""
 PROVISION_TOOL_IDS=()
 MISE_BIN=""
+PROVISIONING_RECEIPT_IDENTITY=""
+PROVISIONING_RECEIPT_READ_IDENTITY=""
+PROVISIONING_RECEIPT_READ_CONTENT=""
+PROVISION_INSTALL_ACTIVE=false
+PROVISION_INSTALL_COMMITTED=false
+PROVISION_INSTALL_PATH=""
+PROVISION_INSTALL_IDENTITY=""
+PROVISION_INSTALL_LINK=""
+PROVISION_INSTALL_LINK_IDENTITY=""
+PROVISION_INSTALL_LAUNCHER=""
+PROVISION_INSTALL_LAUNCHER_IDENTITY=""
+PROVISION_INSTALL_LAUNCHER_QUARANTINE=""
+PROVISION_INSTALL_LAUNCHER_QUARANTINE_IDENTITY=""
+PROVISION_INSTALL_RECEIPT_IDENTITY=""
+PROVISION_INSTALL_RECEIPT_QUARANTINE=""
+PROVISION_INSTALL_RECEIPT_QUARANTINE_IDENTITY=""
 
 provisioning_safe_path() {
   safe_relative_path "$1" && [[ "$1" != */ && "$1" != *//* ]]
+}
+
+provisioning_path_tree_identity() {
+  local root="$1" path relative value=""
+  local paths=()
+  [[ -e "$root" || -L "$root" ]] || { PROVISIONING_TREE_IDENTITY=absent; return 0; }
+  shopt -s dotglob globstar nullglob
+  paths=("$root" "$root"/**)
+  shopt -u dotglob globstar nullglob
+  for path in "${paths[@]}"; do
+    capture_path_identity "$path" || return 1
+    relative="${path#"$root"}"
+    value+="$relative|$PATH_IDENTITY"$'\n'
+  done
+  PROVISIONING_TREE_IDENTITY="$(sha256_string "$value")"
+}
+
+provisioning_allocate_quarantine() {
+  local path="$1" candidate
+  candidate="$(mktemp "${path%/*}/.${path##*/}.dotfiles-provisioning-quarantine.XXXXXX")"
+  rm -- "$candidate"
+  printf '%s' "$candidate"
+}
+
+provisioning_quarantine_expected_path() {
+  local path="$1" expected="$2" description="$3" quarantine actual
+  capture_path_identity "$path" || return 1
+  [[ "$PATH_IDENTITY" == "$expected" && "$expected" != absent ]] || return 1
+  quarantine="$(provisioning_allocate_quarantine "$path")"
+  mv -nT -- "$path" "$quarantine" 2>/dev/null || return 1
+  capture_path_identity "$quarantine" || return 1
+  actual="$PATH_IDENTITY"
+  if [[ "$actual" != "$expected" ]]; then
+    if [[ ! -e "$path" && ! -L "$path" ]]; then mv -nT -- "$quarantine" "$path" 2>/dev/null || true; fi
+    return 1
+  fi
+  track_temp_path "$quarantine"
+  PROVISIONING_QUARANTINE_PATH="$quarantine"
+}
+
+provisioning_restore_quarantine() {
+  local quarantine="$1" expected="$2" path="$3"
+  [[ -n "$quarantine" && ! -e "$path" && ! -L "$path" ]] || return 1
+  capture_path_identity "$quarantine" || return 1
+  [[ "$PATH_IDENTITY" == "$expected" ]] || return 1
+  mv -nT -- "$quarantine" "$path" 2>/dev/null || return 1
+  [[ ! -e "$quarantine" && ! -L "$quarantine" ]]
+}
+
+provisioning_remove_installed_path() {
+  local path="$1" expected="$2" description="$3" quarantine actual
+  [[ -n "$path" && -n "$expected" ]] || return 0
+  capture_path_identity "$path" || return 1
+  if [[ "$PATH_IDENTITY" != "$expected" ]]; then
+    printf '[%s] error: retained changed %s for manual recovery at %s\n' "$SCRIPT_NAME" "$description" "$path" >&2
+    return 1
+  fi
+  quarantine="$(provisioning_allocate_quarantine "$path")"
+  mv -nT -- "$path" "$quarantine" 2>/dev/null || return 1
+  capture_path_identity "$quarantine" || return 1
+  actual="$PATH_IDENTITY"
+  if [[ "$actual" != "$expected" ]]; then
+    if [[ ! -e "$path" && ! -L "$path" ]]; then mv -nT -- "$quarantine" "$path" 2>/dev/null || true; fi
+    printf '[%s] error: retained changed %s for manual recovery at %s\n' "$SCRIPT_NAME" "$description" "$path" >&2
+    return 1
+  fi
+  track_temp_path "$quarantine"
+  discard_tracked_temp_path "$quarantine" "retained provisioning $description rollback"
+}
+
+provisioning_remove_installed_tree() {
+  local path="$1" expected="$2" quarantine
+  [[ -n "$path" && -n "$expected" ]] || return 0
+  if ! provisioning_path_tree_identity "$path" || [[ "$PROVISIONING_TREE_IDENTITY" != "$expected" ]]; then
+    printf '[%s] error: retained changed provisioning destination for manual recovery at %s\n' "$SCRIPT_NAME" "$path" >&2
+    return 1
+  fi
+  quarantine="$(provisioning_allocate_quarantine "$path")"
+  mv -nT -- "$path" "$quarantine" 2>/dev/null || return 1
+  if ! provisioning_path_tree_identity "$quarantine" || [[ "$PROVISIONING_TREE_IDENTITY" != "$expected" ]]; then
+    if [[ ! -e "$path" && ! -L "$path" ]]; then mv -nT -- "$quarantine" "$path" 2>/dev/null || true; fi
+    printf '[%s] error: retained changed provisioning root for manual recovery at %s\n' "$SCRIPT_NAME" "$path" >&2
+    return 1
+  fi
+  track_temp_path "$quarantine"
+  discard_tracked_temp_path "$quarantine" 'retained provisioning root rollback'
+}
+
+provisioning_discard_quarantine() {
+  local quarantine="$1" expected="$2" description="$3"
+  [[ -n "$quarantine" ]] || return 0
+  capture_path_identity "$quarantine" || return 1
+  [[ "$PATH_IDENTITY" == "$expected" ]] || {
+    printf '[%s] error: retained changed %s quarantine for manual recovery at %s\n' \
+      "$SCRIPT_NAME" "$description" "$quarantine" >&2
+    return 1
+  }
+  discard_tracked_temp_path "$quarantine" "retained provisioning $description quarantine"
+}
+
+reset_retained_provisioning_transaction() {
+  PROVISION_INSTALL_ACTIVE=true; PROVISION_INSTALL_COMMITTED=false
+  PROVISION_INSTALL_PATH=""; PROVISION_INSTALL_IDENTITY=""
+  PROVISION_INSTALL_LINK=""; PROVISION_INSTALL_LINK_IDENTITY=""
+  PROVISION_INSTALL_LAUNCHER=""; PROVISION_INSTALL_LAUNCHER_IDENTITY=""
+  PROVISION_INSTALL_LAUNCHER_QUARANTINE=""; PROVISION_INSTALL_LAUNCHER_QUARANTINE_IDENTITY=""
+  PROVISION_INSTALL_RECEIPT_IDENTITY=""
+  PROVISION_INSTALL_RECEIPT_QUARANTINE=""; PROVISION_INSTALL_RECEIPT_QUARANTINE_IDENTITY=""
+}
+
+cleanup_retained_provisioning_transaction() {
+  local failed=false
+  [[ "$PROVISION_INSTALL_ACTIVE" == true && "$PROVISION_INSTALL_COMMITTED" == false ]] || return 0
+  if [[ -n "$PROVISION_INSTALL_RECEIPT_IDENTITY" ]]; then
+    provisioning_remove_installed_path "$PROVISIONING_RECEIPT" "$PROVISION_INSTALL_RECEIPT_IDENTITY" \
+      'provisioning receipt' || failed=true
+  fi
+  if [[ -n "$PROVISION_INSTALL_RECEIPT_QUARANTINE" ]]; then
+    provisioning_restore_quarantine "$PROVISION_INSTALL_RECEIPT_QUARANTINE" \
+      "$PROVISION_INSTALL_RECEIPT_QUARANTINE_IDENTITY" "$PROVISIONING_RECEIPT" || failed=true
+  fi
+  if [[ -n "$PROVISION_INSTALL_LAUNCHER_IDENTITY" ]]; then
+    provisioning_remove_installed_path "$PROVISION_INSTALL_LAUNCHER" "$PROVISION_INSTALL_LAUNCHER_IDENTITY" \
+      'protected launcher' || failed=true
+  fi
+  if [[ -n "$PROVISION_INSTALL_LAUNCHER_QUARANTINE" ]]; then
+    provisioning_restore_quarantine "$PROVISION_INSTALL_LAUNCHER_QUARANTINE" \
+      "$PROVISION_INSTALL_LAUNCHER_QUARANTINE_IDENTITY" "$PROVISION_INSTALL_LAUNCHER" || failed=true
+  fi
+  [[ -z "$PROVISION_INSTALL_LINK" ]] || \
+    provisioning_remove_installed_path "$PROVISION_INSTALL_LINK" "$PROVISION_INSTALL_LINK_IDENTITY" 'mise link' || failed=true
+  [[ -z "$PROVISION_INSTALL_PATH" ]] || \
+    provisioning_remove_installed_tree "$PROVISION_INSTALL_PATH" "$PROVISION_INSTALL_IDENTITY" || failed=true
+  PROVISION_INSTALL_ACTIVE=false
+  [[ "$failed" == false ]]
 }
 
 validate_provisioning_manifest() {
@@ -35,7 +186,7 @@ validate_provisioning_manifest() {
       (.maximum_version | type == "string" and test("^[0-9]+[.][0-9]+[.][0-9]+$"))) and
     (.tools | type == "array" and length > 0 and all(.[];
       type == "object" and
-      ((keys - ["areas","artifact","backend","commands","id","install_root","native_minimum","native_package","owner_policy","profiles","scope","version"]) | length == 0) and
+       ((keys - ["areas","artifact","backend","commands","executable_identity","id","install_root","native_minimum","native_package","owner_policy","profiles","scope","version"]) | length == 0) and
       (["areas","artifact","backend","commands","id","install_root","owner_policy","profiles","scope","version"] - keys | length == 0) and
       (.id | type == "string" and test("^[a-z0-9-]+$")) and
       (.scope == "core" or .scope == "foundation") and
@@ -46,7 +197,12 @@ validate_provisioning_manifest() {
         (.native_minimum | type == "string") and (.native_package | type == "string" and test("^[a-z0-9+.-]+$"))
        else (has("native_minimum") | not) and (has("native_package") | not) end) and
       (.backend | type == "string" and test("^(core:[a-z0-9-]+|aqua:[a-z0-9._-]+/[a-z0-9._-]+)$")) and
-      (.version | type == "string" and test("^[0-9][0-9A-Za-z.-]*$")) and
+       (.version | type == "string" and test("^[0-9][0-9A-Za-z.-]*$")) and
+       (if .id == "tmux" then
+          (.executable_identity | type == "object" and keys == ["mode","sha256","size"] and
+            .mode == "0755" and (.size | type == "number" and . > 0) and
+            (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))
+        else (has("executable_identity") | not) end) and
       (.commands | type == "array" and length == 1 and all(.[];
         type == "object" and keys == ["launcher","name","path","probe_args","protected","version_pattern"] and
         (.name | type == "string" and test("^[a-z0-9-]+$")) and
@@ -114,11 +270,16 @@ detect_provisioning_platform() {
 }
 
 validate_provisioning_receipt() {
-  local value id backend version platform root executable expected_backend destination receipt_manifest active_version hash
+  local value id backend version platform root executable expected_backend destination receipt_manifest active_version hash before
   PROVISIONING_RECEIPT="$HOME/.local/state/dotfiles/provisioning/v1/receipt.json"
   validate_home_parent_chain "$PROVISIONING_RECEIPT"
-  [[ -e "$PROVISIONING_RECEIPT" || -L "$PROVISIONING_RECEIPT" ]] || return 0
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt changed before validation'
+  before="$PATH_IDENTITY"
+  PROVISIONING_RECEIPT_IDENTITY="$before"
+  [[ "$before" != absent ]] || return 0
   [[ -f "$PROVISIONING_RECEIPT" && ! -L "$PROVISIONING_RECEIPT" ]] || die 'provisioning receipt is symlinked or not a regular file'
+  [[ "$(stat -c '%u:%a' -- "$PROVISIONING_RECEIPT")" == "$EUID:600" ]] || \
+    die 'provisioning receipt has an unsafe owner or mode'
   jq -e '
     type == "object" and keys == ["launchers","manifest_sha256","schema_version","tools"] and .schema_version == 1 and
     (.manifest_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
@@ -159,6 +320,10 @@ validate_provisioning_receipt() {
     [[ "$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .commands[0].launcher // empty' "$PROVISIONING_MANIFEST")" == "$destination" ]] || \
       die "provisioning receipt launcher identity is invalid for $id"
   done < <(jq -r '.launchers[] | [.tool_id,.destination] | @tsv' "$PROVISIONING_RECEIPT")
+  test_hold after-provisioning-receipt-validation-read
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt changed during validation'
+  [[ "$PATH_IDENTITY" == "$before" ]] || die 'provisioning receipt changed during validation'
+  PROVISIONING_RECEIPT_IDENTITY="$PATH_IDENTITY"
 }
 
 select_provisioning_tools() {
@@ -176,6 +341,7 @@ select_provisioning_tools() {
     fi
     [[ "$selected" == true ]] && ! array_contains "$id" "${PROVISION_TOOL_IDS[@]}" && PROVISION_TOOL_IDS+=("$id")
   done < <(jq -r '.tools[] | .id as $id | .scope as $scope | .profiles[] | [$id,$scope,.] | @tsv' "$PROVISIONING_MANIFEST")
+  return 0
 }
 
 version_at_least() {
@@ -196,7 +362,7 @@ path_candidates() {
 }
 
 resolve_mise_owner() {
-  local candidate resolved version output
+  local candidate resolved version output status
   local candidates=() approved=()
   MISE_BIN=""
   if declare -F mise >/dev/null || [[ "$(type -t mise 2>/dev/null || true)" == alias ]]; then
@@ -234,7 +400,11 @@ resolve_mise_owner() {
     fi
   fi
   MISE_BIN="${approved[0]}"
-  output="$(run_mise_isolated "$MISE_BIN" --version 2>/dev/null)" || { log 'error: accepted mise version probe failed'; return 1; }
+  if output="$(run_mise_isolated "$MISE_BIN" --version 2>/dev/null)"; then status=0; else status=$?; fi
+  if ((status != 0)); then
+    log 'error: accepted mise version probe failed'
+    case "$status" in 130|143) return "$status" ;; *) return 1 ;; esac
+  fi
   IFS= read -r output <<< "$output"
   [[ "$output" =~ ([0-9]+[.][0-9]+[.][0-9]+) ]] || { log 'error: accepted mise returned an invalid version'; return 1; }
   version="${BASH_REMATCH[1]}"
@@ -344,7 +514,7 @@ download_locked_artifact() {
     ((redirects <= 5)) || die "too many redirects downloading $id"
     url_host_allowed "$url" "$allowed" || die "download redirect for $id uses an unapproved origin: $url"
     headers="$(mktemp "${TMPDIR:-/tmp}/dotfiles-download-headers.XXXXXX")"
-    TEMP_PATHS+=("$headers")
+    track_temp_path "$headers"
     curl --silent --show-error --fail --proto '=https' --max-redirs 0 --dump-header "$headers" --output "$destination" "$url"
     status=""; location=""
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -369,7 +539,8 @@ archive_members_safe() {
   [[ "$actual_inventory" == "$expected_inventory" ]] || return 1
   while IFS= read -r member || [[ -n "$member" ]]; do
     member="${member#./}"
-    [[ -n "$member" && "$member" != /* && "/$member/" != *'/../'* ]] || return 1
+    [[ -n "$member" && "$member" != /* && "/$member/" != *'/../'* &&
+      "$member" != *$'\n'* && "$member" != *$'\r'* ]] || return 1
   done < <(tar "${tar_args[@]}" "$archive")
   details="$(tar "${tar_args[@]/-t/-tv}" "$archive")" || return 1
   while IFS= read -r member || [[ -n "$member" ]]; do
@@ -436,7 +607,10 @@ receipt_launcher_hash() {
 preflight_launcher() {
   local destination_rel="$1" content="$2" destination old_hash current_hash
   destination="$HOME/$destination_rel"
+  PREFLIGHT_LAUNCHER_IDENTITY=""
   validate_home_parent_chain "$destination"
+  capture_path_identity "$destination" || { log "error: launcher destination changed during preflight: $destination"; return 1; }
+  PREFLIGHT_LAUNCHER_IDENTITY="$PATH_IDENTITY"
   [[ -e "$destination" || -L "$destination" ]] || return 0
   [[ -f "$destination" && ! -L "$destination" ]] || { log "error: launcher destination conflict: $destination"; return 1; }
   current_hash="$(sha256_file "$destination")"
@@ -447,6 +621,7 @@ preflight_launcher() {
 
 tool_receipt_valid() {
   local id="$1" root executable expected actual backend version platform active_root active_executable active_backend active_version link_path
+  local identity_mode identity_size identity_sha
   [[ -f "$PROVISIONING_RECEIPT" ]] || return 1
   root="$(jq -er --arg id "$id" '.tools[] | select(.id == $id) | .install_root' "$PROVISIONING_RECEIPT" 2>/dev/null)" || return 1
   executable="$(jq -er --arg id "$id" '.tools[] | select(.id == $id) | .executable' "$PROVISIONING_RECEIPT" 2>/dev/null)" || return 1
@@ -463,6 +638,15 @@ tool_receipt_valid() {
   [[ -f "$HOME/$root/$executable" && ! -L "$HOME/$root/$executable" && -x "$HOME/$root/$executable" ]] || return 1
   actual="$(sha256_file "$HOME/$root/$executable")"
   [[ "$actual" == "$expected" ]] || return 1
+  if jq -e --arg id "$id" '.tools[] | select(.id == $id) | has("executable_identity")' \
+    "$PROVISIONING_MANIFEST" >/dev/null; then
+    IFS=$'\t' read -r identity_mode identity_size identity_sha < <(jq -r --arg id "$id" '
+      .tools[] | select(.id == $id) |
+      [.executable_identity.mode, (.executable_identity.size | tostring), .executable_identity.sha256] | @tsv
+    ' "$PROVISIONING_MANIFEST")
+    [[ "$(stat -c '0%a:%s' -- "$HOME/$root/$executable")" == "$identity_mode:$identity_size" &&
+      "$actual" == "$identity_sha" && "$expected" == "$identity_sha" ]] || return 1
+  fi
   link_path="$(mise_link_path "$backend" "$version")"
   [[ -L "$link_path" && "$(realpath -e -- "$link_path")" == "$HOME/$root" ]]
 }
@@ -532,7 +716,7 @@ resolve_protected_command() {
 }
 
 provision_tool_status() {
-  local id="$1" root executable launcher name content
+  local id="$1" root executable launcher name content content_hash
   native_tool_suitable "$id" && return 0
   root="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .install_root' "$PROVISIONING_MANIFEST")"
   executable="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .artifact.executable' "$PROVISIONING_MANIFEST")"
@@ -545,7 +729,13 @@ provision_tool_status() {
   if [[ -n "$launcher" ]]; then
     name="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .commands[0].name' "$PROVISIONING_MANIFEST")"
     content="$(launcher_content "$HOME/$root/$executable")"
-    [[ -f "$HOME/$launcher" && ! -L "$HOME/$launcher" && "$(sha256_file "$HOME/$launcher")" == "$(launcher_hash "$content")" ]] || return 1
+    content_hash="$(launcher_hash "$content")"
+    jq -e --arg id "$id" --arg destination "$launcher" --arg hash "$content_hash" '
+      [.launchers[] | select(.tool_id == $id)] ==
+      [{tool_id:$id,destination:$destination,content_sha256:$hash}]
+    ' "$PROVISIONING_RECEIPT" >/dev/null 2>&1 || return 1
+    [[ -f "$HOME/$launcher" && ! -L "$HOME/$launcher" && "$(stat -c %a -- "$HOME/$launcher")" == 755 &&
+      "$(sha256_file "$HOME/$launcher")" == "$content_hash" ]] || return 1
     resolve_protected_command "$name" "$HOME/$launcher" || return 1
   fi
   return 0
@@ -554,14 +744,15 @@ provision_tool_status() {
 print_provisioning_plan() {
   local id installed=missing status
   log 'provisioning network plan (no download has started):'
-  set +e
-  resolve_mise_owner
-  status=$?
-  set -e
+  if ((${#PROVISION_TOOL_IDS[@]} == 0)); then
+    log 'no runtime-tool network actions are selected'
+    return 0
+  fi
+  if resolve_mise_owner; then status=0; else status=$?; fi
   if ((status == 0)); then
     installed=compatible
   elif ((status != 2)); then
-    return 1
+    case "$status" in 70|130|143) return "$status" ;; *) return 1 ;; esac
   fi
   if [[ "$installed" == missing ]]; then
     jq -r '"  mise: installed=missing target=" + .mise.version + " artifact=" + .mise.artifact.url + " origins=" + (.mise.artifact.allowed_origins | join(",")) + " destination=~/" + .mise.destination' "$PROVISIONING_MANIFEST"
@@ -575,58 +766,280 @@ print_provisioning_plan() {
 }
 
 ensure_receipt_file() {
-  local dir content
-  [[ -f "$PROVISIONING_RECEIPT" ]] && return 0
+  local dir content expected
+  if [[ -e "$PROVISIONING_RECEIPT" || -L "$PROVISIONING_RECEIPT" ]]; then
+    read_provisioning_receipt
+    [[ -z "$PROVISIONING_RECEIPT_IDENTITY" ||
+      "$PROVISIONING_RECEIPT_READ_IDENTITY" == "$PROVISIONING_RECEIPT_IDENTITY" ]] || \
+      die 'provisioning receipt appeared or changed since transaction start'
+    PROVISIONING_RECEIPT_IDENTITY="$PROVISIONING_RECEIPT_READ_IDENTITY"
+    return 0
+  fi
   dir="${PROVISIONING_RECEIPT%/*}"
   ensure_directory "$dir"
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt changed before creation'
+  expected="$PATH_IDENTITY"
+  [[ "$expected" == absent && ( -z "$PROVISIONING_RECEIPT_IDENTITY" ||
+    "$PROVISIONING_RECEIPT_IDENTITY" == absent ) ]] || \
+    die 'provisioning receipt destination appeared concurrently'
   content="$(jq -cn --arg hash "$PROVISIONING_MANIFEST_SHA" '{schema_version:1,manifest_sha256:$hash,tools:[],launchers:[]}')"
-  write_string_atomic "$content" "$PROVISIONING_RECEIPT" 0600
+  write_string_atomic "$content" "$PROVISIONING_RECEIPT" 0600 "$expected"
+  verify_provisioning_receipt_write "$content"
+}
+
+read_provisioning_receipt() {
+  local before
+  validate_home_parent_chain "$PROVISIONING_RECEIPT"
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt changed before it was read'
+  before="$PATH_IDENTITY"
+  [[ "$before" != absent && -f "$PROVISIONING_RECEIPT" && ! -L "$PROVISIONING_RECEIPT" ]] || \
+    die 'provisioning receipt is symlinked, absent, or not a regular file'
+  [[ "$(stat -c '%u:%a' -- "$PROVISIONING_RECEIPT")" == "$EUID:600" ]] || \
+    die 'provisioning receipt has an unsafe owner or mode'
+  PROVISIONING_RECEIPT_READ_CONTENT="$(< "$PROVISIONING_RECEIPT")"
+  test_hold after-provisioning-receipt-read
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt changed while it was read'
+  [[ "$PATH_IDENTITY" == "$before" ]] || die 'provisioning receipt changed while it was read'
+  PROVISIONING_RECEIPT_READ_IDENTITY="$before"
+}
+
+verify_provisioning_receipt_write() {
+  local content="$1" expected_identity="${2:-}"
+  [[ -f "$PROVISIONING_RECEIPT" && ! -L "$PROVISIONING_RECEIPT" ]] || \
+    die 'provisioning receipt post-state is not a regular file'
+  [[ "$(stat -c '%u:%a' -- "$PROVISIONING_RECEIPT")" == "$EUID:600" ]] || \
+    die 'provisioning receipt post-state has an unsafe owner or mode'
+  [[ "$(sha256_file "$PROVISIONING_RECEIPT")" == "$(sha256_string "$content"$'\n')" ]] || \
+    die 'provisioning receipt post-state has unexpected content'
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt post-state is unreadable'
+  [[ -z "$expected_identity" || "$PATH_IDENTITY" == "$expected_identity" ]] || \
+    die 'provisioning receipt changed during post-state verification'
+  PROVISIONING_RECEIPT_IDENTITY="$PATH_IDENTITY"
 }
 
 write_receipt_update() {
-  local content="$1"
-  write_string_atomic "$content" "$PROVISIONING_RECEIPT" 0600
+  local content="$1" expected="$2"
+  write_string_atomic "$content" "$PROVISIONING_RECEIPT" 0600 "$expected"
+  verify_provisioning_receipt_write "$content"
 }
 
 record_tool_receipt() {
-  local id="$1" backend="$2" version="$3" root="$4" executable="$5" hash content
+  local id="$1" backend="$2" version="$3" root="$4" executable="$5" hash content expected
   hash="$(sha256_file "$HOME/$root/$executable")"
   ensure_receipt_file
+  read_provisioning_receipt
+  expected="$PROVISIONING_RECEIPT_READ_IDENTITY"
   content="$(jq -c --arg manifest "$PROVISIONING_MANIFEST_SHA" --arg id "$id" --arg backend "$backend" --arg version "$version" \
     --arg platform "$PROVISIONING_PLATFORM" --arg root "$root" --arg executable "$executable" --arg hash "$hash" '
       .manifest_sha256=$manifest | .tools = ([.tools[] | select(.id != $id)] + [{id:$id,backend:$backend,version:$version,platform:$platform,install_root:$root,executable:$executable,executable_sha256:$hash}])
-    ' "$PROVISIONING_RECEIPT")"
-  write_receipt_update "$content"
+    ' <<< "$PROVISIONING_RECEIPT_READ_CONTENT")"
+  write_receipt_update "$content" "$expected"
 }
 
-record_launcher_receipt() {
-  local id="$1" destination="$2" hash="$3" content
-  content="$(jq -c --arg id "$id" --arg destination "$destination" --arg hash "$hash" '
-    .launchers = ([.launchers[] | select(.destination != $destination)] + [{tool_id:$id,destination:$destination,content_sha256:$hash}])
-  ' "$PROVISIONING_RECEIPT")"
-  write_receipt_update "$content"
+install_transaction_launcher() {
+  local destination_rel="$1" content="$2" destination expected="$PREFLIGHT_LAUNCHER_IDENTITY"
+  local temporary quarantine=""
+  destination="$HOME/$destination_rel"
+  ensure_directory "${destination%/*}"
+  require_expected_pre_state "$destination" "$expected" 'protected launcher'
+  temporary="$(mktemp "${destination%/*}/.${destination##*/}.provisioning-launcher.XXXXXX")"
+  track_temp_path "$temporary"
+  printf '%s\n' "$content" > "$temporary"
+  chmod 0755 "$temporary"
+  if [[ "$expected" != absent ]]; then
+    provisioning_quarantine_expected_path "$destination" "$expected" 'protected launcher' || \
+      die "protected launcher changed before replacement: $destination"
+    quarantine="$PROVISIONING_QUARANTINE_PATH"
+    PROVISION_INSTALL_LAUNCHER_QUARANTINE="$quarantine"
+    PROVISION_INSTALL_LAUNCHER_QUARANTINE_IDENTITY="$expected"
+  fi
+  install_regular_no_clobber "$temporary" "$destination" 'protected launcher install' "$quarantine"
+  capture_path_identity "$destination" || die 'protected launcher post-state is unreadable'
+  PROVISION_INSTALL_LAUNCHER="$destination"
+  PROVISION_INSTALL_LAUNCHER_IDENTITY="$PATH_IDENTITY"
+  [[ -f "$destination" && ! -L "$destination" && "$(stat -c %a -- "$destination")" == 755 &&
+    "$(sha256_file "$destination")" == "$(launcher_hash "$content")" ]] || \
+    die 'protected launcher post-state differs from its staged content'
+}
+
+build_combined_tool_receipt() {
+  local id="$1" backend="$2" version="$3" root="$4" executable="$5" launcher="$6" launcher_hash_value="$7"
+  local base expected executable_hash
+  ensure_directory "${PROVISIONING_RECEIPT%/*}"
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt changed before combined update'
+  expected="$PATH_IDENTITY"
+  [[ -z "$PROVISIONING_RECEIPT_IDENTITY" || "$expected" == "$PROVISIONING_RECEIPT_IDENTITY" ]] || \
+    die 'provisioning receipt appeared or changed before combined update'
+  if [[ "$expected" == absent ]]; then
+    base="$(jq -cn --arg hash "$PROVISIONING_MANIFEST_SHA" \
+      '{schema_version:1,manifest_sha256:$hash,tools:[],launchers:[]}')"
+  else
+    read_provisioning_receipt
+    [[ "$PROVISIONING_RECEIPT_READ_IDENTITY" == "$expected" ]] || \
+      die 'provisioning receipt changed during combined update read'
+    base="$PROVISIONING_RECEIPT_READ_CONTENT"
+  fi
+  executable_hash="$(sha256_file "$HOME/$root/$executable")"
+  PROVISIONING_COMBINED_RECEIPT_CONTENT="$(jq -c --arg manifest "$PROVISIONING_MANIFEST_SHA" \
+    --arg id "$id" --arg backend "$backend" --arg version "$version" --arg platform "$PROVISIONING_PLATFORM" \
+    --arg root "$root" --arg executable "$executable" --arg executable_hash "$executable_hash" \
+    --arg launcher "$launcher" --arg launcher_hash "$launcher_hash_value" '
+      .manifest_sha256=$manifest |
+      .tools = ([.tools[] | select(.id != $id)] + [{id:$id,backend:$backend,version:$version,platform:$platform,
+        install_root:$root,executable:$executable,executable_sha256:$executable_hash}]) |
+      .launchers = ([.launchers[] | select(.tool_id != $id and .destination != $launcher)] +
+        (if $launcher == "" then [] else [{tool_id:$id,destination:$launcher,content_sha256:$launcher_hash}] end))
+    ' <<< "$base")"
+  PROVISIONING_COMBINED_RECEIPT_EXPECTED="$expected"
+}
+
+write_combined_tool_receipt_cas() {
+  local content="$1" expected="$2" temporary quarantine=""
+  temporary="$(mktemp "${PROVISIONING_RECEIPT%/*}/.receipt.json.provisioning.XXXXXX")"
+  track_temp_path "$temporary"
+  printf '%s\n' "$content" > "$temporary"
+  chmod 0600 "$temporary"
+  require_expected_pre_state "$PROVISIONING_RECEIPT" "$expected" 'combined provisioning receipt'
+  if [[ "$expected" != absent ]]; then
+    provisioning_quarantine_expected_path "$PROVISIONING_RECEIPT" "$expected" 'combined provisioning receipt' || \
+      die 'provisioning receipt changed before combined update commit'
+    quarantine="$PROVISIONING_QUARANTINE_PATH"
+    PROVISION_INSTALL_RECEIPT_QUARANTINE="$quarantine"
+    PROVISION_INSTALL_RECEIPT_QUARANTINE_IDENTITY="$expected"
+  fi
+  install_regular_no_clobber "$temporary" "$PROVISIONING_RECEIPT" 'combined provisioning receipt install' "$quarantine"
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'combined provisioning receipt post-state is unreadable'
+  PROVISION_INSTALL_RECEIPT_IDENTITY="$PATH_IDENTITY"
+  test_hold provisioning-tool-after-combined-receipt
+  fault provisioning-tool-after-combined-receipt
+  verify_provisioning_receipt_write "$content" "$PROVISION_INSTALL_RECEIPT_IDENTITY"
+}
+
+verify_combined_tool_transaction() {
+  local id="$1" backend="$2" version="$3" root_rel="$4" executable="$5" launcher="$6" launcher_hash_value="$7"
+  local root
+  root="$HOME/$root_rel"
+  if [[ -n "$PROVISION_INSTALL_PATH" ]]; then
+    provisioning_path_tree_identity "$root" || return 1
+    [[ "$PROVISIONING_TREE_IDENTITY" == "$PROVISION_INSTALL_IDENTITY" ]] || return 1
+  fi
+  if [[ -n "$PROVISION_INSTALL_LINK" ]]; then
+    capture_path_identity "$PROVISION_INSTALL_LINK" || return 1
+    [[ "$PATH_IDENTITY" == "$PROVISION_INSTALL_LINK_IDENTITY" && -L "$PROVISION_INSTALL_LINK" &&
+      "$(realpath -e -- "$PROVISION_INSTALL_LINK" 2>/dev/null || true)" == "$root" ]] || return 1
+  fi
+  if [[ -n "$launcher" ]]; then
+    capture_path_identity "$HOME/$launcher" || return 1
+    [[ "$PATH_IDENTITY" == "$PROVISION_INSTALL_LAUNCHER_IDENTITY" && -f "$HOME/$launcher" &&
+      ! -L "$HOME/$launcher" && "$(stat -c %a -- "$HOME/$launcher")" == 755 &&
+      "$(sha256_file "$HOME/$launcher")" == "$launcher_hash_value" ]] || return 1
+  fi
+  capture_path_identity "$PROVISIONING_RECEIPT" || return 1
+  [[ "$PATH_IDENTITY" == "$PROVISION_INSTALL_RECEIPT_IDENTITY" ]] || return 1
+  verify_provisioning_receipt_write "$PROVISIONING_COMBINED_RECEIPT_CONTENT" \
+    "$PROVISION_INSTALL_RECEIPT_IDENTITY" || return 1
+  tool_receipt_valid "$id" || return 1
+  jq -e --arg id "$id" --arg destination "$launcher" --arg hash "$launcher_hash_value" '
+    if $destination == "" then ([.launchers[] | select(.tool_id == $id)] | length) == 0
+    else [.launchers[] | select(.tool_id == $id)] ==
+      [{tool_id:$id,destination:$destination,content_sha256:$hash}] end
+  ' "$PROVISIONING_RECEIPT" >/dev/null
+}
+
+commit_combined_tool_transaction() {
+  local failed=false
+  # The verified new receipt is the commit point. Old rollback objects are no
+  # longer allowed to trigger reversal of the committed root or launcher.
+  PROVISION_INSTALL_COMMITTED=true
+  PROVISION_INSTALL_ACTIVE=false
+  test_hold provisioning-tool-after-commit-before-cleanup
+  if [[ -n "$PROVISION_INSTALL_RECEIPT_QUARANTINE" ]]; then
+    if provisioning_discard_quarantine "$PROVISION_INSTALL_RECEIPT_QUARANTINE" \
+      "$PROVISION_INSTALL_RECEIPT_QUARANTINE_IDENTITY" 'receipt'; then
+      PROVISION_INSTALL_RECEIPT_QUARANTINE=""
+    else
+      retain_tracked_temp_path "$PROVISION_INSTALL_RECEIPT_QUARANTINE"
+      printf '[%s] error: committed provisioning retained old receipt recovery path: %s\n' \
+        "$SCRIPT_NAME" "$PROVISION_INSTALL_RECEIPT_QUARANTINE" >&2
+      failed=true
+    fi
+  fi
+  if [[ -n "$PROVISION_INSTALL_LAUNCHER_QUARANTINE" ]]; then
+    if provisioning_discard_quarantine "$PROVISION_INSTALL_LAUNCHER_QUARANTINE" \
+      "$PROVISION_INSTALL_LAUNCHER_QUARANTINE_IDENTITY" 'launcher'; then
+      PROVISION_INSTALL_LAUNCHER_QUARANTINE=""
+    else
+      retain_tracked_temp_path "$PROVISION_INSTALL_LAUNCHER_QUARANTINE"
+      printf '[%s] error: committed provisioning retained old launcher recovery path: %s\n' \
+        "$SCRIPT_NAME" "$PROVISION_INSTALL_LAUNCHER_QUARANTINE" >&2
+      failed=true
+    fi
+  fi
+  [[ "$failed" == false ]]
+}
+
+verify_mise_transaction() {
+  local version="$1" destination_rel="$2" destination="$HOME/$destination_rel"
+  provisioning_path_tree_identity "$destination" || return 1
+  [[ "$PROVISIONING_TREE_IDENTITY" == "$PROVISION_INSTALL_IDENTITY" ]] || return 1
+  capture_path_identity "$PROVISIONING_RECEIPT" || return 1
+  [[ "$PATH_IDENTITY" == "$PROVISION_INSTALL_RECEIPT_IDENTITY" ]] || return 1
+  verify_provisioning_receipt_write "$PROVISIONING_COMBINED_RECEIPT_CONTENT" \
+    "$PROVISION_INSTALL_RECEIPT_IDENTITY" || return 1
+  jq -e --arg version "$version" --arg platform "$PROVISIONING_PLATFORM" \
+    --arg root "${destination_rel%/*}" --arg executable "${destination_rel##*/}" \
+    --arg hash "$(sha256_file "$destination")" '
+      [.tools[] | select(.id == "mise")] == [{id:"mise",backend:"bootstrap:mise",version:$version,
+        platform:$platform,install_root:$root,executable:$executable,executable_sha256:$hash}] and
+      ([.launchers[] | select(.tool_id == "mise")] | length) == 0
+    ' "$PROVISIONING_RECEIPT" >/dev/null
 }
 
 install_mise() {
-  local artifact destination destination_rel dir payload stage version
+  local artifact destination destination_rel dir payload stage version expected staged_identity staged_tree_identity
   artifact="$(jq -c .mise.artifact "$PROVISIONING_MANIFEST")"
   destination_rel="$(jq -r .mise.destination "$PROVISIONING_MANIFEST")"
   destination="$HOME/$destination_rel"
   version="$(jq -r .mise.version "$PROVISIONING_MANIFEST")"
   validate_home_parent_chain "$destination"
-  [[ ! -e "$destination" && ! -L "$destination" ]] || die "mise destination conflict: $destination"
+  capture_path_identity "$destination" || die 'mise destination changed at transaction start'
+  expected="$PATH_IDENTITY"
+  [[ "$expected" == absent ]] || die "mise destination conflict: $destination"
+  reset_retained_provisioning_transaction
   dir="${destination%/*}"; ensure_directory "$dir"
-  payload="$(mktemp "$dir/.mise-download.XXXXXX")"; TEMP_PATHS+=("$payload")
+  payload="$(mktemp "$dir/.mise-download.XXXXXX")"; track_temp_path "$payload"
   download_locked_artifact mise "$artifact" "$payload"
-  stage="$(mktemp "$dir/.mise-install.XXXXXX")"; TEMP_PATHS+=("$stage")
+  test_hold provisioning-mise-after-download
+  stage="$(mktemp "$dir/.mise-install.XXXXXX")"; track_temp_path "$stage"
   cp -- "$payload" "$stage"; chmod 0755 "$stage"
-  mv -- "$stage" "$destination"
+  capture_path_identity "$stage" || die 'staged mise identity is unreadable'
+  staged_identity="$PATH_IDENTITY"
+  provisioning_path_tree_identity "$stage" || die 'staged mise post-state is unreadable'
+  staged_tree_identity="$PROVISIONING_TREE_IDENTITY"
+  [[ "$expected" == absent ]] || die 'mise transaction did not start from an absent destination'
+  install_regular_no_clobber "$stage" "$destination" 'mise install'
+  PROVISION_INSTALL_PATH="$destination"; PROVISION_INSTALL_IDENTITY="$staged_tree_identity"
+  capture_path_identity "$destination" || die 'installed mise identity is unreadable'
+  [[ "$PATH_IDENTITY" == "$staged_identity" ]] || die 'installed mise differs from staging'
+  provisioning_path_tree_identity "$destination" || die 'installed mise post-state is unreadable'
+  [[ "$PROVISIONING_TREE_IDENTITY" == "$staged_tree_identity" ]] || die 'installed mise post-state differs from staging'
   MISE_BIN="$destination"
-  record_tool_receipt mise bootstrap:mise "$version" "${destination_rel%/*}" mise
+  fault provisioning-mise-after-install
+  build_combined_tool_receipt mise bootstrap:mise "$version" "${destination_rel%/*}" \
+    "${destination_rel##*/}" '' ''
+  fault provisioning-mise-before-combined-receipt
+  write_combined_tool_receipt_cas "$PROVISIONING_COMBINED_RECEIPT_CONTENT" \
+    "$PROVISIONING_COMBINED_RECEIPT_EXPECTED"
+  test_hold provisioning-mise-before-commit
+  test_signal provisioning-mise-before-commit
+  verify_mise_transaction "$version" "$destination_rel" || \
+    die 'mise transaction post-state verification failed'
+  commit_combined_tool_transaction || die 'mise transaction committed with retained cleanup recovery paths'
 }
 
 install_locked_tool() {
   local id="$1" root_rel root parent artifact archive stage executable backend version launcher content link_path
+  local root_start_identity staged_identity launcher_hash_value=""
   native_tool_suitable "$id" && { log "$id uses a suitable distro-owned executable"; return 0; }
   root_rel="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .install_root' "$PROVISIONING_MANIFEST")"
   root="$HOME/$root_rel"; parent="${root%/*}"
@@ -638,15 +1051,30 @@ install_locked_tool() {
   if tool_receipt_valid "$id"; then
     [[ -n "$launcher" ]] || return 0
     content="$(launcher_content "$root/$executable")"
+    launcher_hash_value="$(launcher_hash "$content")"
     preflight_launcher "$launcher" "$content" || die "launcher ownership preflight failed for $id"
-    write_string_atomic "$content" "$HOME/$launcher" 0755
-    record_launcher_receipt "$id" "$launcher" "$(launcher_hash "$content")"
+    reset_retained_provisioning_transaction
+    install_transaction_launcher "$launcher" "$content"
+    fault provisioning-tool-after-launcher
+    build_combined_tool_receipt "$id" "$backend" "$version" "$root_rel" "$executable" \
+      "$launcher" "$launcher_hash_value"
+    fault provisioning-tool-before-combined-receipt
+    write_combined_tool_receipt_cas "$PROVISIONING_COMBINED_RECEIPT_CONTENT" \
+      "$PROVISIONING_COMBINED_RECEIPT_EXPECTED"
+    test_hold provisioning-tool-before-commit
+    verify_combined_tool_transaction "$id" "$backend" "$version" "$root_rel" "$executable" \
+      "$launcher" "$launcher_hash_value" || die "retained launcher transaction post-state verification failed for $id"
+    test_hold provisioning-tool-before-committed-cleanup
+    commit_combined_tool_transaction || die "retained launcher transaction commit failed for $id"
     log "repaired retained launcher for $id"
     return 0
   fi
-  [[ ! -e "$root" && ! -L "$root" ]] || die "retained install destination conflict for $id: $root"
+  capture_path_identity "$root" || die "retained install destination changed at transaction start for $id"
+  root_start_identity="$PATH_IDENTITY"
+  [[ "$root_start_identity" == absent ]] || die "retained install destination conflict for $id: $root"
   if [[ -n "$launcher" ]]; then
     content="$(launcher_content "$root/$executable")"
+    launcher_hash_value="$(launcher_hash "$content")"
     preflight_launcher "$launcher" "$content" || die "launcher ownership preflight failed for $id"
   fi
   link_path="$(mise_link_path "$backend" "$version")"
@@ -655,26 +1083,64 @@ install_locked_tool() {
       die "mise already records unrelated $backend@$version at $link_path"
   fi
   ensure_directory "$parent"
-  archive="$(mktemp "$parent/.$id-download.XXXXXX")"; TEMP_PATHS+=("$archive")
+  reset_retained_provisioning_transaction
+  archive="$(mktemp "$parent/.$id-download.XXXXXX")"; track_temp_path "$archive"
   download_locked_artifact "$id" "$artifact" "$archive"
-  stage="$(mktemp -d "$parent/.$id-install.XXXXXX")"; TEMP_PATHS+=("$stage")
+  stage="$(mktemp -d "$parent/.$id-install.XXXXXX")"; track_temp_path "$stage"
   extract_locked_artifact "$artifact" "$archive" "$stage/root"
+  if jq -e --arg id "$id" '.tools[] | select(.id == $id) | has("executable_identity")' \
+    "$PROVISIONING_MANIFEST" >/dev/null; then
+    local expected_mode expected_size expected_sha
+    IFS=$'\t' read -r expected_mode expected_size expected_sha < <(jq -r --arg id "$id" \
+      '.tools[] | select(.id == $id) | [.executable_identity.mode, (.executable_identity.size | tostring), .executable_identity.sha256] | @tsv' \
+      "$PROVISIONING_MANIFEST")
+    [[ "$(stat -c '0%a:%s' -- "$stage/root/$executable")" == "$expected_mode:$expected_size" && \
+      "$(sha256_file "$stage/root/$executable")" == "$expected_sha" ]] || \
+      die "installed executable identity did not match lock for $id"
+  fi
   verify_tool_probe "$id" "$stage/root/$executable" || die "installed executable version did not match lock for $id"
-  mv -- "$stage/root" "$root"
+  provisioning_path_tree_identity "$stage/root" || die "staged retained install identity is unreadable for $id"
+  staged_identity="$PROVISIONING_TREE_IDENTITY"
+  test_hold provisioning-tool-after-staging
+  require_expected_pre_state "$root" "$root_start_identity" 'retained install destination'
+  mv -nT -- "$stage/root" "$root" 2>/dev/null || die "retained install could not be installed without clobber for $id"
+  [[ ! -e "$stage/root" && ! -L "$stage/root" && -d "$root" && ! -L "$root" ]] || \
+    die "retained install destination appeared concurrently for $id: $root"
+  PROVISION_INSTALL_PATH="$root"; PROVISION_INSTALL_IDENTITY="$staged_identity"
+  provisioning_path_tree_identity "$root" || die "retained install post-state is unreadable for $id"
+  [[ "$PROVISIONING_TREE_IDENTITY" == "$staged_identity" ]] || die "retained install differs from staging for $id"
+  fault provisioning-tool-after-root
   if ! run_mise_write "$MISE_BIN" link "$backend@$version" "$root" >/dev/null; then
-    rm -rf -- "$root"
+    if [[ -L "$link_path" && "$(realpath -e -- "$link_path" 2>/dev/null || true)" == "$root" ]]; then
+      capture_path_identity "$link_path" || die "failed mise link post-state is unreadable for $id"
+      PROVISION_INSTALL_LINK="$link_path"; PROVISION_INSTALL_LINK_IDENTITY="$PATH_IDENTITY"
+    fi
     die "mise failed to link verified install for $id"
   fi
-  record_tool_receipt "$id" "$backend" "$version" "$root_rel" "$executable"
+  [[ -L "$link_path" && "$(realpath -e -- "$link_path")" == "$root" ]] || \
+    die "mise link post-state is invalid for $id"
+  capture_path_identity "$link_path" || die "mise link post-state is unreadable for $id"
+  PROVISION_INSTALL_LINK="$link_path"; PROVISION_INSTALL_LINK_IDENTITY="$PATH_IDENTITY"
+  fault provisioning-tool-after-link
   if [[ -n "$launcher" ]]; then
-    write_string_atomic "$content" "$HOME/$launcher" 0755
-    record_launcher_receipt "$id" "$launcher" "$(launcher_hash "$content")"
+    install_transaction_launcher "$launcher" "$content"
   fi
+  fault provisioning-tool-after-launcher
+  build_combined_tool_receipt "$id" "$backend" "$version" "$root_rel" "$executable" \
+    "$launcher" "$launcher_hash_value"
+  fault provisioning-tool-before-combined-receipt
+  write_combined_tool_receipt_cas "$PROVISIONING_COMBINED_RECEIPT_CONTENT" \
+    "$PROVISIONING_COMBINED_RECEIPT_EXPECTED"
+  test_hold provisioning-tool-before-commit
+  verify_combined_tool_transaction "$id" "$backend" "$version" "$root_rel" "$executable" \
+    "$launcher" "$launcher_hash_value" || die "retained tool transaction post-state verification failed for $id"
+  test_hold provisioning-tool-before-committed-cleanup
+  commit_combined_tool_transaction || die "retained tool transaction commit failed for $id"
   log "installed locked $id $version"
 }
 
 run_provisioning() {
-  local id overall=0 status
+  local plan_printed="${1:-false}" id overall=0 status
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     check_omarchy_neovim_drift
     return
@@ -684,13 +1150,15 @@ run_provisioning() {
     return 0
   fi
   check_selected_provisioning_dependencies || return 1
-  print_provisioning_plan || return 1
-  set +e
-  resolve_mise_owner
-  status=$?
-  set -e
+  if [[ "$plan_printed" != true ]]; then
+    if print_provisioning_plan; then status=0; else status=$?; fi
+    ((status == 0)) || return "$status"
+  fi
+  if resolve_mise_owner; then status=0; else status=$?; fi
   if ((status != 0)); then
-    if ((status != 2)); then return 1; fi
+    if ((status != 2)); then
+      case "$status" in 70|130|143) return "$status" ;; *) return 1 ;; esac
+    fi
     if [[ "$MODE" == check ]]; then
       overall=1
     else
@@ -712,6 +1180,7 @@ run_provisioning() {
     status=$?
     set -e
     if ((status != 0)); then
+      case "$status" in 70|130|143) return "$status" ;; esac
       overall=1
     elif ! provision_tool_status "$id"; then
       log "error: $id did not converge to its protected owner after installation"

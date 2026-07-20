@@ -54,6 +54,10 @@ make_repositories() {
   write_file "$OMARCHY_REPO/config/tmux/tmux.conf" $'set -g status off\n'
   write_file "$OMARCHY_REPO/config/starship.toml" $'format = "$directory"\n'
   write_file "$OMARCHY_REPO/themes/tokyo-night/neovim.lua" $'return { background = "dark" }\n'
+  write_file "$OMARCHY_REPO/default/bash/shell" $'shopt -s histappend\n'
+  write_file "$OMARCHY_REPO/default/bash/aliases" $'alias g=git\n'
+  write_file "$OMARCHY_REPO/default/bash/fns/tmux" $'tdl() { :; }\n'
+  write_file "$OMARCHY_REPO/default/bash/inputrc" $'set completion-ignore-case on\n'
   write_file "$OMARCHY_REPO/default/bash/env" $'export FIXTURE_ENV=1\n'
   write_file "$OMARCHY_REPO/default/bash/bin/fixture-tool" $'#!/usr/bin/env bash\nprintf "fixture\\n"\n' 0755
   OMARCHY_COMMIT="$(commit_repo "$OMARCHY_REPO" 'omarchy fixture')"
@@ -177,6 +181,27 @@ assert_no_staging "$HAPPY"
 
 [[ -x "$HAPPY/packages/upstream/reference/omarchy/default/bash/bin/fixture-tool" ]] || fail 'executable tree mode was not preserved'
 [[ ! -x "$HAPPY/packages/upstream/reference/omarchy/default/bash/env" ]] || fail 'regular tree mode changed'
+for selected in shell aliases fns/tmux inputrc; do
+  cmp -s "$HAPPY/packages/upstream/reference/omarchy/default/bash/$selected" \
+    "$HAPPY/packages/upstream/bash/.config/dotfiles/upstream/bash/$selected" || \
+    fail "sync did not update the selected Bash reference and payload together: $selected"
+done
+for excluded in env bin/fixture-tool; do
+  [[ ! -e "$HAPPY/packages/upstream/bash/.config/dotfiles/upstream/bash/$excluded" ]] || \
+    fail "sync materialized excluded Bash payload: $excluded"
+done
+jq -e --arg commit "$OMARCHY_COMMIT" '
+  [
+    .sources[] |
+    select(.snapshot | startswith("packages/upstream/bash/")) |
+    [.commit, .source.path, .destination.path]
+  ] == [
+    [$commit, "default/bash/shell", ".config/dotfiles/upstream/bash/shell"],
+    [$commit, "default/bash/aliases", ".config/dotfiles/upstream/bash/aliases"],
+    [$commit, "default/bash/fns/tmux", ".config/dotfiles/upstream/bash/fns/tmux"],
+    [$commit, "default/bash/inputrc", ".config/dotfiles/upstream/bash/inputrc"]
+  ]
+' "$HAPPY/manifests/sources.json" >/dev/null || fail 'sync generated the wrong Bash payload provenance'
 [[ "$(cat "$HAPPY/packages/upstream/nvim/.config/nvim/lua/config/keymaps.lua")" == *overlay* ]] || fail 'overlay did not replace starter content'
 options="$HAPPY/packages/upstream/nvim/.config/nvim/lua/config/options.lua"
 printf '%s' $'vim.opt.number = true\nrequire(\'config.remote_clipboard\').setup()\nvim.opt.relativenumber = false\nvim.g.autoformat = false\n' \

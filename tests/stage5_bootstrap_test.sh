@@ -23,6 +23,9 @@ printf '6.8.0-generic\n' > "$host/proc/sys/kernel/osrelease"
 fixture="$TEST_ROOT/repo"
 mkdir "$fixture"
 cp -a "$REPO_DIR/." "$fixture/"
+# Stage 5 exercises provisioning independently of later default-ready areas.
+sed -i 's/^area|bash|ready$/area|bash|framework/; s/^area|tmux|ready$/area|tmux|framework/; s/^area|zsh|ready$/area|zsh|framework/' \
+  "$fixture/manifests/areas.tsv"
 
 mise_artifact="$TEST_ROOT/mise-artifact"
 tool_artifact="$TEST_ROOT/starship-artifact"
@@ -110,14 +113,18 @@ SCRIPT
 chmod +x "$fake_bin/curl"
 
 new_home() { local path="$TEST_ROOT/home-$1"; mkdir "$path"; printf '%s' "$path"; }
-capture() {
+invoke_fixture() {
   local home="$1"; shift
-  set +e
-  TEST_OUTPUT="$(HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
+  HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
     XDG_STATE_HOME="$home/.local/state" XDG_CACHE_HOME="$home/.cache" \
     PATH="$home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \
     DOTFILES_TEST_HOST_ROOT="$host" FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" \
-    GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' "$fixture/bootstrap.sh" "$@" 2>&1)"
+    GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' "$fixture/bootstrap.sh" "$@"
+}
+capture() {
+  local home="$1"; shift
+  set +e
+  TEST_OUTPUT="$(invoke_fixture "$home" "$@" 2>&1)"
   TEST_RC=$?
   set -e
 }
@@ -180,6 +187,268 @@ DENY_DOWNLOAD=1 capture "$home" --check --provision
 assert_contains "$TEST_OUTPUT" 'starship is converged'
 pass
 
+# General receipts are exact regular EUID-owned mode-0600 objects.
+chmod 0644 "$receipt"
+capture "$home" --check --provision
+((TEST_RC != 0)) || fail 'unsafe provisioning receipt mode was accepted'
+assert_contains "$TEST_OUTPUT" 'provisioning receipt has an unsafe owner or mode'
+chmod 0600 "$receipt"
+symlink_receipt_home="$(new_home receipt-symlink)"
+mkdir -p "$symlink_receipt_home/.local/state/dotfiles/provisioning/v1"
+ln -s "$receipt" "$symlink_receipt_home/.local/state/dotfiles/provisioning/v1/receipt.json"
+capture "$symlink_receipt_home" --check
+((TEST_RC != 0)) || fail 'symlinked provisioning receipt was accepted'
+assert_contains "$TEST_OUTPUT" 'provisioning receipt is symlinked or not a regular file'
+pass
+
+# Validation itself is bound to the exact identity whose schema and ownership
+# were checked, not merely to the same pathname before later provisioning.
+hold="$TEST_ROOT/receipt-validation-hold"
+mkdir "$hold"
+cp "$receipt" "$TEST_ROOT/receipt-before-validation-race"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=after-provisioning-receipt-validation-read DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$home" --check > "$TEST_ROOT/receipt-validation-race.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/receipt-validation-race.rc" ) &
+pid=$!
+set -e
+for ((attempt=0; attempt<500; attempt++)); do
+  [[ ! -e "$hold/after-provisioning-receipt-validation-read.ready" ]] || break
+  sleep 0.01
+done
+[[ -e "$hold/after-provisioning-receipt-validation-read.ready" ]] || fail 'receipt validation race did not reach its exact-read hold'
+printf '{"validation_race":true}\n' > "$receipt.concurrent"
+chmod 0600 "$receipt.concurrent"
+mv -T "$receipt.concurrent" "$receipt"
+: > "$hold/after-provisioning-receipt-validation-read.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/receipt-validation-race.rc")" != 0 ]] || fail 'receipt replacement during validation was accepted'
+[[ "$(< "$receipt")" == '{"validation_race":true}' ]] || fail 'validation race changed concurrent receipt bytes'
+assert_contains "$(< "$TEST_ROOT/receipt-validation-race.out")" 'provisioning receipt changed during validation'
+cp "$TEST_ROOT/receipt-before-validation-race" "$receipt"
+chmod 0600 "$receipt"
+pass
+
+# Every receipt read-modify-write CASes the exact version read. Replacing the
+# receipt at the read hold preserves concurrent bytes and refuses the update.
+rm "$home/.local/bin/starship"
+hold="$TEST_ROOT/receipt-cas-hold"
+mkdir "$hold"
+cp "$receipt" "$TEST_ROOT/receipt-before-cas"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=after-provisioning-receipt-read DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$home" --provision > "$TEST_ROOT/receipt-cas.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/receipt-cas.rc" ) &
+pid=$!
+set -e
+for ((attempt=0; attempt<500; attempt++)); do
+  [[ ! -e "$hold/after-provisioning-receipt-read.ready" ]] || break
+  sleep 0.01
+done
+[[ -e "$hold/after-provisioning-receipt-read.ready" ]] || fail 'receipt CAS test did not reach the exact-read hold'
+printf '{"concurrent_receipt":true}\n' > "$receipt.concurrent"
+chmod 0600 "$receipt.concurrent"
+mv -T "$receipt.concurrent" "$receipt"
+: > "$hold/after-provisioning-receipt-read.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/receipt-cas.rc")" != 0 ]] || fail 'receipt CAS race unexpectedly succeeded'
+[[ "$(< "$receipt")" == '{"concurrent_receipt":true}' ]] || fail 'receipt CAS race overwrote concurrent bytes'
+assert_contains "$(< "$TEST_ROOT/receipt-cas.out")" 'provisioning receipt changed while it was read'
+cp "$TEST_ROOT/receipt-before-cas" "$receipt"
+chmod 0600 "$receipt"
+capture "$home" --provision
+((TEST_RC == 0)) && [[ -x "$home/.local/bin/starship" ]] || fail 'transactional launcher rollback did not repair cleanly'
+pass
+
+# Tool convergence requires the exact launcher receipt row, not only matching
+# launcher bytes. A forged hash makes the retained owner pending.
+cp "$receipt" "$TEST_ROOT/receipt-before-launcher-hash"
+jq '(.launchers[] | select(.tool_id == "starship") | .content_sha256)="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+  "$receipt" > "$receipt.new"
+mv "$receipt.new" "$receipt"; chmod 0600 "$receipt"
+capture "$home" --check --provision
+((TEST_RC == 1)) || fail 'forged launcher receipt hash was accepted as converged'
+assert_contains "$TEST_OUTPUT" 'starship: target='
+cp "$TEST_ROOT/receipt-before-launcher-hash" "$receipt"; chmod 0600 "$receipt"
+pass
+
+# Root, mise link, launcher, and both metadata rows share one commit boundary.
+# Faults at every post-install phase restore the exact absent pre-state.
+for point in provisioning-tool-after-root provisioning-tool-after-link provisioning-tool-after-launcher \
+  provisioning-tool-before-combined-receipt provisioning-tool-after-combined-receipt; do
+  tx_home="$(new_home "transaction-$point")"
+  mkdir -p "$tx_home/.local/bin"
+  cp "$mise_artifact" "$tx_home/.local/bin/mise"; chmod 0755 "$tx_home/.local/bin/mise"
+  set +e
+  TEST_OUTPUT="$(DOTFILES_TEST_FAIL_AT="$point" invoke_fixture "$tx_home" --provision 2>&1)"
+  TEST_RC=$?
+  set -e
+  ((TEST_RC != 0 && TEST_RC != 70)) || fail "$point returned the wrong transaction status"
+  tx_root_rel="$(jq -r '.tools[0].install_root' "$fixture/manifests/provisioning.json")"
+  tx_link="$tx_home/.local/share/mise/installs/starship/1.26.0"
+  [[ ! -e "$tx_home/$tx_root_rel" && ! -L "$tx_home/$tx_root_rel" &&
+    ! -e "$tx_link" && ! -L "$tx_link" && ! -e "$tx_home/.local/bin/starship" &&
+    ! -e "$tx_home/.local/state/dotfiles/provisioning/v1/receipt.json" ]] || \
+    fail "$point left a partially committed retained-tool transaction"
+done
+pass
+
+# Initial mise bytes and their first receipt are one CAS transaction. Failures
+# after either installation cannot leave an unreceipted binary or stale receipt.
+for point in provisioning-mise-after-install provisioning-mise-before-combined-receipt \
+  provisioning-tool-after-combined-receipt; do
+  mise_tx_home="$(new_home "mise-transaction-$point")"
+  set +e
+  TEST_OUTPUT="$(DOTFILES_TEST_FAIL_AT="$point" invoke_fixture "$mise_tx_home" --provision 2>&1)"
+  TEST_RC=$?
+  set -e
+  ((TEST_RC != 0 && TEST_RC != 70)) || fail "$point returned the wrong initial mise transaction status"
+  [[ ! -e "$mise_tx_home/.local/bin/mise" &&
+    ! -e "$mise_tx_home/.local/state/dotfiles/provisioning/v1/receipt.json" ]] || \
+    fail "$point left initial mise bytes or a stale receipt"
+done
+
+mise_receipt_home="$(new_home mise-receipt-rollback)"
+mkdir -p "$mise_receipt_home/.local/state/dotfiles/provisioning/v1"
+printf '{"schema_version":1,"manifest_sha256":"%s","tools":[],"launchers":[]}\n' \
+  "$(sha256sum "$fixture/manifests/provisioning.json" | cut -d' ' -f1)" > \
+  "$mise_receipt_home/.local/state/dotfiles/provisioning/v1/receipt.json"
+chmod 0600 "$mise_receipt_home/.local/state/dotfiles/provisioning/v1/receipt.json"
+mise_old_receipt="$(stat -c '%d:%i:%a:%y' -- "$mise_receipt_home/.local/state/dotfiles/provisioning/v1/receipt.json"):$(sha256sum "$mise_receipt_home/.local/state/dotfiles/provisioning/v1/receipt.json")"
+set +e
+TEST_OUTPUT="$(DOTFILES_TEST_FAIL_AT=provisioning-tool-after-combined-receipt \
+  invoke_fixture "$mise_receipt_home" --provision 2>&1)"
+TEST_RC=$?
+set -e
+((TEST_RC != 0 && TEST_RC != 70)) || fail 'initial mise receipt replacement fault had the wrong status'
+[[ ! -e "$mise_receipt_home/.local/bin/mise" && "$mise_old_receipt" == \
+  "$(stat -c '%d:%i:%a:%y' -- "$mise_receipt_home/.local/state/dotfiles/provisioning/v1/receipt.json"):$(sha256sum "$mise_receipt_home/.local/state/dotfiles/provisioning/v1/receipt.json")" ]] || \
+  fail 'initial mise rollback did not restore the exact quarantined receipt'
+
+mise_signal_home="$(new_home mise-signal)"
+set +e
+TEST_OUTPUT="$(DOTFILES_TEST_SIGNAL_AT=provisioning-mise-before-commit \
+  invoke_fixture "$mise_signal_home" --provision 2>&1)"
+TEST_RC=$?
+set -e
+[[ "$TEST_RC" == 143 && ! -e "$mise_signal_home/.local/bin/mise" &&
+  ! -e "$mise_signal_home/.local/state/dotfiles/provisioning/v1/receipt.json" ]] || \
+  fail 'initial mise signal left binary or receipt state'
+pass
+
+# Launcher repair is the same combined transaction. A failed mode repair
+# restores the exact prior launcher and leaves the combined receipt unchanged.
+chmod 0644 "$home/.local/bin/starship"
+cp -a "$home/.local/bin/starship" "$TEST_ROOT/launcher-before-repair"
+cp "$receipt" "$TEST_ROOT/receipt-before-repair"
+set +e
+TEST_OUTPUT="$(DOTFILES_TEST_FAIL_AT=provisioning-tool-before-combined-receipt invoke_fixture "$home" --provision 2>&1)"
+TEST_RC=$?
+set -e
+((TEST_RC != 0 && TEST_RC != 70)) || fail 'launcher repair fault had the wrong status'
+cmp -s "$home/.local/bin/starship" "$TEST_ROOT/launcher-before-repair" || fail 'launcher repair rollback changed prior bytes'
+[[ "$(stat -c %a -- "$home/.local/bin/starship")" == 644 ]] || fail 'launcher repair rollback changed prior mode'
+cmp -s "$receipt" "$TEST_ROOT/receipt-before-repair" || fail 'launcher repair fault changed combined metadata'
+chmod 0755 "$home/.local/bin/starship"
+pass
+
+# Verified receipt installation is the commit point. Cleanup failures after it
+# retain exact old recovery paths without rolling back committed new state.
+cleanup_home="$(new_home committed-cleanup)"
+capture "$cleanup_home" --provision
+((TEST_RC == 0)) || fail 'committed-cleanup fixture did not converge'
+chmod 0644 "$cleanup_home/.local/bin/starship"
+hold="$TEST_ROOT/committed-cleanup-hold"; mkdir "$hold"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=provisioning-tool-after-commit-before-cleanup DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$cleanup_home" --provision > "$TEST_ROOT/committed-cleanup.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/committed-cleanup.rc" ) &
+pid=$!
+set -e
+for ((attempt=0; attempt<500; attempt++)); do
+  [[ ! -e "$hold/provisioning-tool-after-commit-before-cleanup.ready" ]] || break
+  sleep 0.01
+done
+[[ -e "$hold/provisioning-tool-after-commit-before-cleanup.ready" ]] || fail 'committed cleanup test did not reach its post-commit hold'
+mapfile -t cleanup_quarantines < <(/usr/bin/find "$cleanup_home" -name '*.dotfiles-provisioning-quarantine.*' -print)
+((${#cleanup_quarantines[@]} == 2)) || fail 'committed cleanup fixture did not retain receipt and launcher rollback objects'
+for quarantine in "${cleanup_quarantines[@]}"; do printf '\nchanged after commit\n' >> "$quarantine"; done
+: > "$hold/provisioning-tool-after-commit-before-cleanup.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/committed-cleanup.rc")" != 0 ]] || fail 'committed cleanup failure unexpectedly reported success'
+cleanup_output="$(< "$TEST_ROOT/committed-cleanup.out")"
+for quarantine in "${cleanup_quarantines[@]}"; do
+  [[ -e "$quarantine" ]] || fail "committed cleanup deleted retained recovery path: $quarantine"
+  assert_contains "$cleanup_output" "$quarantine"
+done
+[[ -x "$cleanup_home/.local/bin/starship" && "$(stat -c %a -- "$cleanup_home/.local/bin/starship")" == 755 ]] || \
+  fail 'committed cleanup failure reverted the new launcher'
+jq -e '[.tools[] | select(.id == "starship")] | length == 1' \
+  "$cleanup_home/.local/state/dotfiles/provisioning/v1/receipt.json" >/dev/null || \
+  fail 'committed cleanup failure reverted the new receipt'
+pass
+
+# A same-UID receipt replacement after the combined write is preserved, forces
+# status 70, and rolls back the exact root, link, and launcher post-states.
+receipt_race_home="$(new_home combined-receipt-race)"
+mkdir -p "$receipt_race_home/.local/bin"
+cp "$mise_artifact" "$receipt_race_home/.local/bin/mise"; chmod 0755 "$receipt_race_home/.local/bin/mise"
+hold="$TEST_ROOT/combined-receipt-race-hold"; mkdir "$hold"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=provisioning-tool-after-combined-receipt DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$receipt_race_home" --provision > "$TEST_ROOT/combined-receipt-race.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/combined-receipt-race.rc" ) &
+pid=$!
+set -e
+for ((attempt=0; attempt<500; attempt++)); do
+  [[ ! -e "$hold/provisioning-tool-after-combined-receipt.ready" ]] || break
+  sleep 0.01
+done
+[[ -e "$hold/provisioning-tool-after-combined-receipt.ready" ]] || fail 'combined receipt race did not reach its post-write hold'
+race_receipt="$receipt_race_home/.local/state/dotfiles/provisioning/v1/receipt.json"
+printf '{"combined_receipt_race":true}\n' > "$race_receipt"
+chmod 0600 "$race_receipt"
+: > "$hold/provisioning-tool-after-combined-receipt.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/combined-receipt-race.rc")" == 70 &&
+  "$(< "$race_receipt")" == '{"combined_receipt_race":true}' ]] || \
+  fail 'combined receipt race did not preserve concurrent bytes with status 70'
+tx_root_rel="$(jq -r '.tools[0].install_root' "$fixture/manifests/provisioning.json")"
+[[ ! -e "$receipt_race_home/$tx_root_rel" && ! -e "$receipt_race_home/.local/bin/starship" ]] || \
+  fail 'combined receipt race retained exact rollback-safe tool objects'
+pass
+
+# A concurrent launcher edit after receipt installation is never deleted during
+# rollback. The transaction reports 70 while still removing its unchanged
+# receipt, mise link, and root.
+launcher_race_home="$(new_home launcher-race)"
+mkdir -p "$launcher_race_home/.local/bin"
+cp "$mise_artifact" "$launcher_race_home/.local/bin/mise"; chmod 0755 "$launcher_race_home/.local/bin/mise"
+hold="$TEST_ROOT/launcher-race-hold"; mkdir "$hold"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=provisioning-tool-before-commit DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$launcher_race_home" --provision > "$TEST_ROOT/launcher-race.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/launcher-race.rc" ) &
+pid=$!
+set -e
+for ((attempt=0; attempt<500; attempt++)); do
+  [[ ! -e "$hold/provisioning-tool-before-commit.ready" ]] || break
+  sleep 0.01
+done
+[[ -e "$hold/provisioning-tool-before-commit.ready" ]] || fail 'launcher race did not reach the final verification hold'
+printf '#!/usr/bin/env bash\nprintf "concurrent launcher\\n"\n' > "$launcher_race_home/.local/bin/starship"
+chmod 0755 "$launcher_race_home/.local/bin/starship"
+: > "$hold/provisioning-tool-before-commit.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/launcher-race.rc")" == 70 &&
+  "$(< "$launcher_race_home/.local/bin/starship")" == $'#!/usr/bin/env bash\nprintf "concurrent launcher\\n"' ]] || \
+  fail 'launcher race did not preserve concurrent bytes with status 70'
+tx_root_rel="$(jq -r '.tools[0].install_root' "$fixture/manifests/provisioning.json")"
+[[ ! -e "$launcher_race_home/$tx_root_rel" &&
+  ! -e "$launcher_race_home/.local/state/dotfiles/provisioning/v1/receipt.json" ]] || \
+  fail 'launcher race retained unchanged transaction objects'
+pass
+
 # Configuration removal retains tools, launchers, receipts, and unrelated OpenCode state.
 capture "$home" --remove
 ((TEST_RC == 0)) || fail 'configuration removal failed'
@@ -207,6 +476,7 @@ pass
 # A forged receipt owner identity is rejected before any executable probe.
 jq '(.tools[] | select(.id == "starship") | .backend)="aqua:evil/shadow"' "$receipt" > "$receipt.new"
 mv "$receipt.new" "$receipt"
+chmod 0600 "$receipt"
 capture "$home" --check --provision
 ((TEST_RC == 1)) || fail 'forged receipt backend was accepted'
 assert_contains "$TEST_OUTPUT" 'receipt owner identity is invalid for starship'
@@ -216,6 +486,7 @@ pass
 # Restore the accepted receipt generated before the identity corruption.
 jq --arg backend 'aqua:starship/starship' '(.tools[] | select(.id == "starship") | .backend)=$backend' "$receipt" > "$receipt.new"
 mv "$receipt.new" "$receipt"
+chmod 0600 "$receipt"
 shadow_bin="$TEST_ROOT/project-bin"
 mkdir "$shadow_bin"
 cat > "$shadow_bin/starship" <<SCRIPT
@@ -301,6 +572,62 @@ assert_contains "$TEST_OUTPUT" 'unapproved origin'
 [[ ! -e "$redirect_home/.local/bin/mise" ]] || fail 'redirect failure installed mise'
 pass
 
+
+# Destination identity is captured before network/staging. Appeared file and
+# directory destinations are preserved without overwrite or directory nesting.
+mise_race_home="$(new_home mise-appearance)"
+hold="$TEST_ROOT/mise-appearance-hold"
+mkdir "$hold"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=provisioning-mise-after-download DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$mise_race_home" --provision > "$TEST_ROOT/mise-appearance.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/mise-appearance.rc" ) &
+pid=$!
+set -e
+for ((attempt=0; attempt<500; attempt++)); do
+  [[ ! -e "$hold/provisioning-mise-after-download.ready" ]] || break
+  sleep 0.01
+done
+[[ -e "$hold/provisioning-mise-after-download.ready" ]] || fail 'mise appearance test did not reach its network hold'
+mkdir "$mise_race_home/.local/bin/mise"
+printf 'appeared directory\n' > "$mise_race_home/.local/bin/mise/marker"
+: > "$hold/provisioning-mise-after-download.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/mise-appearance.rc")" != 0 ]] || fail 'appeared mise destination was accepted'
+[[ "$(< "$mise_race_home/.local/bin/mise/marker")" == 'appeared directory' ]] || fail 'mise appearance race changed destination data'
+[[ "$(/usr/bin/find "$mise_race_home/.local/bin/mise" -mindepth 1 ! -name marker -print -quit)" == "" ]] || \
+  fail 'mise stage was nested into an appeared directory'
+[[ ! -e "$mise_race_home/.local/state/dotfiles/provisioning/v1/receipt.json" ]] || fail 'mise appearance race wrote an ownership receipt'
+
+tool_race_home="$(new_home tool-appearance)"
+mkdir -p "$tool_race_home/.local/bin"
+cp "$mise_artifact" "$tool_race_home/.local/bin/mise"
+chmod 0755 "$tool_race_home/.local/bin/mise"
+tool_root_rel="$(jq -r '.tools[0].install_root' "$fixture/manifests/provisioning.json")"
+hold="$TEST_ROOT/tool-appearance-hold"
+mkdir "$hold"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=provisioning-tool-after-staging DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$tool_race_home" --provision > "$TEST_ROOT/tool-appearance.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/tool-appearance.rc" ) &
+pid=$!
+set -e
+for ((attempt=0; attempt<500; attempt++)); do
+  [[ ! -e "$hold/provisioning-tool-after-staging.ready" ]] || break
+  sleep 0.01
+done
+[[ -e "$hold/provisioning-tool-after-staging.ready" ]] || fail 'tool appearance test did not reach its staging hold'
+mkdir -p "$tool_race_home/$tool_root_rel"
+printf 'appeared root\n' > "$tool_race_home/$tool_root_rel/marker"
+: > "$hold/provisioning-tool-after-staging.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/tool-appearance.rc")" != 0 ]] || fail 'appeared retained tool root was accepted'
+[[ "$(< "$tool_race_home/$tool_root_rel/marker")" == 'appeared root' ]] || fail 'tool appearance race changed destination data'
+[[ ! -e "$tool_race_home/$tool_root_rel/root" && ! -e "$tool_race_home/$tool_root_rel/starship" ]] || \
+  fail 'retained tool stage was nested into an appeared root'
+[[ ! -e "$tool_race_home/.local/state/dotfiles/provisioning/v1/receipt.json" ]] || fail 'tool appearance race wrote an ownership receipt'
+pass
+
 # Archive membership is locked independently from the compressed-byte hash.
 archive_root="$TEST_ROOT/archive"
 mkdir "$archive_root"
@@ -341,6 +668,10 @@ isolation_repo="$TEST_ROOT/isolation-repo"
 mkdir "$isolation_repo"
 cp -a "$fixture/." "$isolation_repo/"
 sed -i 's/^area|bash|framework$/area|bash|ready/' "$isolation_repo/manifests/areas.tsv"
+# Keep this dependency-isolation fixture deterministic on workstations that now
+# have every later Bash dependency installed.
+sed -i 's/|bash|apply,check|generic,wsl|fzf|/|bash|apply,check|generic,wsl|stage5-missing-command|/' \
+  "$isolation_repo/manifests/dependencies.tsv"
 isolation_home="$(new_home isolation)"
 set +e
 TEST_OUTPUT="$(HOME="$isolation_home" PATH="$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \

@@ -10,6 +10,9 @@ source "$SCRIPT_DIR/lib/host.sh"
 source "$SCRIPT_DIR/lib/engine.sh"
 source "$SCRIPT_DIR/lib/provisioning.sh"
 source "$SCRIPT_DIR/lib/areas/git.sh"
+source "$SCRIPT_DIR/lib/areas/bash.sh"
+source "$SCRIPT_DIR/lib/areas/tmux.sh"
+source "$SCRIPT_DIR/lib/areas/zsh.sh"
 source "$SCRIPT_DIR/lib/areas/generic.sh"
 
 MODE=apply
@@ -123,14 +126,48 @@ select_recorded_areas() {
   shopt -u nullglob
 }
 
+enforce_wsl_shell_rollout_sequence() {
+  local bash_state="$HOME/.local/state/dotfiles/v1/bash.json"
+  local zsh_state="$HOME/.local/state/dotfiles/v1/zsh.json"
+  [[ "$MODE" == apply && "$SELECTED_PROFILE" == wsl ]] || return 0
+
+  if array_contains bash "${AREAS[@]}" && [[ ! -f "$bash_state" ]]; then
+    [[ "$EXPLICIT_AREA_SELECTION" == true ]] && ! array_contains zsh "${AREAS[@]}" ||
+      die "first WSL Bash deployment must explicitly select --area bash without zsh"
+  fi
+  if array_contains zsh "${AREAS[@]}" && [[ ! -f "$zsh_state" ]]; then
+    [[ -f "$bash_state" ]] || die "first WSL zsh deployment requires a completed earlier --area bash apply"
+    [[ "$EXPLICIT_AREA_SELECTION" == true ]] && ! array_contains bash "${AREAS[@]}" ||
+      die "first WSL zsh deployment must explicitly select --area zsh without bash after Bash smoke testing"
+    if ! (
+      set -Eeuo pipefail
+      MODE=check
+      PROVISION=false
+      AREAS=(bash)
+      preflight_bash
+    ); then
+      die 'existing Bash deployment is degraded; run ./bootstrap.sh --check --area bash, repair it, and complete Bash smoke testing before the first zsh apply'
+    fi
+  fi
+}
+
 validate_selected_areas() {
   local area
   for area in "${AREAS[@]}"; do
     [[ -n "${AREA_STATUS[$area]+x}" ]] || die "unknown area '$area'"
     if [[ "$MODE" != remove && "${AREA_STATUS[$area]}" == framework ]]; then
+      if [[ "$PROVISION" == true && "$EXPLICIT_AREA_SELECTION" == true &&
+        ${#AREAS[@]} -eq 1 && "${AREAS[0]}" == tmux ]]; then
+        continue
+      fi
       die "area '$area' is framework-only in this checkout; its payload deploys in a later stage"
     fi
   done
+}
+
+tmux_plugin_provisioning_requested() {
+  [[ "$PROVISION" == true && "$EXPLICIT_AREA_SELECTION" == true &&
+    ${#AREAS[@]} -eq 1 && "${AREAS[0]}" == tmux ]]
 }
 
 run_area() {
@@ -144,12 +181,18 @@ run_area() {
   if [[ "$MODE" == remove ]]; then
     case "$area" in
       git) remove_git ;;
+      bash) remove_bash ;;
+      tmux) remove_tmux ;;
+      zsh) remove_zsh ;;
       *) remove_generic "$area" ;;
     esac
     return 0
   fi
   case "$area" in
     git) preflight_git ;;
+    bash) preflight_bash ;;
+    tmux) preflight_tmux ;;
+    zsh) preflight_zsh ;;
     *) preflight_generic "$area" ;;
   esac
   if [[ "$MODE" == check ]]; then
@@ -158,6 +201,9 @@ run_area() {
   fi
   case "$area" in
     git) apply_git ;;
+    bash) apply_bash ;;
+    tmux) apply_tmux ;;
+    zsh) apply_zsh ;;
     *) apply_generic "$area" ;;
   esac
 }
@@ -204,11 +250,14 @@ run_selected_areas() {
     ( run_area "$area" )
     status=$?
     set -e
-    if ((status == 70)); then
-      printf "[%s] error: rollback failed for area '%s'; stopping before further areas\n" \
-        "$SCRIPT_NAME" "$area" >&2
-      exit 70
-    fi
+    case "$status" in
+      70)
+        printf "[%s] error: rollback failed for area '%s'; stopping before further areas\n" \
+          "$SCRIPT_NAME" "$area" >&2
+        exit 70
+        ;;
+      130|143) exit "$status" ;;
+    esac
     if ((status != 0)); then
       overall=1
     fi
@@ -217,9 +266,14 @@ run_selected_areas() {
 }
 
 preflight_selected_areas() {
-  local area status overall=0
-  AREA_PREFLIGHT_OK=()
+  local skip_area="${1:-}" only_area="${2:-}" area status overall=0
+  [[ -n "$only_area" ]] || AREA_PREFLIGHT_OK=()
   for area in "${AREAS[@]}"; do
+    [[ -z "$only_area" || "$area" == "$only_area" ]] || continue
+    if [[ -n "$skip_area" && "$area" == "$skip_area" ]]; then
+      AREA_PREFLIGHT_OK["$area"]=false
+      continue
+    fi
     if [[ "${AREA_DEPENDENCY_OK[$area]:-true}" != true ]]; then
       AREA_PREFLIGHT_OK["$area"]=false
       continue
@@ -230,6 +284,9 @@ preflight_selected_areas() {
       trap cleanup EXIT
       case "$area" in
         git) preflight_git ;;
+        bash) preflight_bash ;;
+        tmux) preflight_tmux ;;
+        zsh) preflight_zsh ;;
         *) preflight_generic "$area" ;;
       esac
     )
@@ -238,6 +295,7 @@ preflight_selected_areas() {
     if ((status == 0)); then
       AREA_PREFLIGHT_OK["$area"]=true
     else
+      case "$status" in 70|130|143) exit "$status" ;; esac
       AREA_PREFLIGHT_OK["$area"]=false
       overall=1
     fi
@@ -247,6 +305,8 @@ preflight_selected_areas() {
 
 main() {
   local dependency_status=0 provisioning_status=0 area_status=0 run_status=0 native_status=0 area
+  local plugin_plan_status=0 plugin_status=0
+  local defer_tmux_preflight=false
   parse_cli "$@"
   ((EUID != 0)) || die 'run bootstrap as the non-root workstation user'
   [[ -n "${HOME:-}" && -d "$HOME" ]] || die 'HOME must refer to an existing directory'
@@ -292,24 +352,103 @@ main() {
   validate_migrations_ledger
   refuse_profile_mismatch
   validate_provisioning_receipt
+  enforce_wsl_shell_rollout_sequence
   check_omarchy_core_drift || native_status=1
   if ((native_status != 0)); then
     for area in "${AREAS[@]}"; do AREA_DEPENDENCY_OK["$area"]=false; done
   fi
-  preflight_selected_areas || area_status=1
-  if [[ "$PROVISION" == true ]]; then
-    if [[ "$PROVISION_DEPENDENCY_MISSING" == true ]]; then
-      provisioning_status=1
-    else
+  if tmux_plugin_provisioning_requested; then
+    set +e
+    tmux_preflight_plugin_provision_plan
+    plugin_plan_status=$?
+    set -e
+    case "$plugin_plan_status" in 70|130|143) exit "$plugin_plan_status" ;; esac
+    # Runtime selection needs the requested area identity, but this is not a
+    # configuration-preflight success marker.
+    if [[ "${AREA_DEPENDENCY_OK[tmux]:-false}" == true ]]; then
+      AREA_PREFLIGHT_OK[tmux]=true
       select_provisioning_tools
-      run_provisioning || provisioning_status=1
+      AREA_PREFLIGHT_OK[tmux]=false
+    else
+      PROVISION_TOOL_IDS=()
+    fi
+    if print_provisioning_plan; then provisioning_status=0; else provisioning_status=$?; fi
+    case "$provisioning_status" in 70|130|143) exit "$provisioning_status" ;; esac
+    ((provisioning_status == 0)) || plugin_plan_status=1
+    provisioning_status=0
+    if ((${#TMUX_PLUGIN_IDS[@]} > 0)); then
+      print_tmux_plugin_provisioning_plan
+    fi
+    if [[ "${AREA_DEPENDENCY_OK[tmux]:-false}" != true ||
+      "$PROVISION_DEPENDENCY_MISSING" == true || "$plugin_plan_status" != 0 ]]; then
+      provisioning_status=1
+    elif [[ "$MODE" == check ]]; then
+      set +e
+      run_provisioning true
+      provisioning_status=$?
+      set -e
+      case "$provisioning_status" in 70|130|143) exit "$provisioning_status" ;; esac
+      [[ "$TMUX_PLUGIN_PLAN_PENDING" == false ]] || {
+        log 'pending locked provisioning: tmux plugins'
+        provisioning_status=1
+      }
+    else
+      set +e
+      run_provisioning true
+      provisioning_status=$?
+      set -e
+      case "$provisioning_status" in 70|130|143) exit "$provisioning_status" ;; esac
+      if ((provisioning_status == 0)); then
+        set +e
+        tmux_apply_plugin_provisioning
+        plugin_status=$?
+        set -e
+        case "$plugin_status" in 70|130|143) exit "$plugin_status" ;; esac
+        ((plugin_status == 0)) || provisioning_status=1
+      fi
+    fi
+    if ((provisioning_status == 0)); then
+      preflight_selected_areas || area_status=1
+    else
+      area_status=1
+    fi
+  else
+    if [[ "$PROVISION" == true ]] && array_contains tmux "${AREAS[@]}"; then
+      defer_tmux_preflight=true
+      preflight_selected_areas tmux || area_status=1
+    else
+      preflight_selected_areas || area_status=1
+    fi
+    if [[ "$PROVISION" == true ]]; then
+      if [[ "$PROVISION_DEPENDENCY_MISSING" == true ]]; then
+        provisioning_status=1
+      else
+        if [[ "$defer_tmux_preflight" == true && "${AREA_DEPENDENCY_OK[tmux]:-false}" == true ]]; then
+          AREA_PREFLIGHT_OK[tmux]=true
+        fi
+        select_provisioning_tools
+        if [[ "$defer_tmux_preflight" == true ]]; then AREA_PREFLIGHT_OK[tmux]=false; fi
+        set +e
+        run_provisioning
+        provisioning_status=$?
+        set -e
+        case "$provisioning_status" in 70|130|143) exit "$provisioning_status" ;; esac
+      fi
+      if [[ "$defer_tmux_preflight" == true ]]; then
+        if ((provisioning_status == 0)); then
+          preflight_selected_areas '' tmux || area_status=1
+        else
+          AREA_PREFLIGHT_OK[tmux]=false
+          area_status=1
+        fi
+      fi
     fi
   fi
   set +e
   ( run_selected_areas )
   run_status=$?
   set -e
-  ((run_status != 70)) || exit 70
+  case "$run_status" in 70|130|143) exit "$run_status" ;; esac
   ((run_status == 0)) || area_status=1
   ((dependency_status == 0 && provisioning_status == 0 && native_status == 0 && area_status == 0)) || exit 1
 }

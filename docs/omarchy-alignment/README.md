@@ -69,8 +69,8 @@ the packet.
   `aqua:tmux/tmux-builds` when the distro package is older than 3.5.
 - Keep both `--check` forms, ordinary apply, removal, Bash startup, and tmux
   startup offline. Only explicit `--provision` apply may fetch its printed,
-  locked runtime-tool plan; transitional zsh retains its documented first-start
-  exception.
+  locked runtime-tool plan; transitional zsh retains only its documented
+  missing-Zinit first-start exception.
 - Define full provisioning as no-area `--provision`: Node, pnpm, Claude Code,
   Worktrunk, and platform foundations. Area-scoped provisioning selects only
   area dependencies and does not make framework-only areas selectable.
@@ -84,10 +84,16 @@ the packet.
   customizations into the Omarchy baseline. Git history is the configuration
   backup.
 - Preserve tmux persistence while adopting the stock Omarchy interaction
-  model.
+  model. Stage 7 implements a private byte-identical baseline, XDG dispatcher,
+  command-empty WSL adapter, common persistence, and exact schema-backed plugin
+  lock. tmux is ready after its automated gates passed; WSL operational
+  acceptance also passed after the live rollout and terminal checks.
 - Treat Bash with Starship as the evaluated primary shell; keep the existing
-  zsh configuration as a transitional default and behaviorally frozen escape
-  hatch, with convergence or retirement deferred until after the migration.
+  zsh configuration as the unchanged-login-shell, behaviorally frozen escape
+  hatch. Stage 6 uses reversible generic/WSL Bash attachments, an additive
+  native attachment, and exactly two zsh exceptions: local-alias relocation and
+  durable global Vite+ hook retirement. Bash and zsh are ready after their
+  isolated implementation gates passed; host rollout acceptance remains separate.
 - Include minimal Windows Terminal client handling in scope: documented
   manual host-side unbinds and key checks, applying to WSL shells and to SSH
   sessions into remote hosts alike.
@@ -108,8 +114,7 @@ before implementation reaches the affected stage:
 
 1. Specify the native Neovim personal loader and refresh-recovery behavior
    during the Omarchy native integration stage.
-2. Select exact TPM and persistence plugin commits.
-3. Record the tested Windows Terminal version before closing the tmux gate.
+2. Record the tested Windows Terminal version before closing the tmux gate.
 
 Tool-specific implications are recorded in [Deployment](deployment.md),
 [tmux](tools/tmux.md), and [Neovim](tools/neovim.md).

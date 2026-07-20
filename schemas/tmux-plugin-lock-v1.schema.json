@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/tmux-plugin-lock-v1.schema.json",
+  "title": "Dotfiles tmux plugin lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "area",
+    "plugin_root",
+    "resurrect_root",
+    "provision_command",
+    "plugins",
+    "retained_paths"
+  ],
+  "properties": {
+    "$schema": {"const": "../schemas/tmux-plugin-lock-v1.schema.json"},
+    "schema_version": {"const": 1},
+    "area": {"const": "tmux"},
+    "plugin_root": {"const": ".tmux/plugins"},
+    "resurrect_root": {"const": ".tmux/resurrect"},
+    "provision_command": {
+      "const": ["bootstrap.sh", "--provision", "--area", "tmux"]
+    },
+    "plugins": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/tpmPlugin"},
+          {"$ref": "#/$defs/managedHooksPlugin"}
+        ]
+      },
+      "uniqueItems": true
+    },
+    "retained_paths": {
+      "const": [".tmux/plugins", ".tmux/resurrect"]
+    }
+  },
+  "$defs": {
+    "pluginBase": {
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "loading",
+        "repository",
+        "commit",
+        "directory"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "role": {"enum": ["manager", "plugin"]},
+        "repository": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "directory": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$",
+          "not": {"enum": [".", ".."]}
+        }
+      }
+    },
+    "tpmPlugin": {
+      "allOf": [
+        {"$ref": "#/$defs/pluginBase"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "role", "loading", "declaration", "repository", "commit", "directory"],
+          "properties": {
+            "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+            "role": {"enum": ["manager", "plugin"]},
+            "loading": {"const": "tpm"},
+            "declaration": {"type": "string", "pattern": "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"},
+            "repository": {"type": "string", "format": "uri", "pattern": "^https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"},
+            "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "directory": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$", "not": {"enum": [".", ".."]}}
+          }
+        }
+      ]
+    },
+    "managedHooksPlugin": {
+      "allOf": [
+        {"$ref": "#/$defs/pluginBase"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "role", "loading", "hooks", "repository", "commit", "directory"],
+          "properties": {
+            "id": {"const": "tmux-assistant-resurrect"},
+            "role": {"const": "plugin"},
+            "loading": {"const": "managed-hooks"},
+            "hooks": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["@resurrect-hook-post-save-all", "@resurrect-hook-post-restore-all"],
+              "properties": {
+                "@resurrect-hook-post-save-all": {"const": "scripts/save-assistant-sessions.sh"},
+                "@resurrect-hook-post-restore-all": {"const": "scripts/restore-assistant-sessions.sh"}
+              }
+            },
+            "repository": {"const": "https://github.com/timvw/tmux-assistant-resurrect"},
+            "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "directory": {"const": "tmux-assistant-resurrect"}
+          }
+        }
+      ]
+    }
+  }
+}

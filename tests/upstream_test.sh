@@ -7,6 +7,14 @@ readonly REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
 readonly UPSTREAM="$REPO_DIR/scripts/upstream"
 readonly EXPECTED_COMMIT='6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3'
 readonly EXPECTED_BLOB='0f8e979785bb2a451f42cd494517d12eabcd54bf'
+readonly BASH_REFERENCE_ROOT='packages/upstream/reference/omarchy/default/bash'
+readonly BASH_PAYLOAD_ROOT='packages/upstream/bash/.config/dotfiles/upstream/bash'
+readonly BASH_MAPPINGS=(
+  'shell|shell'
+  'aliases|aliases'
+  'fns/tmux|fns/tmux'
+  'inputrc|inputrc'
+)
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -79,6 +87,32 @@ success_output="$(HOME="$TEMP_ROOT/empty-home" "$moved_checkout/scripts/upstream
 [[ "$success_output" == *"$EXPECTED_BLOB"* ]] || fail 'verification did not print the blob pin'
 [[ "$success_output" == *'v3.8.3'* ]] || fail 'verification did not print the release pin'
 
+for mapping in "${BASH_MAPPINGS[@]}"; do
+  IFS='|' read -r reference payload <<< "$mapping"
+  cmp -s "$moved_checkout/$BASH_REFERENCE_ROOT/$reference" \
+    "$moved_checkout/$BASH_PAYLOAD_ROOT/$payload" || \
+    fail "deployable Bash payload differs from its pinned reference: $payload"
+done
+jq -e '
+  [
+    .sources[] |
+    select(.snapshot | startswith("packages/upstream/bash/")) |
+    [.source.path, .destination.path]
+  ] == [
+    ["default/bash/shell", ".config/dotfiles/upstream/bash/shell"],
+    ["default/bash/aliases", ".config/dotfiles/upstream/bash/aliases"],
+    ["default/bash/fns/tmux", ".config/dotfiles/upstream/bash/fns/tmux"],
+    ["default/bash/inputrc", ".config/dotfiles/upstream/bash/inputrc"]
+  ]
+' "$moved_checkout/manifests/sources.json" >/dev/null || \
+  fail 'deployable Bash manifest inventory is not the selected four-source mapping'
+for excluded in completions envs functions init rc fns/compression fns/drives \
+  fns/ssh-port-forwarding fns/transcoding fns/worktrees; do
+  [[ ! -e "$moved_checkout/$BASH_PAYLOAD_ROOT/$excluded" && \
+    ! -L "$moved_checkout/$BASH_PAYLOAD_ROOT/$excluded" ]] || \
+    fail "excluded Bash source was materialized: $excluded"
+done
+
 real_git="$(command -v git)"
 deny_bin="$TEMP_ROOT/deny-bin"
 mkdir "$deny_bin"
@@ -110,6 +144,20 @@ fi
 new_fixture 'content-drift'
 printf '\ndrift\n' >> "$FIXTURE/packages/upstream/git/.config/git/config"
 expect_failure 'content drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'bash-reference-drift'
+printf '\ndrift\n' >> "$FIXTURE/$BASH_REFERENCE_ROOT/shell"
+expect_failure 'Bash reference drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'bash-payload-drift'
+printf '\ndrift\n' >> "$FIXTURE/$BASH_PAYLOAD_ROOT/shell"
+expect_failure 'Bash payload drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'bash-copy-provenance-drift'
+rewrite_manifest "$FIXTURE" \
+  '(.sources[] | select(.id == "omarchy-bash-deployable-shell").release) = "other"'
+expect_failure 'Bash copy provenance drift' 'deployable Bash source mapping is invalid' \
+  "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'malformed-home-gitconfig'
 mkdir "$TEMP_ROOT/malformed-home"
@@ -165,6 +213,11 @@ expect_failure 'malicious snapshot path' 'unsafe snapshot path' "$FIXTURE/script
 new_fixture 'extra-inventory'
 printf 'extra\n' > "$FIXTURE/packages/upstream/git/.config/git/extra"
 expect_failure 'extra snapshot inventory' 'undeclared snapshot inventory path' \
+  "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'unmanifested-bash-payload'
+printf 'excluded\n' > "$FIXTURE/$BASH_PAYLOAD_ROOT/completions"
+expect_failure 'unmanifested Bash payload' 'undeclared snapshot inventory path' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'framework-markers'

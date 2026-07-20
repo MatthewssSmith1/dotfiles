@@ -97,8 +97,13 @@ mapping afterward.
 
 The single active snapshot root is `packages/upstream`. It contains:
 
-- `git/.config/git/config`, `tmux/.config/tmux/tmux.conf`, and
-  `starship/.config/starship.toml`, mapped to their XDG home destinations.
+- `git/.config/git/config` and `starship/.config/starship.toml`, mapped to their
+  XDG home destinations.
+- `tmux/.config/dotfiles/upstream/tmux/tmux.conf`, the byte-identical Omarchy
+  tmux input mapped to private managed
+  `~/.config/dotfiles/upstream/tmux/tmux.conf`. The separate generic package
+  owns the public `~/.config/tmux/tmux.conf` dispatcher, so the upstream
+  snapshot is never modified to become a loader.
 - `nvim/.config/nvim/`, the assembled Neovim configuration and released
   `lazy-lock.json`.
 - `reference/omarchy/default/bash/` and
@@ -195,6 +200,9 @@ baseline changes during review.
 
 - Every active snapshot file is listed with source path, commit, blob identity,
   destination, mode, and any transform.
+- The tmux snapshot retains source blob
+  `470040a3bcc3f22e7b4c3ff32ff641198b487f8e` byte-for-byte at its private
+  managed path.
 - Offline verification succeeds without network access and proves the snapshot
   matches the accepted manifest.
 - Sync rejects source paths or blobs that do not belong to the supplied

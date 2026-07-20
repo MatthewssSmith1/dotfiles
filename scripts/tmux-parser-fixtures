@@ -1,0 +1,371 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly SCRIPT_NAME="${0##*/}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR
+REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+readonly REPO_DIR
+readonly LOCK="$REPO_DIR/manifests/tmux-parser-fixtures.lock.json"
+readonly SCHEMA="$REPO_DIR/schemas/tmux-parser-fixture-lock-v1.schema.json"
+readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/tmux-parser-fixture-lock-v1.schema.json'
+
+CACHE_ROOT=""
+STAGING=""
+DOWNLOAD=""
+UNCOMMITTED_GENERATION=""
+CACHE_ROOT_FD=""
+CACHE_ROOT_IDENTITY=""
+MANAGED_PREFLIGHT_IDENTITY=""
+
+log() { printf '[%s] %s\n' "$SCRIPT_NAME" "$*"; }
+die() { printf '[%s] error: %s\n' "$SCRIPT_NAME" "$*" >&2; exit 1; }
+usage() { die "usage: $SCRIPT_NAME validate-lock | verify --root <cache-root> | sync --root <cache-root>"; }
+
+cleanup() {
+  local status=$?
+  local active=""
+  if [[ -n "$DOWNLOAD" && -f "$DOWNLOAD" && ! -L "$DOWNLOAD" && "$(stat -c %u -- "$DOWNLOAD" 2>/dev/null || true)" == "$EUID" ]]; then
+    rm -f -- "$DOWNLOAD"
+  fi
+  if [[ -n "$STAGING" && -d "$STAGING" && ! -L "$STAGING" && "$(stat -c %u -- "$STAGING" 2>/dev/null || true)" == "$EUID" ]]; then
+    rm -rf -- "$STAGING"
+  fi
+  if [[ -n "$UNCOMMITTED_GENERATION" && -d "$UNCOMMITTED_GENERATION" && ! -L "$UNCOMMITTED_GENERATION" ]]; then
+    if [[ -L "$(managed_root_path 2>/dev/null || true)" ]]; then
+      active="$(readlink -- "$(managed_root_path)" 2>/dev/null || true)"
+    fi
+    if [[ "$active" != "${UNCOMMITTED_GENERATION##*/}" && \
+      "$(stat -c %u -- "$UNCOMMITTED_GENERATION" 2>/dev/null || true)" == "$EUID" ]]; then
+      rm -rf -- "$UNCOMMITTED_GENERATION"
+    fi
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+sha256_file() { sha256sum -- "$1" | while read -r hash _; do printf '%s' "$hash"; done; }
+
+test_hold() {
+  local point="$1"
+  [[ "${DOTFILES_TESTING:-}" == 1 && "${DOTFILES_TEST_HOLD_AT:-}" == "$point" ]] || return 0
+  [[ "${DOTFILES_TEST_HOLD_DIR:-}" == /* && -d "$DOTFILES_TEST_HOLD_DIR" && ! -L "$DOTFILES_TEST_HOLD_DIR" ]] || \
+    die 'fixture test hold requires an absolute existing directory'
+  : > "$DOTFILES_TEST_HOLD_DIR/$point.ready"
+  while [[ ! -e "$DOTFILES_TEST_HOLD_DIR/$point.release" ]]; do sleep 0.02; done
+}
+
+fault() {
+  [[ "${DOTFILES_TESTING:-}" == 1 && "${DOTFILES_TEST_FAIL_AT:-}" == "$1" ]] || return 0
+  die "injected fixture failure at $1"
+}
+
+validate_lock() {
+  [[ -f "$SCHEMA" && ! -L "$SCHEMA" ]] || die 'tmux parser fixture schema is missing or unsafe'
+  [[ -f "$LOCK" && ! -L "$LOCK" ]] || die 'tmux parser fixture lock is missing or unsafe'
+  jq empty "$SCHEMA" "$LOCK" >/dev/null 2>&1 || die 'tmux parser fixture lock or schema is malformed'
+  jq -e --arg id "$SCHEMA_ID" '
+    .["$schema"] == "https://json-schema.org/draft/2020-12/schema" and
+    .["$id"] == $id and .type == "object" and .additionalProperties == false and
+    .properties["$schema"].const == "../schemas/tmux-parser-fixture-lock-v1.schema.json" and
+    .properties.schema_version.const == 1 and
+    .properties.managed_root.const == "tmux-parser-fixtures-v1" and
+    .properties.extractor.const == ["dpkg-deb", "--extract"]
+  ' "$SCHEMA" >/dev/null || die 'tmux parser fixture schema is unsupported'
+  jq -e '
+    def keys_are($allowed): (keys | sort) == ($allowed | sort);
+    def hex64: type == "string" and test("^[0-9a-f]{64}$");
+    type == "object" and keys_are(["$schema", "schema_version", "managed_root", "extractor", "fixtures"]) and
+    .["$schema"] == "../schemas/tmux-parser-fixture-lock-v1.schema.json" and
+    .schema_version == 1 and .managed_root == "tmux-parser-fixtures-v1" and
+    .extractor == ["dpkg-deb", "--extract"] and
+    (.fixtures | type == "array" and length == 1) and
+    .fixtures[0] as $fixture |
+    ($fixture | keys_are(["id", "package", "executable"])) and
+    $fixture.id == "ubuntu-jammy-tmux-3-2a-amd64" and
+    ($fixture.package | keys_are(["name", "architecture", "version", "url", "archive", "size", "sha256"])) and
+    $fixture.package.name == "tmux" and $fixture.package.architecture == "amd64" and
+    $fixture.package.version == "3.2a-4ubuntu0.2" and
+    $fixture.package.url == "https://security.ubuntu.com/ubuntu/pool/main/t/tmux/tmux_3.2a-4ubuntu0.2_amd64.deb" and
+    $fixture.package.archive == "tmux_3.2a-4ubuntu0.2_amd64.deb" and
+    $fixture.package.size == 428388 and ($fixture.package.sha256 | hex64) and
+    $fixture.package.sha256 == "b51865a24b78d68459421ee68e1e35d53112d9c08c4e823b241141342efb21dd" and
+    ($fixture.executable | keys_are(["path", "mode", "size", "sha256", "version_output"])) and
+    $fixture.executable.path == "usr/bin/tmux" and $fixture.executable.mode == "0755" and
+    $fixture.executable.size == 971320 and ($fixture.executable.sha256 | hex64) and
+    $fixture.executable.sha256 == "6684c9b0bd4af08461f9e476e0abee9c3f08daa5d55ed6fb7c663c000e09f83d" and
+    $fixture.executable.version_output == "tmux 3.2a"
+  ' "$LOCK" >/dev/null || die 'tmux parser fixture lock does not conform to the accepted schema-v1 pin'
+}
+
+validate_cache_root() {
+  local resolved current="" component owner mode
+  local components=()
+  [[ "$CACHE_ROOT" == /* ]] || die 'fixture cache root must be an absolute path'
+  [[ -d "$CACHE_ROOT" && ! -L "$CACHE_ROOT" ]] || die 'fixture cache root must be an existing, non-symlink directory'
+  resolved="$(realpath -e -- "$CACHE_ROOT")" || die 'fixture cache root cannot be resolved'
+  [[ "${CACHE_ROOT%/}" == "$resolved" ]] || die 'fixture cache root has a symlinked path component'
+  CACHE_ROOT="$resolved"
+  IFS='/' read -r -a components <<< "${CACHE_ROOT#/}"
+  for component in "${components[@]}"; do
+    [[ -n "$component" ]] || continue
+    current="$current/$component"
+    [[ -d "$current" && ! -L "$current" ]] || die "fixture cache root has an unsafe path component: $current"
+    owner="$(stat -c %u -- "$current")"; mode="$(stat -c %a -- "$current")"
+    if [[ "$owner" != "$EUID" && "$owner" != 0 ]]; then
+      die "fixture cache root has a foreign-owned path component: $current"
+    fi
+    if (( (8#$mode & 0022) != 0 )); then
+      if [[ "$owner" != 0 ]] || (( (8#$mode & 01000) == 0 )); then
+        die "fixture cache root has an unsafe writable path component: $current"
+      fi
+    fi
+  done
+  [[ "$(stat -c %u -- "$CACHE_ROOT")" == "$EUID" ]] || die 'fixture cache root must be owned by the effective user'
+  mode="$(stat -c %a -- "$CACHE_ROOT")"
+  (( (8#$mode & 0022) == 0 )) || die 'fixture cache root must not be group- or world-writable'
+}
+
+cache_root_identity() { stat -Lc '%d:%i:%u:%a' -- "$1"; }
+
+verify_cache_root_lock_identity() {
+  local path_identity fd_identity
+  path_identity="$(cache_root_identity "$CACHE_ROOT" 2>/dev/null || true)"
+  fd_identity="$(cache_root_identity "/proc/$$/fd/$CACHE_ROOT_FD" 2>/dev/null || true)"
+  [[ -n "$path_identity" && "$path_identity" == "$CACHE_ROOT_IDENTITY" && "$fd_identity" == "$CACHE_ROOT_IDENTITY" ]] || \
+    die 'fixture cache root changed during the locked operation'
+}
+
+lock_cache_root() {
+  local mode="$1"
+  CACHE_ROOT_IDENTITY="$(cache_root_identity "$CACHE_ROOT")" || die 'fixture cache root identity is unreadable'
+  exec {CACHE_ROOT_FD}<"$CACHE_ROOT" || die 'fixture cache root could not be opened for locking'
+  [[ "$mode" == shared ]] && flock --shared "$CACHE_ROOT_FD" || {
+    [[ "$mode" == exclusive ]] && flock --exclusive "$CACHE_ROOT_FD" || die 'fixture cache root lock failed'
+  }
+  verify_cache_root_lock_identity
+  test_hold "fixture-after-$mode-lock"
+}
+
+capture_managed_identity() {
+  local managed="$1" value before after
+  if [[ ! -e "$managed" && ! -L "$managed" ]]; then printf absent; return 0; fi
+  before="$(stat -c '%F:%d:%i:%u:%a:%s:%y' -- "$managed")" || return 1
+  if [[ -L "$managed" ]]; then value="$(readlink -- "$managed")" || return 1; else value=''; fi
+  after="$(stat -c '%F:%d:%i:%u:%a:%s:%y' -- "$managed")" || return 1
+  [[ "$before" == "$after" ]] || return 1
+  printf '%s' "$(printf '%s|%s' "$before" "$value" | sha256sum | while read -r hash _; do printf '%s' "$hash"; done)"
+}
+
+managed_tree_safe() {
+  local root="$1" unsafe
+  [[ -d "$root" && ! -L "$root" && "$(stat -c %u -- "$root")" == "$EUID" ]] || return 1
+  unsafe="$(find "$root" -xdev \( -type l -o ! -uid "$EUID" -o -perm /022 \) -print -quit 2>/dev/null)" || return 1
+  [[ -z "$unsafe" ]]
+}
+
+verify_archive() {
+  local archive="$1" expected_size="$2" expected_sha="$3" actual_size actual_sha
+  [[ -f "$archive" && ! -L "$archive" && "$(stat -c %u -- "$archive")" == "$EUID" ]] || return 1
+  actual_size="$(stat -c %s -- "$archive")"
+  [[ "$actual_size" == "$expected_size" ]] || return 1
+  actual_sha="$(sha256_file "$archive")"
+  [[ "$actual_sha" == "$expected_sha" ]]
+}
+
+verify_executable() {
+  local executable="$1" expected_mode="$2" expected_size="$3" expected_sha="$4" expected_version="$5"
+  local actual_mode actual_size actual_sha actual_version
+  [[ -f "$executable" && ! -L "$executable" && -x "$executable" && "$(stat -c %u -- "$executable")" == "$EUID" ]] || return 1
+  actual_mode="$(stat -c '0%a' -- "$executable")"
+  actual_size="$(stat -c %s -- "$executable")"
+  [[ "$actual_mode" == "$expected_mode" && "$actual_size" == "$expected_size" ]] || return 1
+  actual_sha="$(sha256_file "$executable")"
+  [[ "$actual_sha" == "$expected_sha" ]] || return 1
+  actual_version="$(env -u TMUX HOME=/nonexistent "$executable" -V 2>/dev/null)" || return 1
+  [[ "$actual_version" == "$expected_version" ]]
+}
+
+managed_root_path() { printf '%s/%s' "$CACHE_ROOT" "$(jq -r .managed_root "$LOCK")"; }
+
+verify_managed_root() {
+  local managed target relative_target id path mode size sha version executable
+  managed="$(managed_root_path)"
+  [[ -L "$managed" ]] || die "verified fixture root is missing; prepare it with: $REPO_DIR/scripts/tmux-parser-fixtures sync --root $CACHE_ROOT"
+  [[ "$(stat -c %u -- "$managed")" == "$EUID" ]] || die 'managed fixture root link has an unsafe owner'
+  relative_target="$(readlink -- "$managed")"
+  [[ "$relative_target" == .tmux-parser-fixtures-generation.* && "$relative_target" != */* ]] || \
+    die 'managed fixture root has an unsafe generation link'
+  target="$CACHE_ROOT/$relative_target"
+  [[ -d "$target" && ! -L "$target" && "$(realpath -e -- "$target")" == "$CACHE_ROOT/"* ]] || \
+    die 'managed fixture generation is missing or unsafe'
+  managed_tree_safe "$target" || die 'managed fixture generation has unsafe ownership or nested symlinks'
+
+  while IFS=$'\t' read -r id path mode size sha version; do
+    executable="$managed/$id/$path"
+    verify_executable "$executable" "$mode" "$size" "$sha" "$version" || \
+      die "tmux parser fixture executable identity drift: $executable"
+  done < <(jq -r '.fixtures[] | [.id, .executable.path, .executable.mode,
+    (.executable.size | tostring), .executable.sha256, .executable.version_output] | @tsv' "$LOCK")
+
+  [[ -f "$managed/lock.sha256" && ! -L "$managed/lock.sha256" ]] || die 'managed fixture lock identity is missing'
+  [[ "$(< "$managed/lock.sha256")" == "$(sha256_file "$LOCK")" ]] || die 'managed fixture lock identity drift'
+  log "verified tmux parser fixture root: $managed"
+}
+
+print_plan() {
+  local managed id url archive size sha package version architecture path mode executable_size executable_sha output
+  managed="$(managed_root_path)"
+  log 'tmux parser fixture HTTPS plan (no download has started):'
+  while IFS=$'\t' read -r id url archive size sha package version architecture path mode executable_size executable_sha output; do
+    printf '  %s: url=%s\n' "$id" "$url"
+    printf '    archive=%s/archives/%s size=%s sha256=%s\n' "$CACHE_ROOT" "$archive" "$size" "$sha"
+    printf '    package=%s version=%s architecture=%s extractor=dpkg-deb,--extract\n' "$package" "$version" "$architecture"
+    printf '    executable=%s/%s/%s mode=%s size=%s sha256=%s version-output=%q\n' \
+      "$managed" "$id" "$path" "$mode" "$executable_size" "$executable_sha" "$output"
+  done < <(jq -r '.fixtures[] | [.id, .package.url, .package.archive, (.package.size | tostring),
+    .package.sha256, .package.name, .package.version, .package.architecture, .executable.path,
+    .executable.mode, (.executable.size | tostring), .executable.sha256, .executable.version_output] | @tsv' "$LOCK")
+  printf '  atomic-managed-root=%s\n' "$managed"
+}
+
+download_archive() {
+  local url="$1" destination="$2" expected_size="$3" expected_sha="$4" temporary
+  if verify_archive "$destination" "$expected_size" "$expected_sha"; then
+    log "using verified cached archive: $destination"
+    return 0
+  fi
+  temporary="$(mktemp "$CACHE_ROOT/archives/.download.XXXXXX")"
+  DOWNLOAD="$temporary"
+  curl --silent --show-error --fail --proto '=https' --max-redirs 0 --output "$temporary" "$url" || \
+    die "unable to download locked fixture archive: $url"
+  verify_archive "$temporary" "$expected_size" "$expected_sha" || die 'downloaded fixture archive size or checksum mismatch'
+  mv -fT -- "$temporary" "$destination"
+  DOWNLOAD=""
+  log "downloaded and verified fixture archive: $destination"
+}
+
+publish_candidate() {
+  local candidate="$1" managed generation_name generation link_tmp actual_identity
+  managed="$(managed_root_path)"
+  generation="$(mktemp -d "$CACHE_ROOT/.tmux-parser-fixtures-generation.XXXXXX")"
+  rmdir -- "$generation"
+  mv -T -- "$candidate" "$generation"
+  UNCOMMITTED_GENERATION="$generation"
+  managed_tree_safe "$generation" || die 'published fixture candidate has unsafe ownership or nested symlinks'
+  generation_name="${generation##*/}"
+  link_tmp="$STAGING/managed-root-link"
+  ln -s -- "$generation_name" "$link_tmp"
+  if [[ -L "$managed" ]]; then
+    local old_target
+    old_target="$(readlink -- "$managed")"
+    [[ "$old_target" == .tmux-parser-fixtures-generation.* && "$old_target" != */* ]] || \
+      die 'refusing to replace an unmanaged fixture-root link'
+  elif [[ -e "$managed" ]]; then
+    die 'refusing to replace a non-symlink fixture root'
+  fi
+  test_hold fixture-before-publish-cas
+  verify_cache_root_lock_identity
+  actual_identity="$(capture_managed_identity "$managed")" || die 'managed fixture root changed before publication'
+  [[ "$actual_identity" == "$MANAGED_PREFLIGHT_IDENTITY" ]] || die 'managed fixture root changed since preflight; refusing publication'
+  fault fixture-before-publication
+  mv -fT -- "$link_tmp" "$managed"
+  fault fixture-after-publication
+  UNCOMMITTED_GENERATION=""
+}
+
+run_sync() {
+  local archives managed candidate id archive_name package_name architecture package_version path mode size sha version
+  local archive executable extracted package_value
+  command -v curl >/dev/null 2>&1 || die 'curl is required for fixture sync'
+  command -v dpkg-deb >/dev/null 2>&1 || die 'dpkg-deb is required for fixture sync'
+  [[ -w "$CACHE_ROOT" ]] || die 'fixture cache root is not writable'
+  archives="$CACHE_ROOT/archives"
+  [[ ! -e "$archives" || -d "$archives" && ! -L "$archives" && "$(stat -c %u -- "$archives")" == "$EUID" ]] || die 'fixture archive cache is unsafe'
+  print_plan
+  mkdir -p -- "$archives"
+  chmod 0700 -- "$archives"
+
+  while IFS=$'\t' read -r id archive_name package_name architecture package_version path mode size sha version; do
+    archive="$archives/$archive_name"
+    download_archive "$(jq -r --arg id "$id" '.fixtures[] | select(.id == $id) | .package.url' "$LOCK")" \
+      "$archive" "$(jq -r --arg id "$id" '.fixtures[] | select(.id == $id) | .package.size' "$LOCK")" \
+      "$(jq -r --arg id "$id" '.fixtures[] | select(.id == $id) | .package.sha256' "$LOCK")"
+    package_value="$(dpkg-deb --field "$archive" Package)" || die 'unable to read fixture package name'
+    [[ "$package_value" == "$package_name" ]] || die 'fixture archive package-name identity mismatch'
+    package_value="$(dpkg-deb --field "$archive" Architecture)" || die 'unable to read fixture package architecture'
+    [[ "$package_value" == "$architecture" ]] || die 'fixture archive architecture identity mismatch'
+    package_value="$(dpkg-deb --field "$archive" Version)" || die 'unable to read fixture package version'
+    [[ "$package_value" == "$package_version" ]] || die 'fixture archive package-version identity mismatch'
+  done < <(jq -r '.fixtures[] | [.id, .package.archive, .package.name, .package.architecture,
+    .package.version, .executable.path, .executable.mode, (.executable.size | tostring),
+    .executable.sha256, .executable.version_output] | @tsv' "$LOCK")
+
+  managed="$(managed_root_path)"
+  STAGING="$(mktemp -d "$CACHE_ROOT/.tmux-parser-fixtures-staging.XXXXXX")"
+  candidate="$STAGING/candidate"
+  mkdir -- "$candidate"
+  while IFS=$'\t' read -r id archive_name path mode size sha version; do
+    archive="$archives/$archive_name"
+    extracted="$STAGING/extracted-$id"
+    mkdir -- "$extracted"
+    dpkg-deb --extract "$archive" "$extracted" || die "unable to extract fixture package: $archive"
+    executable="$extracted/$path"
+    verify_executable "$executable" "$mode" "$size" "$sha" "$version" || \
+      die "extracted fixture executable identity mismatch: $id"
+    mkdir -p -- "$candidate/$id/${path%/*}"
+    cp -p -- "$executable" "$candidate/$id/$path"
+    verify_executable "$candidate/$id/$path" "$mode" "$size" "$sha" "$version" || \
+      die "staged fixture executable identity mismatch: $id"
+  done < <(jq -r '.fixtures[] | [.id, .package.archive, .executable.path, .executable.mode,
+    (.executable.size | tostring), .executable.sha256, .executable.version_output] | @tsv' "$LOCK")
+  sha256_file "$LOCK" > "$candidate/lock.sha256"
+  chmod 0644 -- "$candidate/lock.sha256"
+
+  publish_candidate "$candidate"
+  verify_managed_root
+  log "atomically replaced only the managed fixture root: $managed"
+}
+
+command -v jq >/dev/null 2>&1 || die 'jq is required'
+command -v sha256sum >/dev/null 2>&1 || die 'sha256sum is required'
+validate_lock
+
+(($# >= 1)) || usage
+operation="$1"
+shift
+case "$operation" in
+  validate-lock)
+    (($# == 0)) || usage
+    log 'validated tmux parser fixture lock and schema offline'
+    ;;
+  verify|sync)
+    (($# == 2)) && [[ "$1" == --root ]] || usage
+    CACHE_ROOT="$2"
+    validate_cache_root
+    if [[ "$operation" == verify ]]; then
+      lock_cache_root shared
+      MANAGED_PREFLIGHT_IDENTITY="$(capture_managed_identity "$(managed_root_path)")" || die 'managed fixture root identity is unstable'
+      verify_managed_root
+      archive_dir="$CACHE_ROOT/archives"
+      if [[ -e "$archive_dir" ]]; then
+        [[ -d "$archive_dir" && ! -L "$archive_dir" && "$(stat -c %u -- "$archive_dir")" == "$EUID" &&
+          "$(stat -c %a -- "$archive_dir")" == 700 ]] || die 'fixture archive cache is unsafe'
+        while IFS=$'\t' read -r archive size sha; do
+          [[ ! -e "$archive_dir/$archive" ]] || verify_archive "$archive_dir/$archive" "$size" "$sha" || \
+            die "cached fixture archive identity drift: $archive_dir/$archive"
+        done < <(jq -r '.fixtures[] | [.package.archive, (.package.size | tostring), .package.sha256] | @tsv' "$LOCK")
+      fi
+      verify_cache_root_lock_identity
+    else
+      lock_cache_root exclusive
+      MANAGED_PREFLIGHT_IDENTITY="$(capture_managed_identity "$(managed_root_path)")" || die 'managed fixture root identity is unstable'
+      run_sync
+      verify_cache_root_lock_identity
+    fi
+    ;;
+  *) usage ;;
+esac

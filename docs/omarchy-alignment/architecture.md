@@ -61,6 +61,22 @@ environment-specific overrides. It must remain outside Stow payloads.
 Not every tool requires all four physical files, but every change must have a
 clear owner in this model.
 
+For managed Bash, physical source order is explicit rather than inferred from
+package order. Generic portable initialization owns environment, pinned shell
+and alias inputs, tmux helpers, mise, Starship, zoxide, fzf, and Readline. The
+WSL adapter follows that generic layer only on WSL. Common configuration then
+owns Worktrunk and shared personal preferences, and the host owns the final
+local Bash layer. Native Omarchy keeps its native baseline and runs only those
+common and host-local layers afterward. See the exact order in
+[Shell](tools/shell.md#managed-bash-load-order).
+
+tmux is a deliberate three-layer physical design with no host-local layer.
+Generic and WSL load the private pinned baseline, the generic adapter, an
+optional command-empty WSL adapter, and common persistence in explicit source
+order. Native Omarchy keeps its regular native baseline and attaches only the
+common persistence file. Guarded TPM initialization is the final common tmux
+action. See [tmux](tools/tmux.md#load-paths).
+
 ## Locations
 
 ```text
@@ -76,6 +92,13 @@ own location and must work from another path.
 Tracked baseline, adapter, and personal files under `~/.config/dotfiles/` are
 normally Stow links. `local/` is always a real, untracked directory. Git
 identity is a deliberate exception stored as a real `~/.gitconfig.local` file.
+Existing generic and WSL Bash startup files are another deliberate exception:
+they remain host-owned regular files with exact, state-recorded, reversible
+managed blocks. Native Omarchy's additive Bash block is a different attachment
+strategy and never bypasses its native baseline.
+The generic tmux XDG entrypoint is a dispatcher; the pinned baseline is private
+managed content under `~/.config/dotfiles/upstream/tmux/`. Native Omarchy's XDG
+entrypoint remains a regular Omarchy-owned file.
 
 ## Profiles
 
@@ -157,12 +180,17 @@ only those areas. Omitting a previously deployed area does not remove it. A
 conflict in one selected area must not prevent an unrelated area from being
 deployed independently.
 
+The manifest, not this conceptual list, controls readiness. Git, Bash, tmux,
+and transitional zsh are ready and default-selected after their isolated gates;
+Neovim remains a framework area.
+
 ## Ownership Boundaries
 
 - Omarchy owns native refresh-managed baseline files and native development
   packages.
 - This repository owns synchronized generic baselines, portability adapters,
-  shared personal layers, deployment metadata, and guarded attachment content.
+  shared personal layers, deployment metadata, guarded attachment content, and
+  the exact tmux plugin lock.
 - The host owns local identity, local overrides, credentials, and unrelated
   regular files.
 - Platform package managers own stable generic CLI dependencies where
@@ -178,7 +206,9 @@ deployed independently.
 
 Executable ownership checks cover inherited exported functions, candidates on
 bootstrap's effective `PATH`, mise resolution from neutral and controlled
-project directories, and, after Stage 6, the managed interactive shell.
+project directories, and, after Stage 6, a controlled managed interactive Bash
+that can observe aliases and non-exported functions without executing rejected
+objects.
 Unexported aliases and functions in an arbitrary parent shell are not inherited;
 bootstrap does not parse unrelated startup files in an attempt to infer them.
 
@@ -198,3 +228,4 @@ links into this checkout. Concrete attachment and executable rules are in
 - Native refreshes can replace native baselines without overwriting shared
   personal source files.
 - Normal startup and bootstrap do not silently update upstream baselines.
+- tmux has no host-local layer, and startup never provisions plugins.

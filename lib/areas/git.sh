@@ -2,6 +2,7 @@
 
 readonly MANAGED_BEGIN='# >>> dotfiles managed git includes >>>'
 readonly MANAGED_END='# <<< dotfiles managed git includes <<<'
+readonly MANAGED_MARKER_TOKEN='dotfiles managed git includes'
 readonly MANAGED_BLOCK="$MANAGED_BEGIN
 [include]
 	path = ~/.config/dotfiles/personal/git.conf
@@ -38,31 +39,15 @@ init_git_area() {
     "$HOME/.config/dotfiles/local/git.conf"
     "$HOME/.local/state/dotfiles/v1/migrations.json"
   )
+  register_migration_ledger_journal
   AREA_ATTACHMENT_VALIDATOR=validate_attachment_from_state
 }
 
 validate_managed_global() {
   local file="$1"
-  local line inside=false begin=0 end=0 block=""
   [[ -f "$file" && ! -L "$file" ]] || return 1
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    if [[ "$line" == "$MANAGED_BEGIN" ]]; then
-      ((begin += 1))
-      [[ "$inside" == false ]] || return 1
-      inside=true
-      block="$line"
-    elif [[ "$line" == "$MANAGED_END" ]]; then
-      ((end += 1))
-      [[ "$inside" == true ]] || return 1
-      block+=$'\n'"$line"
-      inside=false
-    elif [[ "$line" == *'dotfiles managed git includes'* ]]; then
-      return 1
-    elif [[ "$inside" == true ]]; then
-      block+=$'\n'"$line"
-    fi
-  done < "$file"
-  [[ "$inside" == false && "$begin" == 1 && "$end" == 1 && "$block" == "$MANAGED_BLOCK" ]]
+  [[ "$(stat -c %u -- "$file")" == "$EUID" ]] || return 1
+  inspect_guarded_block "$file" "$MANAGED_BEGIN" "$MANAGED_END" "$MANAGED_MARKER_TOKEN" "$MANAGED_BLOCK"
 }
 
 validate_git_file() {
@@ -117,6 +102,7 @@ preflight_identity() {
   IDENTITY_ADD_EMAIL=false
   IDENTITY_REMOVE_NAME=false
   IDENTITY_REMOVE_EMAIL=false
+  IDENTITY_EXPECTED_IDENTITY=""
   validate_home_parent_chain "$path"
 
   if [[ -L "$path" ]]; then
@@ -167,6 +153,8 @@ preflight_identity() {
     mode="$(stat -c %a -- "$path")"
     [[ "$mode" == 600 ]] || IDENTITY_ACTION=protect
   fi
+  capture_path_identity "$path" || die "Git identity path changed during preflight: $path"
+  IDENTITY_EXPECTED_IDENTITY="$PATH_IDENTITY"
 }
 
 load_baseline_keys() {
@@ -232,6 +220,7 @@ validate_central_local() {
   local path="$HOME/.config/dotfiles/local/git.conf"
   local entry key lower actual=() expected=() i
   CENTRAL_ACTION=none
+  CENTRAL_EXPECTED_IDENTITY=""
   validate_home_parent_chain "$path"
   if [[ -L "$path" ]]; then
     die "$path must not be a symlink"
@@ -266,6 +255,8 @@ validate_central_local() {
   else
     CENTRAL_ACTION=create
   fi
+  capture_path_identity "$path" || die "central Git local path changed during preflight: $path"
+  CENTRAL_EXPECTED_IDENTITY="$PATH_IDENTITY"
 }
 
 inspect_git_configuration() {
@@ -273,26 +264,9 @@ inspect_git_configuration() {
     die 'current global or XDG Git configuration cannot be inspected with origin and scope'
 }
 
-validate_migrations_ledger() {
-  local path="$HOME/.local/state/dotfiles/v1/migrations.json"
-  validate_home_parent_chain "$path"
-  [[ ! -e "$path" && ! -L "$path" ]] && return 0
-  [[ -f "$path" && ! -L "$path" ]] || die "$path is not a regular file"
-  jq -e '
-    type == "object" and keys == ["migrations","schema_version"] and .schema_version == 1 and
-    (.migrations | type == "array" and all(.[];
-      type == "object" and keys == ["backups","completed_at","id","source_fingerprint"] and
-      (.id | type == "string") and (.source_fingerprint | type == "string" and test("^[0-9a-f]{64}$")) and
-      (.completed_at | type == "string") and (.backups | type == "array")))
-  ' "$path" >/dev/null || die "malformed or unknown migration ledger: $path"
-}
-
 refuse_repeated_legacy_migration() {
-  local path="$HOME/.local/state/dotfiles/v1/migrations.json"
   [[ "$MIGRATION_REQUIRED" == true || "$IDENTITY_ACTION" == copy ]] || return 0
-  [[ -f "$path" ]] || return 0
-  jq -e '.migrations[] | select(.id == "git-legacy-v1")' "$path" >/dev/null || return 0
-  die 'Git legacy migration is already recorded but legacy files reappeared'
+  preflight_migration git-legacy-v1 true 'Git legacy migration'
 }
 
 preflight_global() {
@@ -301,6 +275,7 @@ preflight_global() {
   GLOBAL_ACTION=none
   GLOBAL_KIND=managed
   GLOBAL_LEGACY_SOURCE=""
+  GLOBAL_EXPECTED_IDENTITY=""
   MIGRATION_KEYS=()
   MIGRATION_VALUES=()
   MIGRATION_REQUIRED=false
@@ -322,6 +297,8 @@ preflight_global() {
     GLOBAL_KIND=absent
     GLOBAL_ACTION=create
   fi
+  capture_path_identity "$path" || die "global Git path changed during preflight: $path"
+  GLOBAL_EXPECTED_IDENTITY="$PATH_IDENTITY"
 }
 
 validate_attachment_from_state() {
@@ -360,13 +337,14 @@ apply_central_local() {
   [[ "$CENTRAL_ACTION" == create ]] || return 0
   ensure_directory "$(dirname -- "$path")"
   temporary="$(mktemp "$(dirname -- "$path")/.git.conf.tmp.XXXXXX")"
-  TEMP_PATHS+=("$temporary")
+  track_temp_path "$temporary"
   chmod 0600 "$temporary"
   for i in "${!MIGRATION_KEYS[@]}"; do
     git config --file "$temporary" --add "${MIGRATION_KEYS[i]}" "${MIGRATION_VALUES[i]}"
   done
   validate_git_file "$temporary"
-  mv -fT -- "$temporary" "$path"
+  track_temp_path "$temporary"
+  replace_with_staged_regular "$temporary" "$path" "$CENTRAL_EXPECTED_IDENTITY" 'central Git local file'
 }
 
 apply_identity() {
@@ -374,7 +352,7 @@ apply_identity() {
   [[ "$IDENTITY_ACTION" != none ]] || return 0
   ensure_directory "$HOME"
   temporary="$(mktemp "$HOME/.gitconfig.local.tmp.XXXXXX")"
-  TEMP_PATHS+=("$temporary")
+  track_temp_path "$temporary"
   source="$path"
   [[ "$IDENTITY_ACTION" != copy ]] || source="$IDENTITY_SOURCE"
   if [[ "$IDENTITY_ACTION" == create ]]; then
@@ -390,33 +368,25 @@ apply_identity() {
   validate_git_file "$temporary"
   [[ -n "$(identity_value "$temporary" user.name)" && -n "$(identity_value "$temporary" user.email)" ]] || \
     die 'generated Git identity is incomplete'
-  mv -fT -- "$temporary" "$path"
+  track_temp_path "$temporary"
+  replace_with_staged_regular "$temporary" "$path" "$IDENTITY_EXPECTED_IDENTITY" 'Git identity file'
 }
 
 apply_global() {
-  local path="$HOME/.gitconfig"
   case "$GLOBAL_ACTION" in
     none) ;;
-    create|replace) write_string_atomic "$MANAGED_BLOCK" "$path" 0644 ;;
+    create|replace) write_guarded_attachment_only_atomic .gitconfig "$MANAGED_BLOCK" 0644 "$GLOBAL_EXPECTED_IDENTITY" ;;
     *) die "unknown global action: $GLOBAL_ACTION" ;;
   esac
 }
 
 update_migrations_ledger() {
-  local path="$HOME/.local/state/dotfiles/v1/migrations.json"
-  local current='{"schema_version":1,"migrations":[]}' fingerprint entry updated source_material=""
+  local fingerprint source_material=""
   [[ "$MIGRATION_REQUIRED" == true || "$IDENTITY_ACTION" == copy ]] || return 0
-  if [[ -f "$path" ]]; then current="$(< "$path")"; fi
-  if jq -e '.migrations[] | select(.id == "git-legacy-v1")' <<< "$current" >/dev/null; then
-    die 'Git legacy migration is already recorded but legacy files reappeared'
-  fi
   [[ "$GLOBAL_KIND" != legacy ]] || source_material+="$(sha256_file "$GLOBAL_LEGACY_SOURCE")"
   [[ "$IDENTITY_ACTION" != copy ]] || source_material+="$(sha256_file "$IDENTITY_SOURCE")"
   fingerprint="$(sha256_string "$source_material")"
-  entry="$(jq -cn --arg id git-legacy-v1 --arg fingerprint "$fingerprint" --arg completed "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{id:$id,source_fingerprint:$fingerprint,completed_at:$completed,backups:[]}')"
-  updated="$(jq -c --argjson entry "$entry" '.migrations += [$entry]' <<< "$current")"
-  write_string_atomic "$updated" "$path" 0600
+  append_migration_ledger git-legacy-v1 "$fingerprint"
 }
 
 build_state_json() {
@@ -480,40 +450,10 @@ apply_git() {
   validate_effective_git
   fault before-state
   state_json="$(build_state_json)"
-  write_string_atomic "$state_json" "$AREA_STATE" 0600
+  write_transaction_string_atomic "$state_json" "$AREA_STATE" 0600
   TRANSACTION_ACTIVE=false
   fault after-state-commit
   log "applied Git area for profile '$SELECTED_PROFILE'"
-}
-
-write_without_managed_block() {
-  local source="$1" destination="$2"
-  local dir base temporary line inside=false status mode
-  dir="$(dirname -- "$destination")"
-  base="${destination##*/}"
-  temporary="$(mktemp "$dir/.$base.tmp.XXXXXX")"
-  TEMP_PATHS+=("$temporary")
-  mode="$(stat -c %a -- "$source")"
-  while true; do
-    line=""
-    status=0
-    IFS= read -r line || status=$?
-    if [[ "$line" == "$MANAGED_BEGIN" ]]; then
-      inside=true
-    elif [[ "$line" == "$MANAGED_END" ]]; then
-      inside=false
-    elif [[ "$inside" == false ]]; then
-      printf '%s' "$line" >> "$temporary"
-      ((status != 0)) || printf '\n' >> "$temporary"
-    fi
-    ((status == 0)) || break
-  done < "$source"
-  chmod "$mode" "$temporary"
-  if [[ -s "$temporary" ]]; then
-    mv -fT -- "$temporary" "$destination"
-  else
-    rm -- "$temporary" "$destination"
-  fi
 }
 
 remove_git() {
@@ -541,13 +481,13 @@ remove_git() {
   while IFS= read -r relative; do TARGET_PATHS+=("$relative"); done < <(jq -r '.targets[].path' "$state")
   begin_transaction
   for ((index=0; index<count; index++)); do
-    relative="$(jq -r ".targets[$index].path" "$state")"
-    rm -- "$HOME/$relative"
+    remove_recorded_target "$state" "$index"
   done
   fault remove-after-links
-  write_without_managed_block "$HOME/.gitconfig" "$HOME/.gitconfig"
+  remove_guarded_attachment .gitconfig "$MANAGED_BEGIN" "$MANAGED_END" "$MANAGED_MARKER_TOKEN" \
+    "$MANAGED_BLOCK" prepend existing-final-newline true
   fault remove-after-global
-  rm -- "$state"
+  remove_current_regular_path "$state" 'Git area state'
   prune_managed_directories "${managed_directories[@]}"
   TRANSACTION_ACTIVE=false
   log 'removed managed Git links and global include block; retained identity, local settings, and migration ledger'

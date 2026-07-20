@@ -10,7 +10,7 @@ readonly BOOTSTRAP="$REPO_DIR/bootstrap.sh"
 TEST_ROOT="$(mktemp -d)"
 TEST_BIN="$TEST_ROOT/bin"
 mkdir "$TEST_BIN"
-for command_name in eza bat; do
+for command_name in eza bat fdfind fzf rg zoxide; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$TEST_BIN/$command_name"
   chmod +x "$TEST_BIN/$command_name"
 done
@@ -111,10 +111,12 @@ make_stage3_fixture() {
   local name="$1"
   shift
   local fixture="$TEST_ROOT/fixture-$name"
-  local area
+  local area bash_fixture=false tmux_fixture=false zsh_fixture=false
   mkdir "$fixture"
   cp -a "$REPO_DIR/." "$fixture/"
-  if [[ "$name" != real-baselines ]]; then
+  # Historical Stage 3 fixtures opt into tmux explicitly; production is ready now.
+  sed -i 's/^area|tmux|ready$/area|tmux|framework/' "$fixture/manifests/areas.tsv"
+  if [[ "$name" != real-baselines && "$name" != default-ready ]]; then
     for area in starship tmux nvim; do
       rm -rf -- "$fixture/packages/upstream/$area"
       mkdir -p -- "$fixture/packages/upstream/$area"
@@ -122,12 +124,52 @@ make_stage3_fixture() {
         "$fixture/packages/upstream/$area/.empty-package"
       printf '^/\\.empty-package$\n' > "$fixture/packages/upstream/$area/.stow-local-ignore"
     done
+    # Later stages populated every tmux layer. Historical Stage 3 fixtures use
+    # only payloads added explicitly below, preserving their generic-engine scope.
+    for package in generic/tmux wsl/tmux common/tmux; do
+      rm -rf -- "$fixture/packages/$package"
+      mkdir -p -- "$fixture/packages/$package"
+      printf 'Placeholder for isolated Stage 3 fixture.\n' > "$fixture/packages/$package/.empty-package"
+      printf '^/\\.empty-package$\n' > "$fixture/packages/$package/.stow-local-ignore"
+    done
   fi
   for area in "$@"; do
-    sed -i "s/^area|$area|framework$/area|$area|ready/" "$fixture/manifests/areas.tsv"
+    if grep -qxF "area|$area|framework" "$fixture/manifests/areas.tsv"; then
+      sed -i "s/^area|$area|framework$/area|$area|ready/" "$fixture/manifests/areas.tsv"
+    fi
     grep -qxF "area|$area|ready" "$fixture/manifests/areas.tsv" || \
       fail "fixture $name could not mark area $area ready"
+    [[ "$area" != bash ]] || bash_fixture=true
+    [[ "$area" != tmux ]] || tmux_fixture=true
+    [[ "$area" != zsh ]] || zsh_fixture=true
   done
+  if [[ "$bash_fixture" == true ]]; then
+    cat >> "$fixture/lib/areas/bash.sh" <<'SCRIPT'
+
+# Stage 3 fixtures exercise the generic engine, not the later Bash lifecycle.
+preflight_bash() { preflight_generic bash; }
+apply_bash() { apply_generic; }
+remove_bash() { remove_generic bash; }
+SCRIPT
+  fi
+  if [[ "$tmux_fixture" == true ]]; then
+    cat >> "$fixture/lib/areas/tmux.sh" <<'SCRIPT'
+
+# Stage 3 fixtures exercise the generic engine, not the later tmux lifecycle.
+preflight_tmux() { preflight_generic tmux; }
+apply_tmux() { apply_generic; }
+remove_tmux() { remove_generic tmux; }
+SCRIPT
+  fi
+  if [[ "$zsh_fixture" == true ]]; then
+    cat >> "$fixture/lib/areas/zsh.sh" <<'SCRIPT'
+
+# Stage 3 fixtures exercise the generic engine, not the later zsh lifecycle.
+preflight_zsh() { preflight_generic zsh; }
+apply_zsh() { apply_generic; }
+remove_zsh() { remove_generic zsh; }
+SCRIPT
+  fi
   printf '%s' "$fixture"
 }
 
@@ -144,6 +186,9 @@ readonly BOOTSTRAP_SOURCES=(
   "$REPO_DIR/lib/host.sh"
   "$REPO_DIR/lib/engine.sh"
   "$REPO_DIR/lib/areas/git.sh"
+  "$REPO_DIR/lib/areas/bash.sh"
+  "$REPO_DIR/lib/areas/tmux.sh"
+  "$REPO_DIR/lib/areas/zsh.sh"
   "$REPO_DIR/lib/areas/generic.sh"
 )
 for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
@@ -154,15 +199,15 @@ bash -n "${BOOTSTRAP_SOURCES[@]}" || fail 'a bootstrap source file has invalid B
 wsl_host="$(make_host stage3-wsl wsl)"
 
 # Committed statics: the area manifest, the canonical profile closure table,
-# populated Stage 4 snapshots, and placeholders for unfinished package layers.
+# populated shell/upstream snapshots, and placeholders for unfinished package layers.
 expected_areas='schema|1
 area|git|ready
-area|bash|framework
-area|tmux|framework
+area|bash|ready
+area|tmux|ready
 area|nvim|framework
-area|zsh|framework'
+area|zsh|ready'
 [[ "$(cat "$REPO_DIR/manifests/areas.tsv")" == "$expected_areas" ]] || \
-  fail 'manifests/areas.tsv does not record the Stage 3 readiness table'
+  fail 'manifests/areas.tsv does not record the current readiness table'
 declare -A EXPECTED_CLOSURES=(
   [generic:git]='upstream/git,generic/git,common/git'
   [generic:bash]='upstream/bash,upstream/starship,generic/bash,common/bash'
@@ -190,13 +235,28 @@ for profile in omarchy generic wsl; do
   [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 5 ]] || \
     fail "profile $profile does not list exactly five area closures"
 done
-for package in common/tmux common/nvim common/zsh upstream/bash \
-  generic/git generic/tmux generic/nvim wsl/bash wsl/tmux; do
+for package in common/nvim generic/git generic/nvim; do
   root="$REPO_DIR/packages/$package"
   [[ -d "$root" && ! -L "$root" ]] || fail "missing committed package root: packages/$package"
   entries="$(cd "$root" && find . -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
   [[ "$entries" == './.empty-package ./.stow-local-ignore ' ]] || \
     fail "packages/$package is not an empty placeholder: $entries"
+done
+zsh_root="$REPO_DIR/packages/common/zsh"
+[[ -d "$zsh_root" && ! -L "$zsh_root" ]] || fail 'missing packages/common/zsh'
+zsh_entries="$(cd "$zsh_root" && find . -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
+[[ "$zsh_entries" == './.p10k.zsh ./.zsh_aliases ./.zshrc ' ]] || \
+  fail "packages/common/zsh does not contain the exact Stage 6 payload: $zsh_entries"
+[[ -f "$REPO_DIR/packages/wsl/bash/.config/dotfiles/bash/wsl.bash" ]] || \
+  fail 'packages/wsl/bash is missing its Stage 6 adapter payload'
+bash_upstream_root="$REPO_DIR/packages/upstream/bash"
+[[ ! -e "$bash_upstream_root/.empty-package" && \
+  ! -e "$bash_upstream_root/.stow-local-ignore" ]] || \
+  fail 'packages/upstream/bash retains framework markers'
+for payload in shell aliases fns/tmux inputrc; do
+  [[ -f "$bash_upstream_root/.config/dotfiles/upstream/bash/$payload" && \
+    ! -L "$bash_upstream_root/.config/dotfiles/upstream/bash/$payload" ]] || \
+    fail "packages/upstream/bash is missing selected payload: $payload"
 done
 for fragment in \
   common/bash/.config/mise/conf.d/20-dotfiles-common.toml \
@@ -224,7 +284,9 @@ expect_success "$home" "$wsl_host" "$fixture/bootstrap.sh" --area bash --area tm
 [[ "$(realpath "$home/.config/starship.toml")" == \
   "$fixture/packages/upstream/starship/.config/starship.toml" ]] || fail 'real Starship baseline did not deploy'
 [[ "$(realpath "$home/.config/tmux/tmux.conf")" == \
-  "$fixture/packages/upstream/tmux/.config/tmux/tmux.conf" ]] || fail 'real tmux baseline did not deploy'
+  "$fixture/packages/generic/tmux/.config/tmux/tmux.conf" ]] || fail 'real tmux dispatcher did not deploy'
+[[ "$(realpath "$home/.config/dotfiles/upstream/tmux/tmux.conf")" == \
+  "$fixture/packages/upstream/tmux/.config/dotfiles/upstream/tmux/tmux.conf" ]] || fail 'private tmux baseline did not deploy'
 for record in bash:.config/starship.toml tmux:.config/tmux/tmux.conf; do
   area="${record%%:*}"
   target="${record#*:}"
@@ -239,23 +301,33 @@ assert_empty_home "$home"
   fail 'ready-flipped fixture changed committed area readiness'
 pass
 
-# Framework areas refuse apply and check symmetrically; defaults select only
-# ready areas; framework-area removal stays state-driven.
+# Framework areas refuse apply and check symmetrically; a focused fixture proves
+# the Git/Bash/zsh default-ready selection without invoking later area behavior.
 home="$(new_home framework-refusal)"
-expect_failure "area 'bash' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --area bash
-assert_empty_home "$home"
-expect_failure "area 'tmux' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --check --area tmux
+expect_failure "area 'nvim' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --check --area nvim
 assert_empty_home "$home"
 expect_failure "unknown area 'python'" "$home" "$wsl_host" "$BOOTSTRAP" --area python
-expect_success "$home" "$wsl_host" "$BOOTSTRAP" --check
+
+default_fixture="$(make_stage3_fixture default-ready bash zsh)"
+expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --check
 assert_contains "$TEST_OUTPUT" "area 'git' preflight passed"
-assert_not_contains "$TEST_OUTPUT" "area 'bash'"
+assert_contains "$TEST_OUTPUT" "area 'bash' preflight passed"
+assert_contains "$TEST_OUTPUT" "area 'zsh' preflight passed"
+assert_not_contains "$TEST_OUTPUT" "area 'tmux'"
 assert_empty_home "$home"
-expect_success "$home" "$wsl_host" "$BOOTSTRAP"
-[[ "$(ls "$home/.local/state/dotfiles/v1")" == 'git.json' ]] || \
-  fail 'bare apply recorded state for areas other than git'
-expect_success "$home" "$wsl_host" "$BOOTSTRAP" --remove
-expect_success "$home" "$wsl_host" "$BOOTSTRAP" --remove --area bash
+expect_failure 'first WSL Bash deployment must explicitly select --area bash without zsh' \
+  "$home" "$wsl_host" "$default_fixture/bootstrap.sh"
+assert_empty_home "$home"
+expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --area bash
+expect_failure 'first WSL zsh deployment must explicitly select --area zsh without bash' \
+  "$home" "$wsl_host" "$default_fixture/bootstrap.sh"
+expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --area zsh
+expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh"
+state_names="$(printf '%s\n' "$home/.local/state/dotfiles/v1/"*.json | xargs -n1 basename | sort | tr '\n' ' ')"
+[[ "$state_names" == 'bash.json git.json zsh.json ' ]] || \
+  fail 'bare apply did not record exactly the default-ready areas'
+expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --remove
+expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --remove --area bash
 assert_contains "$TEST_OUTPUT" "area 'bash' is not deployed; no changes made"
 pass
 

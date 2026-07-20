@@ -123,6 +123,11 @@
         "strip_components": 0,
         "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
       },
+      "executable_identity": {
+        "mode": "0755",
+        "size": 2232808,
+        "sha256": "f3fe7b44391b40f4e4e02b88e4b1af9551be0de926db6bf6c6f3b43b4f1f3bcd"
+      },
       "commands": [{"name": "tmux", "path": "tmux", "probe_args": ["-V"], "version_pattern": "^tmux 3\\.7b$", "protected": true, "launcher": ".local/bin/tmux"}]
     },
     {

@@ -55,28 +55,50 @@ bindkey -M viins "^[[F" end-of-line
 
 ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
 
-# Install Zinit if not present
-if [ ! -d "$ZINIT_HOME" ]; then
+# Install Zinit if its entrypoint is not initialized.
+if [ ! -r "$ZINIT_HOME/zinit.zsh" ]; then
    mkdir -p "$(dirname "$ZINIT_HOME")"
    git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
 fi
 
+if [[ ! -f "$ZINIT_HOME/zinit.zsh" || -L "$ZINIT_HOME/zinit.zsh" ||
+  ! -O "$ZINIT_HOME/zinit.zsh" || ! -r "$ZINIT_HOME/zinit.zsh" ]]; then
+  print -u2 -- "unsafe Zinit entrypoint: $ZINIT_HOME/zinit.zsh"
+  return 1
+fi
 source "${ZINIT_HOME}/zinit.zsh"
 
-# Theme: Powerlevel10k (loaded immediately for instant prompt)
-zinit ice depth=1
-zinit light romkatv/powerlevel10k
+zinit_plugins_root="${ZINIT_HOME:h}/plugins"
+zinit_plugins_ready=true
+for zinit_plugin_dir in \
+  romkatv---powerlevel10k \
+  zsh-users---zsh-syntax-highlighting \
+  zsh-users---zsh-autosuggestions \
+  Aloxaf---fzf-tab; do
+  [[ -d "$zinit_plugins_root/$zinit_plugin_dir" && ! -L "$zinit_plugins_root/$zinit_plugin_dir" &&
+    -O "$zinit_plugins_root/$zinit_plugin_dir" &&
+    -d "$zinit_plugins_root/$zinit_plugin_dir/.git" && ! -L "$zinit_plugins_root/$zinit_plugin_dir/.git" &&
+    -O "$zinit_plugins_root/$zinit_plugin_dir/.git" ]] || \
+    zinit_plugins_ready=false
+done
 
-# =========================
-# PLUGINS
-# =========================
+if $zinit_plugins_ready; then
+  # Local-only loading: Git refuses every network protocol during plugin setup.
+  GIT_ALLOW_PROTOCOL=file zinit ice depth=1
+  GIT_ALLOW_PROTOCOL=file zinit light romkatv/powerlevel10k
 
-zinit light zsh-users/zsh-syntax-highlighting
-zinit light zsh-users/zsh-autosuggestions
-zinit light Aloxaf/fzf-tab
+  # =========================
+  # PLUGINS
+  # =========================
 
-# Completion replay (must run after async plugins load)
-zinit cdreplay -q
+  GIT_ALLOW_PROTOCOL=file zinit light zsh-users/zsh-syntax-highlighting
+  GIT_ALLOW_PROTOCOL=file zinit light zsh-users/zsh-autosuggestions
+  GIT_ALLOW_PROTOCOL=file zinit light Aloxaf/fzf-tab
+
+  # Completion replay (must run after async plugins load)
+  GIT_ALLOW_PROTOCOL=file zinit cdreplay -q
+fi
+unset zinit_plugin_dir zinit_plugins_ready zinit_plugins_root
 
 # =========================
 # COMPLETION SYSTEM
@@ -136,23 +158,37 @@ path_append "$HOME/.opencode/bin"      # OpenCode
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # Mise: Manage multiple versions of tools
-eval_if_available mise mise activate zsh
+eval_if_available mise env MISE_OFFLINE=1 mise activate zsh
 
 # Zoxide: Improved `cd`
 eval_if_available zoxide zoxide init --cmd cd zsh
 
 # Fuzzy finder
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+if command -v fzf >/dev/null 2>&1; then
+  for _dotfiles_fzf_file in /usr/share/fzf/completion.zsh /usr/share/doc/fzf/examples/completion.zsh; do
+    [[ ! -r "$_dotfiles_fzf_file" ]] || { source "$_dotfiles_fzf_file"; break; }
+  done
+  for _dotfiles_fzf_file in /usr/share/fzf/key-bindings.zsh /usr/share/doc/fzf/examples/key-bindings.zsh; do
+    [[ ! -r "$_dotfiles_fzf_file" ]] || { source "$_dotfiles_fzf_file"; break; }
+  done
+  unset _dotfiles_fzf_file
+fi
 
 # WorkTrunk
-if command -v wt >/dev/null 2>&1; then eval "$(command wt config shell init zsh)"; fi
+if command -v wt >/dev/null 2>&1 && command -v unshare >/dev/null 2>&1; then
+  _dotfiles_wt_init="$(unshare --user --map-current-user --net env MISE_OFFLINE=1 wt config shell init zsh 2>/dev/null)" || \
+    _dotfiles_wt_init=""
+  [[ -z $_dotfiles_wt_init ]] || eval "$_dotfiles_wt_init"
+  unset _dotfiles_wt_init
+fi
 
 # Vite+
 [ -s "$HOME/.vite-plus/env" ] && source "$HOME/.vite-plus/env"
 
 # ALIASES
 [[ -f ~/.zsh_aliases ]] && source ~/.zsh_aliases
-[[ -f ~/.zsh_aliases.local ]] && source ~/.zsh_aliases.local
+[[ -f ~/.zsh_aliases.local && ! -L ~/.zsh_aliases.local && -O ~/.zsh_aliases.local && -r ~/.zsh_aliases.local ]] && \
+  source ~/.zsh_aliases.local
 
 # Load Powerlevel10k config
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh

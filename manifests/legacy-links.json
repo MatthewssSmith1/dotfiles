@@ -67,11 +67,11 @@
         [".gitconfig", ".gitconfig", "git", "tracked", "migrate-stage-2"],
         [".gitconfig.local", ".gitconfig.local", "git", "ignored", "migrate-stage-2"],
         [".local/state/mise/tracked-configs/cee751aa218dcaab", ".agents/skills/skills/package.json", "other", "ignored-broken", "remove-user-approved"],
-        [".p10k.zsh", ".p10k.zsh", "zsh", "tracked", "defer"],
-        [".tmux.conf", ".tmux.conf", "tmux", "tracked", "defer"],
-        [".zsh_aliases", ".zsh_aliases", "zsh", "tracked", "defer"],
-        [".zsh_aliases.local", ".zsh_aliases.local", "zsh", "ignored", "defer-local-migration"],
-        [".zshrc", ".zshrc", "zsh", "tracked", "defer"]
+        [".p10k.zsh", ".p10k.zsh", "zsh", "tracked", "replace-stage-6"],
+        [".tmux.conf", ".tmux.conf", "tmux", "tracked", "replace-stage-7"],
+        [".zsh_aliases", ".zsh_aliases", "zsh", "tracked", "replace-stage-6"],
+        [".zsh_aliases.local", ".zsh_aliases.local", "zsh", "ignored", "migrate-local-stage-6"],
+        [".zshrc", ".zshrc", "zsh", "tracked", "replace-stage-6"]
       ],
       "blockers": []
     },

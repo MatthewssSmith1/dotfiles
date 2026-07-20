@@ -41,6 +41,16 @@
         "launcher": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/relativePath"}]}
       }
     },
+    "executableIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "size", "sha256"],
+      "properties": {
+        "mode": {"const": "0755"},
+        "size": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
     "mise": {
       "type": "object",
       "additionalProperties": false,
@@ -69,6 +79,7 @@
         "native_package": {"type": "string", "pattern": "^[a-z0-9+.-]+$"},
         "install_root": {"$ref": "#/$defs/relativePath"},
         "artifact": {"$ref": "#/$defs/artifact"},
+        "executable_identity": {"$ref": "#/$defs/executableIdentity"},
         "commands": {"type": "array", "items": {"$ref": "#/$defs/command"}, "minItems": 1, "maxItems": 1}
       }
     }

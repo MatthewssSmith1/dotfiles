@@ -22,13 +22,20 @@ readonly PKGS_REPOSITORY='https://github.com/omacom-io/omarchy-pkgs'
 # id|source path|snapshot path|destination root|destination path
 readonly OMARCHY_FILES=(
   'omarchy-git-config|config/git/config|packages/upstream/git/.config/git/config|home|.config/git/config'
-  'omarchy-tmux-config|config/tmux/tmux.conf|packages/upstream/tmux/.config/tmux/tmux.conf|home|.config/tmux/tmux.conf'
+  'omarchy-tmux-config|config/tmux/tmux.conf|packages/upstream/tmux/.config/dotfiles/upstream/tmux/tmux.conf|home|.config/dotfiles/upstream/tmux/tmux.conf'
   'omarchy-starship-config|config/starship.toml|packages/upstream/starship/.config/starship.toml|home|.config/starship.toml'
   'omarchy-theme-tokyo-night-neovim|themes/tokyo-night/neovim.lua|packages/upstream/reference/omarchy/themes/tokyo-night/neovim.lua|reference|-'
 )
 readonly OMARCHY_TREE_ID_PREFIX='omarchy-bash'
 readonly OMARCHY_TREE_PREFIX='default/bash'
 readonly OMARCHY_TREE_SNAPSHOT_PREFIX='packages/upstream/reference/omarchy/default/bash'
+# deployable id|reference id|source path|snapshot path|destination path
+readonly OMARCHY_BASH_DEPLOYABLE_FILES=(
+  'omarchy-bash-deployable-shell|omarchy-bash-shell|default/bash/shell|packages/upstream/bash/.config/dotfiles/upstream/bash/shell|.config/dotfiles/upstream/bash/shell'
+  'omarchy-bash-deployable-aliases|omarchy-bash-aliases|default/bash/aliases|packages/upstream/bash/.config/dotfiles/upstream/bash/aliases|.config/dotfiles/upstream/bash/aliases'
+  'omarchy-bash-deployable-fns-tmux|omarchy-bash-fns-tmux|default/bash/fns/tmux|packages/upstream/bash/.config/dotfiles/upstream/bash/fns/tmux|.config/dotfiles/upstream/bash/fns/tmux'
+  'omarchy-bash-deployable-inputrc|omarchy-bash-inputrc|default/bash/inputrc|packages/upstream/bash/.config/dotfiles/upstream/bash/inputrc|.config/dotfiles/upstream/bash/inputrc'
+)
 
 readonly STARTER_ID_PREFIX='lazyvim-starter'
 readonly OVERLAY_ID_PREFIX='omarchy-nvim-overlay'
@@ -263,6 +270,35 @@ verify_tree() {
       then .transform.replaces.path else "-" end)
   ] | @tsv' "$manifest")
 
+  local row deployable_id reference_id expected_source expected_snapshot expected_destination
+  for row in "${OMARCHY_BASH_DEPLOYABLE_FILES[@]}"; do
+    IFS='|' read -r deployable_id reference_id expected_source expected_snapshot \
+      expected_destination <<< "$row"
+    jq -e \
+      --arg deployable_id "$deployable_id" \
+      --arg reference_id "$reference_id" \
+      --arg source "$expected_source" \
+      --arg snapshot "$expected_snapshot" \
+      --arg destination "$expected_destination" '
+        ([.sources[] | select(.id == $deployable_id)] | length) == 1 and
+        ([.sources[] | select(.id == $reference_id)] | length) == 1 and
+        (.sources[] | select(.id == $deployable_id)) as $deployable |
+        (.sources[] | select(.id == $reference_id)) as $reference |
+        $deployable.source.path == $source and
+        $deployable.snapshot == $snapshot and
+        $deployable.destination == {
+          root: "home", path: $destination, mode: $deployable.source.mode
+        } and
+        $deployable.transform == "none" and
+        $reference.snapshot == ("packages/upstream/reference/omarchy/" + $source) and
+        $reference.destination == {root: "reference"} and
+        $reference.transform == "none" and
+        ($deployable | {repository, release, commit, source}) ==
+          ($reference | {repository, release, commit, source})
+      ' "$manifest" >/dev/null || \
+      die "deployable Bash source mapping is invalid for $deployable_id"
+  done
+
   local -a artifact_ids=() artifact_releases=() artifact_snapshots=()
   local -a artifact_destinations=() artifact_modes=() artifact_hashes=() artifact_names=()
   local artifact_hash artifact_name
@@ -359,6 +395,15 @@ verify_tree() {
       [[ "$head_blob" == "${blobs[$index]}" ]] || \
         die "append transform replay drift for $snapshot_path: expected source blob ${blobs[$index]}, found $head_blob"
     fi
+  done
+
+  local reference_snapshot
+  for row in "${OMARCHY_BASH_DEPLOYABLE_FILES[@]}"; do
+    IFS='|' read -r deployable_id reference_id expected_source expected_snapshot \
+      expected_destination <<< "$row"
+    reference_snapshot="packages/upstream/reference/omarchy/$expected_source"
+    cmp -s -- "$root/$reference_snapshot" "$root/$expected_snapshot" || \
+      die "deployable Bash payload differs from pinned reference: $expected_snapshot"
   done
 
   local actual_hash
@@ -620,7 +665,7 @@ enumerate_tree() {
 }
 
 enumerate_scope() {
-  local row id source_path snapshot destination_root destination_path
+  local row id reference_id source_path snapshot destination_root destination_path
   local mode blob path relative
 
   for row in "${OMARCHY_FILES[@]}"; do
@@ -641,6 +686,14 @@ enumerate_scope() {
     add_record "$OMARCHY_TREE_ID_PREFIX-$(slug_from_path "$relative")" omarchy \
       "$path" "$blob" "$mode" "$OMARCHY_TREE_SNAPSHOT_PREFIX/$relative" reference '-'
   done <<< "$rows"
+
+  for row in "${OMARCHY_BASH_DEPLOYABLE_FILES[@]}"; do
+    IFS='|' read -r id reference_id source_path snapshot destination_path <<< "$row"
+    lookup_tree_entry omarchy "$source_path" || \
+      die "missing selected Bash source path in pin 'omarchy': $source_path"
+    add_record "$id" omarchy "$source_path" "$ENTRY_BLOB" "$ENTRY_MODE" \
+      "$snapshot" home "$destination_path"
+  done
 
   enumerate_nvim_assembly
   fault sync-enumerate
@@ -902,6 +955,8 @@ cleanup_before_temp_paths() {
   if [[ -e "$active" || -L "$active" ]]; then
     mv -- "$active" "$failed_tree" || {
       TEMP_PATHS=()
+      TEMP_OBJECT_IDENTITIES=()
+      TEMP_RECURSIVE=()
       printf '[%s] error: interrupted snapshot swap requires manual recovery from %s\n' \
         "$SCRIPT_NAME" "$STAGING" >&2
       return 1
@@ -910,6 +965,8 @@ cleanup_before_temp_paths() {
   mv -- "$UPSTREAM_SWAP_OLD_TREE" "$active" && \
     mv -- "$UPSTREAM_SWAP_OLD_MANIFEST" "$REPO_DIR/manifests/sources.json" || {
       TEMP_PATHS=()
+      TEMP_OBJECT_IDENTITIES=()
+      TEMP_RECURSIVE=()
       printf '[%s] error: interrupted snapshot swap requires manual recovery from %s\n' \
         "$SCRIPT_NAME" "$STAGING" >&2
       return 1
@@ -925,7 +982,7 @@ run_sync() {
   validate_proposal
 
   STAGING="$(mktemp -d "$REPO_DIR/.upstream-staging.XXXXXX")"
-  TEMP_PATHS+=("$STAGING")
+  track_temp_path "$STAGING"
 
   local pin
   for pin in omarchy lazyvim-starter omarchy-pkgs; do

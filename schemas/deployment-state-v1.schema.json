@@ -46,12 +46,14 @@
     },
     "attachments": {
       "type": "array",
+      "description": "Attachment IDs and paths are each unique. Area-defined IDs encode the engine origin (created, existing-empty, existing-final-newline, or existing-no-final-newline) needed for exact removal.",
+      "uniqueItems": true,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["id", "path", "content_hash"],
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
           "path": { "$ref": "#/$defs/relativePath" },
           "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
         }
@@ -59,7 +61,8 @@
     },
     "backups": {
       "type": "array",
-      "items": { "type": "string" }
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/relativePath" }
     }
   },
   "$defs": {

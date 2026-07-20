@@ -72,7 +72,13 @@ new_home() {
 
 capture() {
   local home="$1" host="$2" bootstrap="$3"
+  local argument explicit_area=false
   shift 3
+  for argument in "$@"; do
+    [[ "$argument" != --area && "$argument" != --area=* ]] || explicit_area=true
+  done
+  # Stage 2 tests Git behavior; later default-ready areas must not widen them.
+  [[ "$explicit_area" == true ]] || set -- "$@" --area git
   if TEST_OUTPUT="$(HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
     GIT_USER_NAME='Stage Two User' GIT_USER_EMAIL='stage2@example.com' "$bootstrap" "$@" 2>&1)"; then
     TEST_RC=0
@@ -109,6 +115,9 @@ readonly BOOTSTRAP_SOURCES=(
   "$REPO_DIR/lib/host.sh"
   "$REPO_DIR/lib/engine.sh"
   "$REPO_DIR/lib/areas/git.sh"
+  "$REPO_DIR/lib/areas/bash.sh"
+  "$REPO_DIR/lib/areas/tmux.sh"
+  "$REPO_DIR/lib/areas/zsh.sh"
   "$REPO_DIR/lib/areas/generic.sh"
 )
 for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
@@ -174,7 +183,7 @@ pass
 # Stage 2 CLI and deduplication.
 home="$(new_home cli)"
 expect_success "$home" "$wsl_host" "$BOOTSTRAP" --check --area git --area git
-expect_failure "area 'bash' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --check --area bash
+expect_failure "area 'nvim' is framework-only" "$home" "$wsl_host" "$BOOTSTRAP" --check --area nvim
 expect_failure 'invalid profile' "$home" "$wsl_host" "$BOOTSTRAP" --check --profile Generic
 expect_failure '--profile is invalid with --remove' "$home" "$wsl_host" "$BOOTSTRAP" --remove --profile wsl
 expect_failure 'usage:' "$home" "$wsl_host" "$BOOTSTRAP" --unknown
@@ -207,7 +216,7 @@ exit 99
 EOF
 chmod +x "$fake_bin/sudo"
 if TEST_OUTPUT="$(PATH="$fake_bin" HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
-  /usr/bin/bash "$BOOTSTRAP" --check 2>&1)"; then
+  /usr/bin/bash "$BOOTSTRAP" --check --area git 2>&1)"; then
   fail 'missing Stow dependency was accepted'
 fi
 assert_contains "$TEST_OUTPUT" 'sudo apt-get install -y stow'
@@ -221,7 +230,7 @@ fake_bin="$TEST_ROOT/missing-bootstrap-bin"
 mkdir "$fake_bin"
 for command in dirname git flock realpath uname; do ln -s "$(command -v "$command")" "$fake_bin/$command"; done
 if TEST_OUTPUT="$(PATH="$fake_bin" HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
-  /usr/bin/bash "$BOOTSTRAP" --check 2>&1)"; then
+  /usr/bin/bash "$BOOTSTRAP" --check --area git 2>&1)"; then
   fail 'missing jq and Stow dependencies were accepted'
 fi
 assert_contains "$TEST_OUTPUT" 'sudo apt-get install -y jq stow'
@@ -460,7 +469,7 @@ expect_success "$home" "$wsl_host" "$BOOTSTRAP"
 [[ "$(stat -c %a "$home/.gitconfig.local")" == 600 ]] || fail 'regular identity was not safely replaced at mode 0600'
 [[ "$(git config --file "$home/.gitconfig.local" --get user.name)" == Established ]] || fail 'env overwrote established identity'
 home="$(new_home identity-missing)"
-if TEST_OUTPUT="$(HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" "$BOOTSTRAP" 2>&1)"; then
+if TEST_OUTPUT="$(HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" "$BOOTSTRAP" --area git 2>&1)"; then
   fail 'missing identity without environment was accepted'
 fi
 assert_contains "$TEST_OUTPUT" 'set both GIT_USER_NAME and GIT_USER_EMAIL'
@@ -559,7 +568,7 @@ hold_dir="$TEST_ROOT/process-lock-hold"
 mkdir "$hold_dir"
 HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
   DOTFILES_TEST_HOLD_AT=after-lock DOTFILES_TEST_HOLD_DIR="$hold_dir" \
-  GIT_USER_NAME=Lock GIT_USER_EMAIL=lock@example.com "$BOOTSTRAP" > "$TEST_ROOT/process-lock.log" 2>&1 &
+  GIT_USER_NAME=Lock GIT_USER_EMAIL=lock@example.com "$BOOTSTRAP" --area git > "$TEST_ROOT/process-lock.log" 2>&1 &
 lock_pid=$!
 wait_for_file "$hold_dir/after-lock.ready"
 expect_failure 'another deployment holds the HOME lock' "$home" "$wsl_host" "$BOOTSTRAP"
@@ -580,7 +589,7 @@ hold_dir="$TEST_ROOT/atomic-hold"
 mkdir "$hold_dir"
 HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
   DOTFILES_TEST_HOLD_AT=before-atomic-rename DOTFILES_TEST_HOLD_DIR="$hold_dir" \
-  GIT_USER_NAME=Atomic GIT_USER_EMAIL=atomic@example.com "$fixture/bootstrap.sh" > "$TEST_ROOT/atomic.log" 2>&1 &
+  GIT_USER_NAME=Atomic GIT_USER_EMAIL=atomic@example.com "$fixture/bootstrap.sh" --area git > "$TEST_ROOT/atomic.log" 2>&1 &
 atomic_pid=$!
 wait_for_file "$hold_dir/before-atomic-rename.ready"
 [[ -L "$home/.gitconfig" && "$(readlink -- "$home/.gitconfig")" == "$fixture/.gitconfig" ]] || \
@@ -625,7 +634,7 @@ chmod 0555 "$readonly_tmp"
 state_hash="$(sha256sum "$home/.local/state/dotfiles/v1/git.json")"
 old_link="$(readlink -- "$home/.config/git/config")"
 if ! TEST_OUTPUT="$(TMPDIR="$readonly_tmp" HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
-  GIT_USER_NAME='Stage Two User' GIT_USER_EMAIL=stage2@example.com "$move_root/repo-two/bootstrap.sh" --check 2>&1)"; then
+  GIT_USER_NAME='Stage Two User' GIT_USER_EMAIL=stage2@example.com "$move_root/repo-two/bootstrap.sh" --check --area git 2>&1)"; then
   fail 'moved-checkout check failed without a writable temporary directory'
 fi
 [[ -z "$(find "$readonly_tmp" -mindepth 1 -print -quit)" ]] || fail 'moved-checkout check mutated TMPDIR'
@@ -662,7 +671,7 @@ pass
 for point in after-local after-identity after-stow after-global before-state; do
   home="$(new_home "fault-$point")"
   if TEST_OUTPUT="$(HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
-    DOTFILES_TEST_FAIL_AT="$point" GIT_USER_NAME=Fault GIT_USER_EMAIL=fault@example.com "$BOOTSTRAP" 2>&1)"; then
+    DOTFILES_TEST_FAIL_AT="$point" GIT_USER_NAME=Fault GIT_USER_EMAIL=fault@example.com "$BOOTSTRAP" --area git 2>&1)"; then
     fail "fault injection unexpectedly succeeded at $point"
   fi
   assert_contains "$TEST_OUTPUT" "injected test failure at $point"
@@ -671,7 +680,7 @@ for point in after-local after-identity after-stow after-global before-state; do
 done
 home="$(new_home fault-after-state-commit)"
 if TEST_OUTPUT="$(HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
-  DOTFILES_TEST_FAIL_AT=after-state-commit GIT_USER_NAME=Fault GIT_USER_EMAIL=fault@example.com "$BOOTSTRAP" 2>&1)"; then
+  DOTFILES_TEST_FAIL_AT=after-state-commit GIT_USER_NAME=Fault GIT_USER_EMAIL=fault@example.com "$BOOTSTRAP" --area git 2>&1)"; then
   fail 'post-state fault injection unexpectedly succeeded'
 fi
 assert_contains "$TEST_OUTPUT" 'injected test failure at after-state-commit'
