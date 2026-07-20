@@ -273,7 +273,8 @@ package and manifest presence alone never changes readiness.
 
 ## 8. Generic And WSL Neovim Migration
 
-- Re-evaluate the expected newer stable Omarchy Neovim pin before migration.
+- Use the completed 2026-07-20 stable-channel reevaluation: authoritative
+  stable remains `omarchy-nvim 2026.6.17-1`; do not substitute edge releases.
 - Remove only recognized Kickstart links; use Git history as configuration
   backup.
 - Rename runtime data, state, and cache to collision-free timestamped siblings

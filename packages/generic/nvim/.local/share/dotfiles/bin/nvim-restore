@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly SCRIPT_NAME="${0##*/}"
+readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+readonly STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+readonly LOCKFILE="$CONFIG_HOME/nvim/lazy-lock.json"
+readonly PLUGIN_ROOT="$DATA_HOME/nvim/lazy"
+readonly CALLBACK="${DOTFILES_NVIM_RESTORE_CALLBACK:-$HOME/.local/share/dotfiles/bin/nvim-record-restore}"
+readonly NVIM_EXECUTABLE="${DOTFILES_NVIM_EXECUTABLE:-nvim}"
+readonly LAZY_REPOSITORY="${DOTFILES_NVIM_LAZY_REPOSITORY:-https://github.com/folke/lazy.nvim.git}"
+
+safe_home_root() {
+  local path="$1" relative current component
+  local components=()
+  [[ -n "${HOME:-}" && "$HOME" == /* && -d "$HOME" && ! -L "$HOME" &&
+    "$(realpath -e -- "$HOME")" == "$HOME" && "$path" == /* ]] || return 1
+  [[ "$(realpath -m -s -- "$path")" == "$path" && "$path" == "$HOME/"* ]] || return 1
+  relative="${path#"$HOME"/}"
+  current="$HOME"
+  IFS='/' read -r -a components <<< "$relative"
+  for component in "${components[@]}"; do
+    [[ -n "$component" && "$component" != . && "$component" != .. ]] || return 1
+    current="$current/$component"
+    [[ ! -L "$current" && ( ! -e "$current" || -d "$current" ) ]] || return 1
+    [[ ! -e "$current" || "$(stat -c %u -- "$current")" == "$EUID" ]] || return 1
+  done
+}
+
+validate_plugin_root() {
+  [[ -d "$PLUGIN_ROOT" && ! -L "$PLUGIN_ROOT" && "$(stat -c %u -- "$PLUGIN_ROOT")" == "$EUID" ]] || return 1
+  [[ "$(realpath -e -- "$PLUGIN_ROOT")" == "$PLUGIN_ROOT" ]]
+}
+
+safe_plugin_path() {
+  local path="$1" name="${1#"$PLUGIN_ROOT"/}"
+  [[ "$path" == "$PLUGIN_ROOT/"* && "$name" != "$path" && "$name" != */* &&
+    "$name" != . && "$name" != .. && "$name" =~ ^[A-Za-z0-9._-]+$ ]]
+}
+
+usage() {
+  printf 'usage: %s [--first-launch]\n' "$SCRIPT_NAME" >&2
+  exit 64
+}
+
+mode=explicit
+if (($# == 1)) && [[ "$1" == --first-launch ]]; then
+  mode=first
+elif (($# != 0)); then
+  usage
+fi
+
+command -v git >/dev/null || { printf '%s: git is required\n' "$SCRIPT_NAME" >&2; exit 69; }
+command -v jq >/dev/null || { printf '%s: jq is required\n' "$SCRIPT_NAME" >&2; exit 69; }
+command -v "$NVIM_EXECUTABLE" >/dev/null || { printf '%s: Neovim is required\n' "$SCRIPT_NAME" >&2; exit 69; }
+if [[ -n "${DOTFILES_NVIM_LAZY_REPOSITORY:-}" && "${DOTFILES_TESTING:-}" != 1 ]]; then
+  printf '%s: DOTFILES_NVIM_LAZY_REPOSITORY requires DOTFILES_TESTING=1\n' "$SCRIPT_NAME" >&2
+  exit 64
+fi
+[[ -f "$LOCKFILE" ]] || { printf '%s: missing lockfile: %s\n' "$SCRIPT_NAME" "$LOCKFILE" >&2; exit 66; }
+[[ -x "$CALLBACK" ]] || { printf '%s: restore callback is unavailable: %s\n' "$SCRIPT_NAME" "$CALLBACK" >&2; exit 78; }
+safe_home_root "$CONFIG_HOME" && safe_home_root "$DATA_HOME" && safe_home_root "$STATE_HOME" || {
+  printf '%s: XDG roots must be canonical, owner-controlled directories beneath HOME\n' "$SCRIPT_NAME" >&2; exit 78;
+}
+jq -e 'type == "object" and length > 0 and
+  all(to_entries[]; (.key | test("^[A-Za-z0-9._-]+$") and . != "." and . != "..") and
+    (.value | type == "object") and (.value.commit | test("^[0-9a-f]{40}$"))) and
+  .["lazy.nvim"].commit != null' "$LOCKFILE" >/dev/null || {
+  printf '%s: malformed lazy-lock.json\n' "$SCRIPT_NAME" >&2
+  exit 65
+}
+
+mkdir -p -- "$STATE_HOME/dotfiles"
+safe_home_root "$STATE_HOME/dotfiles" || { printf '%s: restore state root is unsafe\n' "$SCRIPT_NAME" >&2; exit 78; }
+exec {restore_lock_fd}<"$STATE_HOME/dotfiles"
+flock --exclusive "$restore_lock_fd"
+mkdir -p -- "$PLUGIN_ROOT"
+safe_home_root "$PLUGIN_ROOT" && validate_plugin_root || {
+  printf '%s: plugin root is unsafe: %s\n' "$SCRIPT_NAME" "$PLUGIN_ROOT" >&2; exit 78;
+}
+
+lock_identity="$(sha256sum "$LOCKFILE" | cut -d' ' -f1)"
+lock_before="$lock_identity"
+
+transaction="$(mktemp -d "$STATE_HOME/dotfiles/.nvim-restore.XXXXXX")"
+restore_lockfile="$transaction/lazy-lock.json"
+cp -p -- "$LOCKFILE" "$restore_lockfile"
+declare -a moved_paths=()
+declare -a initially_missing_paths=()
+preserved=""
+rollback_done=false
+
+rollback() {
+  local status="${1:-1}" path source
+  [[ "$rollback_done" == false ]] || exit "$status"
+  rollback_done=true
+  trap - ERR INT TERM
+  validate_plugin_root || { printf '%s: plugin root changed; refusing rollback deletion\n' "$SCRIPT_NAME" >&2; exit 70; }
+  for path in "${initially_missing_paths[@]}" "${moved_paths[@]}"; do
+    [[ -n "$path" ]] || continue
+    safe_plugin_path "$path" || { printf '%s: unsafe rollback path: %s\n' "$SCRIPT_NAME" "$path" >&2; exit 70; }
+    [[ ! -e "$path" && ! -L "$path" ]] || rm -rf -- "$path"
+  done
+  source="${preserved:-$transaction}"
+  for path in "${moved_paths[@]}"; do
+    [[ -n "$path" ]] || continue
+    safe_plugin_path "$path" || exit 70
+    name="${path#"$PLUGIN_ROOT"/}"
+    if [[ ! -e "$source/$name" || -e "$path" || -L "$path" ]] || ! mv -T -- "$source/$name" "$path"; then
+      printf '%s: rollback could not restore %s; retained transaction at %s\n' "$SCRIPT_NAME" "$path" "$source" >&2
+      exit 70
+    fi
+  done
+  [[ ! -e "$source" ]] || rm -rf -- "$source"
+  exit "$status"
+}
+trap 'rollback $?' ERR
+trap 'rollback 130' INT
+trap 'rollback 143' TERM
+
+while IFS=$'\t' read -r name expected; do
+  path="$PLUGIN_ROOT/$name"
+  safe_plugin_path "$path" && validate_plugin_root || { printf '%s: unsafe plugin transaction path\n' "$SCRIPT_NAME" >&2; false; }
+  if [[ ! -e "$path" ]]; then
+    initially_missing_paths+=("$path")
+    continue
+  fi
+  [[ -d "$path/.git" && ! -L "$path" && ! -L "$path/.git" &&
+    "$(stat -c %u -- "$path")" == "$EUID" && "$(stat -c %u -- "$path/.git")" == "$EUID" &&
+    "$(realpath -e -- "$(git -C "$path" rev-parse --show-toplevel)")" == "$(realpath -e -- "$path")" ]] || {
+    printf '%s: refusing non-Git plugin checkout: %s\n' "$SCRIPT_NAME" "$path" >&2
+    false
+  }
+  [[ -z "$(git -C "$path" status --porcelain --untracked-files=all)" ]] || {
+    printf '%s: refusing dirty plugin checkout: %s\n' "$SCRIPT_NAME" "$path" >&2
+    false
+  }
+  actual="$(git -C "$path" rev-parse HEAD)"
+  if [[ "$actual" != "$expected" ]]; then
+    mv -nT -- "$path" "$transaction/$name"
+    moved_paths+=("$path")
+  fi
+done < <(jq -r 'to_entries[] | [.key, .value.commit] | @tsv' "$LOCKFILE")
+
+if [[ ! -d "$PLUGIN_ROOT/lazy.nvim/.git" ]]; then
+  expected_lazy="$(jq -r '."lazy.nvim".commit' "$LOCKFILE")"
+  git init -q -- "$PLUGIN_ROOT/lazy.nvim"
+  git -C "$PLUGIN_ROOT/lazy.nvim" remote add origin "$LAZY_REPOSITORY"
+  GIT_TERMINAL_PROMPT=0 git -C "$PLUGIN_ROOT/lazy.nvim" fetch -q --depth=1 origin "$expected_lazy"
+  git -C "$PLUGIN_ROOT/lazy.nvim" checkout -q --detach FETCH_HEAD
+fi
+
+DOTFILES_NVIM_RESTORING=1 DOTFILES_NVIM_RESTORE_LOCKFILE="$restore_lockfile" \
+  "$NVIM_EXECUTABLE" --headless '+Lazy! restore' +qa
+
+while IFS=$'\t' read -r name expected; do
+  path="$PLUGIN_ROOT/$name"
+  safe_plugin_path "$path" && validate_plugin_root || { printf '%s: unsafe plugin verification path\n' "$SCRIPT_NAME" >&2; false; }
+  [[ -d "$path/.git" && ! -L "$path" && ! -L "$path/.git" &&
+    "$(realpath -e -- "$(git -C "$path" rev-parse --show-toplevel)")" == "$(realpath -e -- "$path")" ]] || {
+    printf '%s: restore omitted or produced unsafe checkout %s\n' "$SCRIPT_NAME" "$name" >&2; false;
+  }
+  actual="$(git -C "$path" rev-parse HEAD)"
+  [[ "$actual" == "$expected" ]] || {
+    printf '%s: %s is at %s, expected %s\n' "$SCRIPT_NAME" "$name" "$actual" "$expected" >&2
+    false
+  }
+done < <(jq -r 'to_entries[] | [.key, .value.commit] | @tsv' "$LOCKFILE")
+
+[[ "$(sha256sum "$LOCKFILE" | cut -d' ' -f1)" == "$lock_before" ]] || {
+  printf '%s: lazy-lock.json changed during restore\n' "$SCRIPT_NAME" >&2
+  false
+}
+[[ "$(sha256sum "$restore_lockfile" | cut -d' ' -f1)" == "$lock_before" ]] || {
+  printf '%s: Lazy restore attempted to rewrite its isolated lockfile\n' "$SCRIPT_NAME" >&2
+  false
+}
+rm -- "$restore_lockfile"
+if ((${#moved_paths[@]} > 0)); then
+  preserved="$STATE_HOME/dotfiles/nvim-preserved/$(date -u +%Y%m%dT%H%M%SZ)-$$"
+  mkdir -p -- "${preserved%/*}"
+  safe_home_root "${preserved%/*}" || { printf '%s: preserved-checkout root is unsafe\n' "$SCRIPT_NAME" >&2; false; }
+  mv -T -- "$transaction" "$preserved"
+else
+  rmdir -- "$transaction"
+fi
+
+"$CALLBACK" "$lock_identity"
+trap - ERR INT TERM
+rollback_done=true
+[[ -z "$preserved" ]] || printf '%s: preserved replaced clean checkouts at %s\n' "$SCRIPT_NAME" "$preserved" >&2
+printf '%s: restored and verified %s lock %s\n' "$SCRIPT_NAME" "$mode" "$lock_identity"

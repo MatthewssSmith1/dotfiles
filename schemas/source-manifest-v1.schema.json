@@ -124,6 +124,9 @@
             },
             {
               "$ref": "#/$defs/overwriteTransform"
+            },
+            {
+              "$ref": "#/$defs/stage8NvimPolicyTransform"
             }
           ]
         }
@@ -225,6 +228,23 @@
               "$ref": "#/$defs/gitMode"
             }
           }
+        }
+      }
+    },
+    "stage8NvimPolicyTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "output_blob"
+      ],
+      "properties": {
+        "type": {
+          "const": "stage8-nvim-policy-v1"
+        },
+        "output_blob": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
         }
       }
     },

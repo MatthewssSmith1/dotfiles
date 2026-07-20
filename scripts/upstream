@@ -45,11 +45,18 @@ readonly OVERLAY_FILES=('lazyvim.json')
 readonly NVIM_SNAPSHOT_PREFIX='packages/upstream/nvim/.config/nvim'
 readonly NVIM_DESTINATION_PREFIX='.config/nvim'
 readonly NVIM_APPEND_TARGET='lua/config/options.lua'
+readonly NVIM_INIT_POLICY_BLOB='343e7df3f01c2379c5bff5b4c79059c08e8ce4b8'
+readonly NVIM_LAZY_POLICY_BLOB='cb68d2d1f16e31e1bdaa14eb64969d51ab1ffddc'
 readonly LAZY_LOCK_ID='omarchy-nvim-lazy-lock'
 readonly LAZY_LOCK_RELEASE='omarchy-nvim 2026.6.17-1'
 readonly LAZY_LOCK_SNAPSHOT='packages/upstream/nvim/.config/nvim/lazy-lock.json'
 readonly LAZY_LOCK_DESTINATION='.config/nvim/lazy-lock.json'
 readonly LAZY_LOCK_SHA256='0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de'
+readonly NVIM_EVIDENCE_DIR='docs/omarchy-alignment/artifacts/omarchy-nvim-2026.6.17-1'
+readonly STABLE_DB_SHA256='3ea5428b2ec4109cbd634026c3f88d1103a135e93bcffa658a99e21aedff5289'
+readonly PACKAGE_SHA256='b4a6704df33709e4265cab31d2b8e725fa0dc49cd0872ce22b208a13b0f4e67a'
+readonly SIGNATURE_SHA256='a88bda5a1dadab3617655a122cc697d50a5601cd5f010e5f33bf0420c8ef43d0'
+readonly SIGNING_KEY_SHA256='15d6aac44df688165b2ea35fe0b23af239bbc66a6909c10a5c219e8d94b707de'
 # Exact bytes the release PKGBUILD appends to lua/config/options.lua; they
 # exist only in the PKGBUILD and are recorded here and in the manifest.
 readonly NVIM_OPTIONS_APPEND="require('config.remote_clipboard').setup()
@@ -85,6 +92,58 @@ hash_blob_file() {
 
 hash_blob_stdin() {
   git_quiet hash-object --stdin
+}
+
+verify_nvim_artifact_evidence() {
+  local root="$1" manifest="$2" evidence="$root/$NVIM_EVIDENCE_DIR"
+  local evidence_file snapshot relative actual_signature_hash
+
+  # Tests may use synthetic artifact records. Only the accepted real baseline
+  # is coupled to this signed-package evidence set.
+  jq -e '
+    any((.artifacts // [])[];
+      .id == "omarchy-nvim-lazy-lock" and
+      .provenance.trust == "verified signed stable package; archive omitted due size")
+  ' "$manifest" >/dev/null || return 0
+
+  for evidence_file in README.md SHA256SUMS package.sig.b64 omarchy-signing-key.asc \
+    repository.desc .PKGINFO .BUILDINFO retrieval.txt config.sha256; do
+    [[ -f "$evidence/$evidence_file" && ! -L "$evidence/$evidence_file" ]] || \
+      die "missing regular Neovim artifact evidence: $NVIM_EVIDENCE_DIR/$evidence_file"
+  done
+  grep -Fx "$STABLE_DB_SHA256  omarchy.db" "$evidence/SHA256SUMS" >/dev/null || \
+    die 'stable repository database checksum evidence drifted'
+  grep -Fx "$PACKAGE_SHA256  omarchy-nvim-2026.6.17-1-any.pkg.tar.zst" \
+    "$evidence/SHA256SUMS" >/dev/null || die 'stable package checksum evidence drifted'
+  grep -Fx "$SIGNATURE_SHA256  omarchy-nvim-2026.6.17-1-any.pkg.tar.zst.sig" \
+    "$evidence/SHA256SUMS" >/dev/null || die 'stable package signature checksum evidence drifted'
+  actual_signature_hash="$(base64 -d "$evidence/package.sig.b64" | sha256sum | cut -d' ' -f1)"
+  [[ "$actual_signature_hash" == "$SIGNATURE_SHA256" ]] || \
+    die 'preserved detached signature bytes drifted'
+  [[ "$(sha256_file "$evidence/omarchy-signing-key.asc")" == "$SIGNING_KEY_SHA256" ]] || \
+    die 'preserved Omarchy signing key drifted'
+  grep -Fx 'pkgver = 2026.6.17-1' "$evidence/.PKGINFO" >/dev/null || \
+    die 'preserved package identity drifted'
+  grep -Fx 'pkgbuild_sha256sum = 92bbc655801be780fddcf04144c60fdcac7ec74572488024dec25257b65ed491' \
+    "$evidence/.BUILDINFO" >/dev/null || die 'preserved PKGBUILD identity drifted'
+
+  cmp -s "$evidence/config.sha256" <(
+    while IFS= read -r snapshot; do
+      relative="${snapshot#packages/upstream/nvim/.config/nvim/}"
+      if jq -e --arg snapshot "$snapshot" '
+        any(.sources[]; .snapshot == $snapshot and
+          ((.transform | type) == "object" and .transform.type == "stage8-nvim-policy-v1"))
+      ' "$manifest" >/dev/null; then
+        grep -E "^[0-9a-f]{64}  ${relative//./\\.}$" "$evidence/config.sha256"
+      else
+        printf '%s  %s\n' "$(sha256_file "$root/$snapshot")" "$relative"
+      fi
+    done < <(jq -r '
+      ([.sources[] | select(.snapshot | startswith("packages/upstream/nvim/.config/nvim/")) | .snapshot] +
+       [(.artifacts // [])[] | select(.snapshot | startswith("packages/upstream/nvim/.config/nvim/")) | .snapshot])
+      | sort[]
+    ' "$manifest")
+  ) || die 'committed Neovim snapshot differs from the signed-package extraction record'
 }
 
 validate_schema_file() {
@@ -134,7 +193,9 @@ validate_manifest_file() {
           (.commit | hex40) and
           (.path | clean_string) and
           (.blob | hex40) and
-          (.mode | git_mode)));
+          (.mode | git_mode))) or
+      (type == "object" and keys_are(["type", "output_blob"]) and
+        .type == "stage8-nvim-policy-v1" and (.output_blob | hex40));
     def valid_source:
       type == "object" and
       keys_are(["id", "repository", "release", "commit", "source", "snapshot", "destination", "transform"]) and
@@ -182,6 +243,18 @@ validate_manifest_file() {
       [(.artifacts // [])[].destination.path]) as $targets |
       ($targets | length) == ($targets | unique | length))
   ' "$manifest" >/dev/null || die 'source manifest does not conform to schema version 1'
+
+  jq -e --arg init_blob "$NVIM_INIT_POLICY_BLOB" --arg lazy_blob "$NVIM_LAZY_POLICY_BLOB" '
+    ([.sources[] | select(.repository == "https://github.com/LazyVim/starter")] | length) == 0 or
+    ([.sources[] | select((.transform | type) == "object" and
+      .transform.type == "stage8-nvim-policy-v1") |
+      [.id, .repository, .source.path, .snapshot, .transform.output_blob]] == [
+        ["lazyvim-starter-init-lua", "https://github.com/LazyVim/starter", "init.lua",
+          "packages/upstream/nvim/.config/nvim/init.lua", $init_blob],
+        ["lazyvim-starter-lua-config-lazy-lua", "https://github.com/LazyVim/starter",
+          "lua/config/lazy.lua", "packages/upstream/nvim/.config/nvim/lua/config/lazy.lua", $lazy_blob]
+      ])
+  ' "$manifest" >/dev/null || die 'Stage 8 Neovim policy transform inventory is invalid'
 }
 
 # Verify one checkout-shaped tree (the active checkout or a sync candidate)
@@ -227,7 +300,7 @@ verify_tree() {
       *) die "unsupported destination root for $id" ;;
     esac
     case "$transform_type" in
-      none|append|overwrite) ;;
+      none|append|overwrite|stage8-nvim-policy-v1) ;;
       *) die "unsupported transform for $id" ;;
     esac
     if [[ "$transform_type" == overwrite ]]; then
@@ -264,7 +337,8 @@ verify_tree() {
     (if .transform == "none" then "none" else .transform.type end),
     (if (.transform | type) == "object" and .transform.type == "append"
       then (.transform.appended | @base64) else "-" end),
-    (if (.transform | type) == "object" and .transform.type == "append"
+    (if (.transform | type) == "object" and
+      (.transform.type == "append" or .transform.type == "stage8-nvim-policy-v1")
       then .transform.output_blob else "-" end),
     (if (.transform | type) == "object" and .transform.type == "overwrite"
       then .transform.replaces.path else "-" end)
@@ -373,7 +447,7 @@ verify_tree() {
       die "snapshot mode drift for $snapshot_path: expected $expected_mode, found $actual_mode"
 
     case "${transform_types[$index]}" in
-      append) expected_blob="${output_blobs[$index]}" ;;
+      append|stage8-nvim-policy-v1) expected_blob="${output_blobs[$index]}" ;;
       *) expected_blob="${blobs[$index]}" ;;
     esac
     actual_blob="$(hash_blob_file "$absolute_path")"
@@ -420,6 +494,7 @@ verify_tree() {
     [[ "$actual_hash" == "${artifact_hashes[$index]}" ]] || \
       die "artifact hash drift for $snapshot_path: expected ${artifact_hashes[$index]}, found $actual_hash"
   done
+  verify_nvim_artifact_evidence "$root" "$manifest"
 
   [[ "$report" != quiet ]] || return 0
 
@@ -701,6 +776,73 @@ enumerate_scope() {
 
 declare -A NVIM_RECORD_INDEX=()
 
+apply_stage8_nvim_policy() {
+  local path="$1" output="$2"
+  case "$path" in
+    init.lua)
+      cat > "$output" <<'EOF'
+-- bootstrap lazy.nvim, LazyVim and your plugins
+local dotfiles = dofile(vim.fn.expand("~/.config/dotfiles/nvim/generic.lua"))
+dotfiles.before_lazy()
+require("config.lazy")
+dotfiles.after_lazy()
+EOF
+      ;;
+    lua/config/lazy.lua)
+      cat > "$output" <<'EOF'
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
+  error("locked lazy.nvim checkout is missing; run nvim-restore")
+end
+vim.opt.rtp:prepend(lazypath)
+
+require("lazy").setup({
+  lockfile = vim.env.DOTFILES_NVIM_RESTORE_LOCKFILE or (vim.fn.stdpath("config") .. "/lazy-lock.json"),
+  spec = {
+    -- add LazyVim and import its plugins
+    { "LazyVim/LazyVim", import = "lazyvim.plugins" },
+    -- import/override with your plugins
+    { import = "plugins" },
+  },
+  defaults = {
+    -- By default, only LazyVim plugins will be lazy-loaded. Your custom plugins will load during startup.
+    -- If you know what you're doing, you can set this to `true` to have all your custom plugins lazy-loaded by default.
+    lazy = false,
+    -- It's recommended to leave version=false for now, since a lot the plugin that support versioning,
+    -- have outdated releases, which may break your Neovim install.
+    version = false, -- always use the latest git commit
+    -- version = "*", -- try installing the latest stable version for plugins that support semver
+  },
+  local_spec = true,
+  install = { missing = false, colorscheme = { "tokyonight", "habamax" } },
+  pkg = { sources = { "lazy", "packspec" } },
+  rocks = { enabled = false },
+  checker = {
+    enabled = false, -- updates are checked only by explicit user commands
+    notify = false, -- notify on update
+  }, -- automatically check for plugin updates
+  performance = {
+    rtp = {
+      -- disable some rtp plugins
+      disabled_plugins = {
+        "gzip",
+        -- "matchit",
+        -- "matchparen",
+        -- "netrwPlugin",
+        "tarPlugin",
+        "tohtml",
+        "tutor",
+        "zipPlugin",
+      },
+    },
+  },
+})
+EOF
+      ;;
+    *) die "unsupported Stage 8 Neovim policy target: $path" ;;
+  esac
+}
+
 enumerate_nvim_assembly() {
   local mode blob path relative index subtree rows
 
@@ -769,6 +911,13 @@ enumerate_nvim_assembly() {
   [[ "${REC_TRANSFORM[$index]}" == none ]] || \
     die "append target $NVIM_APPEND_TARGET is overlaid; unsupported assembly"
   REC_TRANSFORM[index]='append'
+
+  for relative in init.lua lua/config/lazy.lua; do
+    index="${NVIM_RECORD_INDEX[$relative]}"
+    [[ "${REC_TRANSFORM[$index]}" == none ]] || \
+      die "Stage 8 Neovim policy target $relative has another transform"
+    REC_TRANSFORM[index]='stage8-nvim-policy-v1'
+  done
 }
 
 extract_records() {
@@ -799,9 +948,14 @@ apply_append_transforms() {
   local index snapshot_file
 
   for index in $(seq 0 $((REC_COUNT - 1))); do
-    [[ "${REC_TRANSFORM[$index]}" == append ]] || continue
     snapshot_file="$STAGING/candidate/${REC_SNAPSHOT[$index]}"
-    printf '%s' "$NVIM_OPTIONS_APPEND" >> "$snapshot_file"
+    case "${REC_TRANSFORM[$index]}" in
+      append) printf '%s' "$NVIM_OPTIONS_APPEND" >> "$snapshot_file" ;;
+      stage8-nvim-policy-v1)
+        apply_stage8_nvim_policy "${REC_SOURCE_PATH[$index]}" "$snapshot_file"
+        ;;
+      *) continue ;;
+    esac
     REC_OUTPUT_BLOB[index]="$(hash_blob_file "$snapshot_file")"
   done
   fault sync-assemble
@@ -872,6 +1026,10 @@ emit_transform_json() {
       jq -cn --rawfile appended "$STAGING/appended-bytes" \
         --arg output_blob "${REC_OUTPUT_BLOB[$index]}" \
         '{type: "append", appended: $appended, output_blob: $output_blob}'
+      ;;
+    stage8-nvim-policy-v1)
+      jq -cn --arg output_blob "${REC_OUTPUT_BLOB[$index]}" \
+        '{type: "stage8-nvim-policy-v1", output_blob: $output_blob}'
       ;;
     overwrite)
       jq -cn --arg repository "${REC_REPLACES_REPOSITORY[$index]}" \
@@ -998,6 +1156,15 @@ run_sync() {
   preserve_framework_markers
   generate_candidate_manifest
 
+  if jq -e '
+    any((.artifacts // [])[];
+      .id == "omarchy-nvim-lazy-lock" and
+      .provenance.trust == "verified signed stable package; archive omitted due size")
+  ' "$REPO_DIR/manifests/sources.json" >/dev/null; then
+    mkdir -p -- "$STAGING/candidate/${NVIM_EVIDENCE_DIR%/*}"
+    cp -a -- "$REPO_DIR/$NVIM_EVIDENCE_DIR" \
+      "$STAGING/candidate/${NVIM_EVIDENCE_DIR%/*}/"
+  fi
   cp -a -- "$REPO_DIR/schemas" "$STAGING/candidate/schemas"
   verify_tree "$STAGING/candidate" quiet
   log 'candidate snapshot verified offline against the candidate manifest'

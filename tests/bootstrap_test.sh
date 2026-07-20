@@ -23,6 +23,7 @@ readonly BOOTSTRAP_SOURCES=(
   "$REPO_DIR/lib/areas/git.sh"
   "$REPO_DIR/lib/areas/bash.sh"
   "$REPO_DIR/lib/areas/tmux.sh"
+  "$REPO_DIR/lib/areas/nvim.sh"
   "$REPO_DIR/lib/areas/zsh.sh"
   "$REPO_DIR/lib/areas/generic.sh"
 )
@@ -49,6 +50,8 @@ bash -n \
   "$TEST_DIR/stage7_tmux_parser_fixture_test.sh" \
   "$TEST_DIR/stage7_tmux_parser_compatibility_test.sh" \
   "$TEST_DIR/stage7_tmux_provisioning_test.sh" \
+  "$TEST_DIR/stage8_nvim_test.sh" \
+  "$TEST_DIR/stage8_nvim_readiness_test.sh" \
   "$TEST_DIR/upstream_test.sh" \
   "$TEST_DIR/upstream_sync_test.sh" || fail 'a bootstrap Bash file has invalid syntax'
 
@@ -127,5 +130,7 @@ fi
 "$TEST_DIR/stage7_tmux_test.sh"
 "$TEST_DIR/stage7_tmux_parser_fixture_test.sh"
 "$TEST_DIR/stage7_tmux_provisioning_test.sh"
+"$TEST_DIR/stage8_nvim_test.sh"
+"$TEST_DIR/stage8_nvim_readiness_test.sh"
 
 printf 'PASS: repository bootstrap checks\n'

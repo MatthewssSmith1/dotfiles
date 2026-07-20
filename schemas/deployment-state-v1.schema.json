@@ -63,8 +63,19 @@
       "type": "array",
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/relativePath" }
+    },
+    "restored_lock_sha256": {
+      "description": "Neovim-only identity written after a complete verified plugin restore.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
     }
   },
+  "allOf": [
+    {
+      "if": { "required": ["restored_lock_sha256"] },
+      "then": { "properties": { "area": { "const": "nvim" } } }
+    }
+  ],
   "$defs": {
     "relativePath": {
       "type": "string",

@@ -9,6 +9,10 @@ TX_MUTATED=()
 TX_CREATED_DIRS=()
 TX_RECOVERY_PATHS=()
 TX_QUARANTINE_PATHS=()
+TX_DIRECTORY_MOVE_SOURCES=()
+TX_DIRECTORY_MOVE_DESTINATIONS=()
+TX_DIRECTORY_MOVE_IDENTITIES=()
+TX_DIRECTORY_MOVE_DONE=()
 declare -A QUARANTINE_IDENTITIES=()
 AREA=""
 AREA_STATE=""
@@ -237,8 +241,8 @@ validate_state_file() {
   # schemas/deployment-state-v1.schema.json (documentation only) aligned with it.
   jq -e --argjson areas "$areas_json" '
     type == "object" and
-    ((keys - ["area","attachments","backups","checkout_root","managed_directories","packages","profile","schema_version","target_root","targets"]) | length == 0) and
-    (keys | length == 10) and
+    ((keys - ["area","attachments","backups","checkout_root","managed_directories","packages","profile","restored_lock_sha256","schema_version","target_root","targets"]) | length == 0) and
+    ((keys | length) == 10 or ((keys | length) == 11 and has("restored_lock_sha256"))) and
     (.profile == "omarchy" or .profile == "generic" or .profile == "wsl") and
     (.area as $recorded | ($areas | index($recorded)) != null) and
     (.checkout_root | type == "string" and startswith("/")) and
@@ -257,7 +261,10 @@ validate_state_file() {
       (.content_hash | type == "string" and test("^[0-9a-f]{64}$"))) and
       ((map(.id) | unique | length) == length) and
       ((map(.path) | unique | length) == length)) and
-    (.backups | type == "array" and all(.[]; type == "string") and ((unique | length) == length))
+    (.backups | type == "array" and all(.[]; type == "string") and ((unique | length) == length)) and
+    (if has("restored_lock_sha256") then
+      .area == "nvim" and (.restored_lock_sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+     else true end)
   ' "$file" >/dev/null || die "malformed or unknown deployment state: $file"
 
   area="$(jq -r .area "$file")"
@@ -348,7 +355,11 @@ record_managed_parents() {
   [[ "$parent" != "$relative" ]] || return 0
   while [[ -n "$parent" && "$parent" != . ]]; do
     path="$HOME/$parent"
-    validate_home_directory "$path"
+    if declare -F area_retiring_managed_parent >/dev/null && area_retiring_managed_parent "$path"; then
+      :
+    else
+      validate_home_directory "$path"
+    fi
     if [[ -e "$path" || -L "$path" ]]; then
       :
     elif ! array_contains "$parent" "${MANAGED_DIRS[@]}"; then
@@ -395,7 +406,7 @@ scan_packages() {
       TARGET_OWNER["$relative"]="$package"
       source="$(realpath -e -- "$path")"
       target_parent="$(dirname -- "$HOME/$relative")"
-      lexical="$(realpath -m --relative-to="$target_parent" -- "$source")"
+      lexical="$(realpath -m -s --relative-to="$target_parent" -- "$source")"
       TARGET_PATHS+=("$relative")
       TARGET_SOURCES+=("$source")
       TARGET_LEXICAL+=("$lexical")
@@ -1116,6 +1127,9 @@ preflight_desired_targets() {
   for i in "${!TARGET_PATHS[@]}"; do
     relative="${TARGET_PATHS[i]}"
     path="$HOME/$relative"
+    if declare -F area_retiring_desired_target >/dev/null && area_retiring_desired_target "$path"; then
+      continue
+    fi
     if [[ -L "$path" ]]; then
       [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "destination symlink has an unsafe owner: $path"
       if [[ "$(readlink -- "$path")" == "${TARGET_LEXICAL[i]}" && "$(resolve_link "$path")" == "${TARGET_SOURCES[i]}" ]]; then
@@ -1180,6 +1194,7 @@ remove_approved_legacy_replacements() {
 run_stow_preflight() {
   local package layer name output status=0 target="$HOME"
   if ((${#PREFLIGHT_APPROVED_REPLACEMENTS[@]} > 0)) || \
+    { declare -F area_requires_isolated_stow_preflight >/dev/null && area_requires_isolated_stow_preflight; } || \
     [[ "$OLD_STATE" == true && "$(jq -r .checkout_root "$AREA_STATE")" != "$CHECKOUT_ROOT" ]]; then
     target="$DOTFILES_DIR/lib/stow-preflight-target"
     [[ -d "$target" && ! -L "$target" ]] || die 'missing moved-checkout Stow preflight target'
@@ -1223,6 +1238,14 @@ snapshot_path() {
   fi
 }
 
+snapshot_logically_absent_path() {
+  local path="$1" index snapshot
+  transaction_path_index "$path" && return 0
+  index="${#TX_PATHS[@]}"; snapshot="$JOURNAL_DIR/$index"
+  TX_PATHS+=("$path"); TX_SNAPSHOTS+=("$snapshot"); TX_INITIAL_IDENTITIES+=(absent)
+  TX_EXPECTED_IDENTITIES+=(absent); TX_MUTATED+=(false); TX_EXISTED+=(false)
+}
+
 begin_transaction() {
   local path
   TX_PATHS=()
@@ -1234,6 +1257,10 @@ begin_transaction() {
   TX_CREATED_DIRS=()
   TX_RECOVERY_PATHS=()
   TX_QUARANTINE_PATHS=()
+  TX_DIRECTORY_MOVE_SOURCES=()
+  TX_DIRECTORY_MOVE_DESTINATIONS=()
+  TX_DIRECTORY_MOVE_IDENTITIES=()
+  TX_DIRECTORY_MOVE_DONE=()
   QUARANTINE_IDENTITIES=()
   TRANSACTION_RECOVERY_REQUIRED=false
   JOURNAL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-$AREA-journal.XXXXXX")"
@@ -1242,11 +1269,66 @@ begin_transaction() {
   for path in "${AREA_JOURNAL_PATHS[@]}"; do
     snapshot_path "$path"
   done
-  for path in "${TARGET_PATHS[@]}"; do snapshot_path "$HOME/$path"; done
+  for path in "${TARGET_PATHS[@]}"; do
+    if declare -F area_retiring_desired_target >/dev/null && area_retiring_desired_target "$HOME/$path"; then
+      snapshot_logically_absent_path "$HOME/$path"
+    else
+      snapshot_path "$HOME/$path"
+    fi
+  done
   if [[ "$OLD_STATE" == true ]]; then
     while IFS= read -r path; do snapshot_path "$HOME/$path"; done < <(jq -r '.targets[].path' "$AREA_STATE")
   fi
   TRANSACTION_ACTIVE=true
+}
+
+register_directory_move() {
+  local source="$1" destination="$2" identity="$3"
+  [[ "$TRANSACTION_ACTIVE" == true ]] || die 'directory moves require an active transaction'
+  validate_home_parent_chain "$source"
+  validate_home_parent_chain "$destination"
+  [[ "$identity" != absent ]] || die "cannot register an absent directory move: $source"
+  TX_DIRECTORY_MOVE_SOURCES+=("$source")
+  TX_DIRECTORY_MOVE_DESTINATIONS+=("$destination")
+  TX_DIRECTORY_MOVE_IDENTITIES+=("$identity")
+  TX_DIRECTORY_MOVE_DONE+=(false)
+}
+
+move_registered_directory() {
+  local index="$1" source destination expected
+  source="${TX_DIRECTORY_MOVE_SOURCES[index]}"
+  destination="${TX_DIRECTORY_MOVE_DESTINATIONS[index]}"
+  expected="${TX_DIRECTORY_MOVE_IDENTITIES[index]}"
+  capture_path_object_identity "$source" || die "runtime directory changed before move: $source"
+  [[ "$PATH_OBJECT_IDENTITY" == "$expected" && -d "$source" && ! -L "$source" ]] || \
+    die "runtime directory changed before move: $source"
+  capture_path_object_identity "$destination" || die "runtime backup cannot be inspected: $destination"
+  [[ "$PATH_OBJECT_IDENTITY" == absent ]] || die "runtime backup destination appeared: $destination"
+  mv -nT -- "$source" "$destination" 2>/dev/null || die "runtime directory could not be renamed without clobber: $source"
+  capture_path_object_identity "$destination" || die "runtime backup cannot be inspected after move: $destination"
+  [[ "$PATH_OBJECT_IDENTITY" == "$expected" && ! -e "$source" && ! -L "$source" ]] || \
+    die "runtime directory changed during move: $source"
+  TX_DIRECTORY_MOVE_DONE[index]=true
+}
+
+rollback_directory_moves() {
+  local index source destination expected failed=false
+  for ((index=${#TX_DIRECTORY_MOVE_SOURCES[@]}-1; index>=0; index--)); do
+    [[ "${TX_DIRECTORY_MOVE_DONE[index]}" == true ]] || continue
+    source="${TX_DIRECTORY_MOVE_SOURCES[index]}"
+    destination="${TX_DIRECTORY_MOVE_DESTINATIONS[index]}"
+    expected="${TX_DIRECTORY_MOVE_IDENTITIES[index]}"
+    capture_path_object_identity "$source" || { failed=true; continue; }
+    [[ "$PATH_OBJECT_IDENTITY" == absent ]] || { failed=true; continue; }
+    capture_path_object_identity "$destination" || { failed=true; continue; }
+    [[ "$PATH_OBJECT_IDENTITY" == "$expected" ]] || { failed=true; continue; }
+    if mv -nT -- "$destination" "$source" 2>/dev/null && [[ -d "$source" && ! -L "$source" ]]; then
+      TX_DIRECTORY_MOVE_DONE[index]=false
+    else
+      failed=true
+    fi
+  done
+  [[ "$failed" == false ]]
 }
 
 install_snapshot_no_clobber() {
@@ -1289,6 +1371,11 @@ rollback_transaction() {
     quarantine=""
     if [[ "$expected" == absent ]]; then
       capture_path_identity "$path"
+      if [[ "$PATH_IDENTITY" != absent && -d "$path" && ! -L "$path" ]] &&
+        declare -F area_retiring_managed_parent >/dev/null && area_retiring_managed_parent "$path"; then
+        rmdir -- "$path" 2>/dev/null || true
+        capture_path_identity "$path"
+      fi
       if [[ "$PATH_IDENTITY" != absent ]]; then
         printf '[%s] error: rollback preserved unexpected concurrent object at %s\n' "$SCRIPT_NAME" "$path" >&2
         failed=true
@@ -1327,7 +1414,15 @@ rollback_transaction() {
     if [[ -n "$quarantine" ]]; then
       discard_quarantine "$quarantine" 'rollback post-state' || failed=true
     fi
+    if declare -F area_retiring_managed_parent >/dev/null; then
+      dir="$(dirname -- "$path")"
+      while area_retiring_managed_parent "$dir"; do
+        rmdir -- "$dir" 2>/dev/null || break
+        dir="$(dirname -- "$dir")"
+      done
+    fi
   done
+  rollback_directory_moves || failed=true
   for ((round=0; round<${#MANAGED_DIRS[@]}; round++)); do
     for dir in "${MANAGED_DIRS[@]:-}"; do [[ -n "$dir" ]] && rmdir -- "$HOME/$dir" 2>/dev/null || true; done
   done

@@ -12,6 +12,7 @@ source "$SCRIPT_DIR/lib/provisioning.sh"
 source "$SCRIPT_DIR/lib/areas/git.sh"
 source "$SCRIPT_DIR/lib/areas/bash.sh"
 source "$SCRIPT_DIR/lib/areas/tmux.sh"
+source "$SCRIPT_DIR/lib/areas/nvim.sh"
 source "$SCRIPT_DIR/lib/areas/zsh.sh"
 source "$SCRIPT_DIR/lib/areas/generic.sh"
 
@@ -183,6 +184,7 @@ run_area() {
       git) remove_git ;;
       bash) remove_bash ;;
       tmux) remove_tmux ;;
+      nvim) remove_nvim ;;
       zsh) remove_zsh ;;
       *) remove_generic "$area" ;;
     esac
@@ -192,10 +194,12 @@ run_area() {
     git) preflight_git ;;
     bash) preflight_bash ;;
     tmux) preflight_tmux ;;
+    nvim) preflight_nvim ;;
     zsh) preflight_zsh ;;
     *) preflight_generic "$area" ;;
   esac
   if [[ "$MODE" == check ]]; then
+    if [[ "$area" == nvim ]]; then check_nvim_restore_convergence; fi
     log "area '$area' preflight passed for profile '$SELECTED_PROFILE'; no changes made"
     return 0
   fi
@@ -203,6 +207,7 @@ run_area() {
     git) apply_git ;;
     bash) apply_bash ;;
     tmux) apply_tmux ;;
+    nvim) apply_nvim ;;
     zsh) apply_zsh ;;
     *) apply_generic "$area" ;;
   esac
@@ -286,6 +291,7 @@ preflight_selected_areas() {
         git) preflight_git ;;
         bash) preflight_bash ;;
         tmux) preflight_tmux ;;
+        nvim) preflight_nvim ;;
         zsh) preflight_zsh ;;
         *) preflight_generic "$area" ;;
       esac
@@ -306,7 +312,7 @@ preflight_selected_areas() {
 main() {
   local dependency_status=0 provisioning_status=0 area_status=0 run_status=0 native_status=0 area
   local plugin_plan_status=0 plugin_status=0
-  local defer_tmux_preflight=false
+  local deferred_runtime_areas=()
   parse_cli "$@"
   ((EUID != 0)) || die 'run bootstrap as the non-root workstation user'
   [[ -n "${HOME:-}" && -d "$HOME" ]] || die 'HOME must refer to an existing directory'
@@ -413,9 +419,19 @@ main() {
       area_status=1
     fi
   else
-    if [[ "$PROVISION" == true ]] && array_contains tmux "${AREAS[@]}"; then
-      defer_tmux_preflight=true
-      preflight_selected_areas tmux || area_status=1
+    if [[ "$PROVISION" == true ]]; then
+      for area in "${AREAS[@]}"; do
+        if jq -e --arg area "$area" 'any(.tools[]; .areas | index($area) != null)' "$PROVISIONING_MANIFEST" >/dev/null; then
+          deferred_runtime_areas+=("$area")
+        fi
+      done
+    fi
+    if ((${#deferred_runtime_areas[@]} > 0)); then
+      for area in "${deferred_runtime_areas[@]}"; do AREA_PREFLIGHT_OK["$area"]=false; done
+      for area in "${AREAS[@]}"; do
+        array_contains "$area" "${deferred_runtime_areas[@]}" && continue
+        preflight_selected_areas '' "$area" || area_status=1
+      done
     else
       preflight_selected_areas || area_status=1
     fi
@@ -423,22 +439,22 @@ main() {
       if [[ "$PROVISION_DEPENDENCY_MISSING" == true ]]; then
         provisioning_status=1
       else
-        if [[ "$defer_tmux_preflight" == true && "${AREA_DEPENDENCY_OK[tmux]:-false}" == true ]]; then
-          AREA_PREFLIGHT_OK[tmux]=true
-        fi
+        for area in "${deferred_runtime_areas[@]:-}"; do
+          [[ -n "$area" && "${AREA_DEPENDENCY_OK[$area]:-false}" == true ]] && AREA_PREFLIGHT_OK["$area"]=true
+        done
         select_provisioning_tools
-        if [[ "$defer_tmux_preflight" == true ]]; then AREA_PREFLIGHT_OK[tmux]=false; fi
+        for area in "${deferred_runtime_areas[@]:-}"; do [[ -z "$area" ]] || AREA_PREFLIGHT_OK["$area"]=false; done
         set +e
         run_provisioning
         provisioning_status=$?
         set -e
         case "$provisioning_status" in 70|130|143) exit "$provisioning_status" ;; esac
       fi
-      if [[ "$defer_tmux_preflight" == true ]]; then
+      if ((${#deferred_runtime_areas[@]} > 0)); then
         if ((provisioning_status == 0)); then
-          preflight_selected_areas '' tmux || area_status=1
+          for area in "${deferred_runtime_areas[@]}"; do preflight_selected_areas '' "$area" || area_status=1; done
         else
-          AREA_PREFLIGHT_OK[tmux]=false
+          for area in "${deferred_runtime_areas[@]}"; do AREA_PREFLIGHT_OK["$area"]=false; done
           area_status=1
         fi
       fi

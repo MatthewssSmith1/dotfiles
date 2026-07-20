@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly SCRIPT_NAME="${0##*/}"
+[[ $# == 1 && "$1" =~ ^[0-9a-f]{64}$ ]] || {
+  printf 'usage: nvim-record-restore <lock-sha256>\n' >&2
+  exit 64
+}
+readonly EXPECTED_HASH="$1"
+readonly STATE="$HOME/.local/state/dotfiles/v1/nvim.json"
+readonly LOCKFILE="$HOME/.config/nvim/lazy-lock.json"
+
+fail() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; exit 1; }
+identity() {
+  local path="$1" metadata hash
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  metadata="$(stat -c '%d|%i|%u|%a|%s|%y' -- "$path")" || return 1
+  hash="$(sha256sum -- "$path")"; hash="${hash%% *}"
+  printf '%s:%s' "$metadata" "$hash"
+}
+
+[[ -n "${HOME:-}" && "$HOME" == /* && -d "$HOME" && ! -L "$HOME" ]] || fail 'HOME is unsafe'
+exec {home_lock_fd}<"$HOME"
+flock --exclusive "$home_lock_fd" || fail 'could not acquire the deployment HOME lock'
+[[ -f "$STATE" && ! -L "$STATE" && "$(stat -c %u -- "$STATE")" == "$EUID" && "$(stat -c %a -- "$STATE")" == 600 ]] || \
+  fail 'Neovim deployment state is absent or unsafe'
+
+jq -e '
+  type == "object" and
+  ((keys - ["area","attachments","backups","checkout_root","managed_directories","packages","profile","restored_lock_sha256","schema_version","target_root","targets"]) | length == 0) and
+  ((keys | length) == 10 or ((keys | length) == 11 and has("restored_lock_sha256"))) and
+  .schema_version == 1 and .area == "nvim" and (.profile == "generic" or .profile == "wsl") and
+  (.checkout_root | type == "string" and startswith("/")) and .target_root == $home and
+  (.packages | type == "array" and length == 3 and . == ["upstream/nvim","generic/nvim","common/nvim"]) and
+  (.targets | type == "array" and all(.[]; type == "object" and keys == ["path","resolved_source","source"] and
+    (.path | type == "string") and (.source | type == "string" and length > 0) and
+    (.resolved_source | type == "string" and startswith("/"))) and
+    ([.[].path] | unique | length) == length) and
+  (.managed_directories | type == "array" and all(.[]; type == "string")) and
+  .attachments == [] and (.backups | type == "array" and all(.[]; type == "string")) and
+  (if has("restored_lock_sha256") then (.restored_lock_sha256 | test("^[0-9a-f]{64}$")) else true end) and
+  ([.targets[] | select(.path == ".config/nvim/lazy-lock.json")] | length) == 1
+' --arg home "$HOME" "$STATE" >/dev/null || fail 'malformed or profile-incompatible Neovim deployment state'
+
+[[ -f "$LOCKFILE" && -L "$LOCKFILE" ]] || fail 'deployed lazy-lock.json is not a managed link'
+source_lexical="$(jq -r '.targets[] | select(.path == ".config/nvim/lazy-lock.json") | .source' "$STATE")"
+source_resolved="$(jq -r '.targets[] | select(.path == ".config/nvim/lazy-lock.json") | .resolved_source' "$STATE")"
+[[ "$(readlink -- "$LOCKFILE")" == "$source_lexical" && "$(realpath -m -- "$LOCKFILE")" == "$source_resolved" ]] || \
+  fail 'deployed lazy-lock.json ownership differs from Neovim state'
+actual_hash="$(sha256sum -- "$LOCKFILE")"; actual_hash="${actual_hash%% *}"
+[[ "$actual_hash" == "$EXPECTED_HASH" ]] || fail 'verified restore hash does not match deployed lazy-lock.json bytes'
+
+before="$(identity "$STATE")" || fail 'Neovim state changed before update'
+if [[ "$(jq -r '.restored_lock_sha256 // empty' "$STATE")" == "$EXPECTED_HASH" ]]; then exit 0; fi
+dir="${STATE%/*}"; temporary="$(mktemp "$dir/.nvim.json.restore.XXXXXX")"
+quarantine="$(mktemp "$dir/.nvim.json.restore-old.XXXXXX")"
+rm -- "$quarantine"
+trap 'rm -f -- "$temporary"; if [[ -e "$quarantine" && ! -e "$STATE" ]]; then mv -nT -- "$quarantine" "$STATE" 2>/dev/null || true; fi' EXIT
+jq -c --arg hash "$EXPECTED_HASH" '.restored_lock_sha256=$hash' "$STATE" > "$temporary"
+chmod 0600 -- "$temporary"
+[[ "$(identity "$STATE")" == "$before" ]] || fail 'Neovim state changed during compare-and-swap update'
+mv -nT -- "$STATE" "$quarantine" 2>/dev/null || fail 'Neovim state changed before compare-and-swap update'
+[[ "$(identity "$quarantine")" == "$before" ]] || fail 'Neovim state changed during compare-and-swap update'
+mv -nT -- "$temporary" "$STATE" 2>/dev/null || fail 'Neovim state destination appeared during compare-and-swap update'
+[[ "$(jq -r .restored_lock_sha256 "$STATE")" == "$EXPECTED_HASH" && "$(stat -c '%u:%a' -- "$STATE")" == "$EUID:600" ]] || \
+  fail 'Neovim restore marker update did not verify'
+rm -- "$quarantine"
+trap - EXIT

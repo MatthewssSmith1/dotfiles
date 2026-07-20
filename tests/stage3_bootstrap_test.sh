@@ -199,7 +199,7 @@ bash -n "${BOOTSTRAP_SOURCES[@]}" || fail 'a bootstrap source file has invalid B
 wsl_host="$(make_host stage3-wsl wsl)"
 
 # Committed statics: the area manifest, the canonical profile closure table,
-# populated shell/upstream snapshots, and placeholders for unfinished package layers.
+# populated snapshots and package layers, with Neovim still lifecycle-gated.
 expected_areas='schema|1
 area|git|ready
 area|bash|ready
@@ -235,13 +235,20 @@ for profile in omarchy generic wsl; do
   [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 5 ]] || \
     fail "profile $profile does not list exactly five area closures"
 done
-for package in common/nvim generic/git generic/nvim; do
+for package in generic/git; do
   root="$REPO_DIR/packages/$package"
   [[ -d "$root" && ! -L "$root" ]] || fail "missing committed package root: packages/$package"
   entries="$(cd "$root" && find . -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
   [[ "$entries" == './.empty-package ./.stow-local-ignore ' ]] || \
     fail "packages/$package is not an empty placeholder: $entries"
 done
+[[ -f "$REPO_DIR/packages/common/nvim/.config/dotfiles/nvim/personal.lua" ]] || \
+  fail 'packages/common/nvim is missing the shared personal source'
+[[ -x "$REPO_DIR/packages/generic/nvim/.local/share/dotfiles/bin/nvim-restore" ]] || \
+  fail 'packages/generic/nvim is missing the restore helper'
+[[ ! -e "$REPO_DIR/packages/common/nvim/.empty-package" && \
+  ! -e "$REPO_DIR/packages/generic/nvim/.empty-package" ]] || \
+  fail 'materialized Neovim packages retain placeholders'
 zsh_root="$REPO_DIR/packages/common/zsh"
 [[ -d "$zsh_root" && ! -L "$zsh_root" ]] || fail 'missing packages/common/zsh'
 zsh_entries="$(cd "$zsh_root" && find . -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
@@ -264,13 +271,17 @@ for fragment in \
   [[ -f "$REPO_DIR/packages/$fragment" && ! -L "$REPO_DIR/packages/$fragment" ]] || \
     fail "missing staged mise fragment: packages/$fragment"
 done
-for package in upstream/starship upstream/tmux upstream/nvim; do
+for package in upstream/starship upstream/tmux; do
   root="$REPO_DIR/packages/$package"
   [[ -d "$root" && ! -L "$root" ]] || fail "missing populated package root: packages/$package"
   [[ -z "$(find "$root" -name .empty-package -o -name .stow-local-ignore)" ]] || \
     fail "packages/$package retains framework markers"
   [[ -n "$(find "$root" -type f -print -quit)" ]] || fail "packages/$package has no snapshot payload"
 done
+[[ "$(< "$REPO_DIR/packages/upstream/nvim/.stow-local-ignore")" == '^/\.stow-local-ignore$' ]] || \
+  fail 'packages/upstream/nvim does not have the exact materialized hidden-file Stow policy'
+[[ ! -e "$REPO_DIR/packages/upstream/nvim/.empty-package" ]] || \
+  fail 'packages/upstream/nvim retains its framework placeholder'
 reference_root="$REPO_DIR/packages/upstream/reference"
 [[ -d "$reference_root/omarchy/default/bash" && -d "$reference_root/omarchy/themes/tokyo-night" ]] || \
   fail 'packages/upstream/reference does not contain the Stage 4 reference snapshot roots'

@@ -457,7 +457,10 @@
         "path": ".config/nvim/init.lua",
         "mode": "100644"
       },
-      "transform": "none"
+      "transform": {
+        "type": "stage8-nvim-policy-v1",
+        "output_blob": "343e7df3f01c2379c5bff5b4c79059c08e8ce4b8"
+      }
     },
     {
       "id": "lazyvim-starter-lua-config-autocmds-lua",
@@ -511,7 +514,10 @@
         "path": ".config/nvim/lua/config/lazy.lua",
         "mode": "100644"
       },
-      "transform": "none"
+      "transform": {
+        "type": "stage8-nvim-policy-v1",
+        "output_blob": "cb68d2d1f16e31e1bdaa14eb64969d51ab1ffddc"
+      }
     },
     {
       "id": "lazyvim-starter-lua-config-options-lua",
@@ -713,9 +719,9 @@
         "artifact": "omarchy-nvim-2026.6.17-1-any.pkg.tar.zst",
         "artifact_sha256": "b4a6704df33709e4265cab31d2b8e725fa0dc49cd0872ce22b208a13b0f4e67a",
         "build_date": "2026-06-20T19:46:26Z",
-        "extracted": "2026-07-16",
-        "trust": "accepted-extracted-snapshot",
-        "record": "docs/omarchy-alignment/artifacts/README.md"
+        "extracted": "2026-07-20; full packaged config matched committed snapshot",
+        "trust": "verified signed stable package; archive omitted due size",
+        "record": "docs/omarchy-alignment/artifacts/omarchy-nvim-2026.6.17-1/README.md"
       }
     }
   ]

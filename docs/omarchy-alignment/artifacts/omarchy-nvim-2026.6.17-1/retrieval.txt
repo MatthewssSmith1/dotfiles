@@ -1,0 +1,13 @@
+retrieved_at = 2026-07-20T04:23:21Z
+stable_database_url = https://pkgs.omarchy.org/stable/x86_64/omarchy.db
+stable_database_content_length = 35153
+stable_database_etag = 53315d7e52d9e89131b19b7f078b8998
+stable_database_last_modified = 2026-07-13T22:56:00Z
+package_url = https://pkgs.omarchy.org/stable/x86_64/omarchy-nvim-2026.6.17-1-any.pkg.tar.zst
+package_content_length = 177497908
+package_etag = 16c38680bb0445a16dfbd3d35d470302
+package_last_modified = 2026-07-13T22:55:56Z
+signature_url = https://pkgs.omarchy.org/stable/x86_64/omarchy-nvim-2026.6.17-1-any.pkg.tar.zst.sig
+signature_content_length = 119
+signature_etag = b710409e910339a0dfbc5e8602db8ec4
+signature_last_modified = 2026-07-13T22:55:54Z

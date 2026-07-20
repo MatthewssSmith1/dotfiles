@@ -29,8 +29,8 @@ directory for every old release.
 | LazyVim starter | `https://github.com/LazyVim/starter` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` |
 | Omarchy Neovim overlay | `https://github.com/omacom-io/omarchy-pkgs` | `2026.6.17-1` | `78e5cc81953c44c804eb00e5be093e2674e09503` |
 
-The reviewed proposal is
-[`manifests/proposals/2026-07-17-initial-pins.json`](../../manifests/proposals/2026-07-17-initial-pins.json).
+The Stage 8 stable-channel reevaluation is recorded in
+[`manifests/proposals/2026-07-20-stage8-neovim-stable.json`](../../manifests/proposals/2026-07-20-stage8-neovim-stable.json).
 Both Neovim inputs record package identity `omarchy-nvim 2026.6.17-1`.
 
 There is no standalone Omarchy Neovim repository. The released configuration
@@ -56,16 +56,17 @@ The built package generated `lazy-lock.json` at build time; the extracted copy
 is committed at
 [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../packages/upstream/nvim/.config/nvim/lazy-lock.json)
 with fixed artifact and extracted-file hashes recorded in
-[Artifacts](artifacts/README.md). The original
-package and signature were not retained, and the stable channel deletes
-superseded artifacts. Package membership therefore cannot now be independently
-reverified; this lockfile is an explicitly accepted extracted snapshot.
+[Artifacts](artifacts/README.md). On 2026-07-20 the package and detached
+signature were still available from stable. The signature, repository checksum,
+PKGBUILD identity, package metadata, and complete packaged configuration were
+verified; the packaged configuration was byte-identical to the committed
+snapshot.
 
-An update to `omarchy-nvim 2026.7.15` (which replaces the remote-clipboard
-module with an OSC-52 and tmux approach, a better fit for SSH, VPS, and tmux
-workflows) is expected. Evaluate it when it reaches the stable channel, before
-the Neovim stage runs, extracting its lockfile the same way. See
-[Neovim](tools/neovim.md).
+`omarchy-nvim 2026.7.15-1`, including its newer OSC-52/tmux clipboard module,
+was explicitly evaluated. It existed on the edge endpoint but was absent from
+authoritative stable metadata, and its stable archive URL returned HTTP 404.
+The approved latest-stable policy therefore retains `2026.6.17-1`; edge content
+must not be assembled into this baseline.
 
 ## Manifest
 
@@ -118,7 +119,7 @@ The implemented interface has separate verification and update modes:
 
 ```text
 scripts/upstream verify
-scripts/upstream sync --proposal manifests/proposals/2026-07-17-initial-pins.json
+scripts/upstream sync --proposal manifests/proposals/2026-07-20-stage8-neovim-stable.json
 ```
 
 The proposal records every requested human-readable version, immutable commit,

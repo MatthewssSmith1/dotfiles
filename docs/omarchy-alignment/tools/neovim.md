@@ -30,11 +30,11 @@ Two baseline facts worth knowing while evaluating the stock experience: the
 Omarchy baseline sets `relativenumber = false` (the personal layer visibly
 inverts this) and `autoformat = false`.
 
-A pin bump to `omarchy-nvim 2026.7.15` is expected before this stage runs: it
-replaces the remote-clipboard module with an OSC-52 and tmux approach that
-fits the SSH, VPS, and tmux workflow. Evaluate it when it reaches the stable
-channel and extract its lockfile the same way (see
-[Upstream](../upstream.md#initial-pins)).
+`omarchy-nvim 2026.7.15-1` was evaluated during Stage 8 because it replaces the
+remote-clipboard module with an OSC-52 and tmux approach. It was available only
+on edge, not in authoritative stable metadata, so the latest-stable policy
+retains `2026.6.17-1`. The newer clipboard behavior is recorded for a future
+stable refresh but is not incorporated from edge (see [Upstream](../upstream.md)).
 
 ## Native Omarchy
 
@@ -148,3 +148,76 @@ ordinary startup is offline.
   implicitly; explicit restore and provisioning operations follow the
   canonical network policy.
 - Native and generic theme behavior matches the initial stock direction.
+
+## Generic/WSL Lifecycle And Restore
+
+The dedicated Neovim area remains framework-gated in `manifests/areas.tsv`.
+Fixture validation can exercise generic and WSL, but native Omarchy is refused
+until Stage 9 defines its refresh-safe attachment. Generic/WSL apply validates
+the exact upstream/generic/common package and target closure before mutation.
+It retires only exact reviewed individual or folded Kickstart links, including
+reviewed broken links whose lexical non-dereferencing normalization and resolved
+normalization both match the reviewed source. Only exact reviewed container
+ancestors are accepted, and links and containers must be user-owned. Unrelated
+or modified topology refuses before mutation; the tracked legacy source tree is
+never changed.
+
+The first apply resolves data, state, and cache roots from XDG variables,
+requires canonical, non-symlink, user-owned ancestor paths beneath `HOME`, and
+records completion even when a root is absent. Existing roots are renamed
+without clobber to timestamped `.bak`
+siblings. Source fingerprints and backup paths are retained in
+`migrations.json`; collisions gain a numeric suffix. A directory-move journal
+restores every rename and reviewed legacy link if deployment, state, or ledger
+commit fails. Removal retains current runtime roots, backups, preserved plugin
+checkouts, credentials, and the migration ledger.
+
+The generic adapter invokes `~/.local/share/dotfiles/bin/nvim-restore
+--first-launch` only when `nvim.json` has no `restored_lock_sha256`. A stale
+value means the deployed lock changed and startup refuses with guidance to run
+`nvim-restore` explicitly. The helper runs headless `Lazy! restore`, verifies
+every applicable checkout, and verifies both lockfile copies byte-for-byte
+before invoking:
+
+```text
+${DOTFILES_NVIM_RESTORE_CALLBACK:-~/.local/share/dotfiles/bin/nvim-record-restore} <64-lowercase-hex-lock-sha256>
+```
+
+The callback opens `HOME` read-only and acquires the deployment advisory lock,
+fully validates `nvim.json`, requires generic/WSL and exact managed lockfile
+ownership, compares deployed bytes with the supplied hash, and performs an
+atomic compare-and-swap state update. There is no sidecar marker. First deploy
+omits the field. Reapply preserves it only when it identifies the current
+deployed lock; a changed lock omits the value and requires a successful explicit
+restore. `--check` fails with a pending message when the field is absent and a
+stale message when it differs from the deployed lock, and cannot claim full
+convergence in either case. An interrupted restore leaves the field absent or
+stale.
+An exact Phase 2 sidecar is retired transactionally on first apply and is not
+trusted or imported; malformed or unsafe sidecars cause preflight refusal.
+
+### Failed First Launch Recovery
+
+1. Leave `migrations.json` and every timestamped runtime backup in place. Do
+   not rename a backup over the new runtime root; the ledger intentionally
+   prevents repeating the destructive migration.
+2. Inspect the reported checkout error. Repair only the named current checkout
+   under the active XDG data root. Clean divergent checkouts preserved by the
+   helper remain under the active XDG state root's
+   `dotfiles/nvim-preserved/` directory.
+3. Run `~/.local/share/dotfiles/bin/nvim-restore` explicitly with connectivity.
+   It verifies all applicable checkouts and unchanged lock bytes before the
+   state marker can be committed.
+4. After readiness is enabled, run `./bootstrap.sh --check --area nvim`, then
+   launch Neovim normally. Never delete `migrations.json` to force another
+   runtime rename.
+
+The downloader policy in the generic Lua layer is explicit: lazy periodic
+checks, startup installation, and Lua rocks are disabled; Mason registry and
+package work is limited to explicit `:Mason` actions; Treesitter's automatic
+ensure list is empty and parser work is limited to explicit `:TSInstall` or
+`:TSUpdate`; project-local specs remain discoverable but missing checkouts are
+reported rather than installed. The inherited Mason and Treesitter build hooks
+are disabled, and Blink uses its Lua matcher with prebuilt-binary download
+disabled. Any remaining plugin build hook can run only as part of the first or
+later explicit restore operation.

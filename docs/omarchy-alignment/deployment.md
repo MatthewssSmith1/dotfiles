@@ -287,6 +287,12 @@ expected lexical source, every managed directory created by deployment,
 managed attachment IDs, destinations, and expected content hashes, and any
 backup paths created by that area. State exists only for exact cleanup and
 mismatch refusal; it never reconciles profiles or overrides detection.
+Neovim state may additionally contain `restored_lock_sha256`, exactly 64
+lowercase hexadecimal characters. The field is absent after initial deployment
+and is written only after complete restore verification. Existing v1 state
+without it remains schema-valid, but Neovim `--check` reports a pending restore
+and fails convergence. A value different from the deployed lock reports stale
+restore and also fails convergence; no other area may record the field.
 State and migration-ledger files must be regular, non-symlink, EUID-owned
 files. Recorded, desired, and legacy package links are accepted or removed only
 while their symlink ownership is also EUID-safe, including a recheck at the
@@ -315,6 +321,11 @@ It records migration ID, source fingerprint, completion time, and backup paths.
 Removal never deletes this ledger, so reapply cannot repeat Neovim runtime
 renames or another completed one-time migration. Stage 6 uses separate stable
 records for zsh local-alias relocation and global Vite+ hook retirement.
+Stage 8 records XDG-resolved Neovim data, state, and cache roots separately,
+including absent roots. Existing roots are no-clobber renamed to collision-free
+timestamped `.bak` siblings beneath `HOME`; each record keeps a source
+fingerprint and any backup path. A directory-move journal, rather than the file
+snapshot journal, reverses uncommitted renames on failure.
 Retained zsh backups are no-clobber mode-`0600` files; every check/reapply
 verifies owner, mode, and content hash against the recorded source fingerprint.
 Initial migration performs the same verification immediately after creation and
