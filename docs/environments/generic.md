@@ -72,3 +72,35 @@ restore locked plugins under its separate lifecycle.
 Managed Bash startup is always offline. The only shell-startup network exception
 is transitional zsh's first start when its Zinit entrypoint is absent; an
 initialized zsh startup is offline. Bootstrap never changes the login shell.
+
+## Validated Environments
+
+### Amazon EC2 Ubuntu 24.04
+
+Validated on 2026-07-20 with Ubuntu 24.04.4 LTS, x86_64, and the
+`6.17.0-1019-aws` kernel. Automatic host detection selected `generic`.
+
+Acceptance covered:
+
+- Migration of legacy repository-root Stow links into independent Git, Bash,
+  tmux, Neovim, and transitional zsh areas.
+- Exact distro ownership for `zoxide`, `eza`, `bat`/`batcat`, and `fd`/`fdfind`.
+- Locked, receipted Node 24.18.0, pnpm 11.13.1, Claude Code 2.1.212,
+  Worktrunk 0.68.0, tmux 3.7b, Neovim 0.12.4, and Starship 1.26.0.
+- Offline area checks, two ordinary configuration-only applies, and the full
+  no-area provisioning check.
+- Bash interactive and login startup, initialized zsh startup, Git identity and
+  credential layering, an isolated and default tmux 3.7b server, pinned Neovim
+  plugin restore, and headless `:checkhealth`.
+
+Ubuntu's AppArmor 4 policy had
+`kernel.apparmor_restrict_unprivileged_userns=1`, so the denied-network
+validation sandboxes required a persistent executable-scoped profile for
+`/usr/bin/unshare` with `flags=(unconfined) { userns, }`. This is narrower than
+disabling the kernel restriction globally, but applies to every caller of that
+executable rather than only this repository or account.
+
+This native VPS acceptance is distinct from the Ubuntu 24 WSL validation. It
+does not cover graphical applications, Wayland clipboard integration, local
+font rendering, terminal-client key translation, or native Omarchy package and
+refresh behavior. Native Omarchy acceptance remains deferred.

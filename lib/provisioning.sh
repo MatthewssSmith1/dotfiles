@@ -1185,6 +1185,8 @@ run_provisioning() {
     elif ! provision_tool_status "$id"; then
       log "error: $id did not converge to its protected owner after installation"
       overall=1
+    else
+      validate_provisioning_receipt
     fi
   done
   ((overall == 0))

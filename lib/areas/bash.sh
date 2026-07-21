@@ -370,7 +370,12 @@ bash_mise_which_readonly() {
     MISE_VALIDATION_CONFIG_FILE="$config_file" bash -c '
       set -Eeuo pipefail
       mount --bind "$REAL_HOME" "$REAL_HOME"
-      mount -o remount,bind,ro "$REAL_HOME"
+      mount -o remount,bind,ro "$REAL_HOME" 2>/dev/null || true
+      home_mount_options=""
+      while read -r _ _ _ _ mountpoint options _; do
+        [[ "$mountpoint" == "$REAL_HOME" ]] && home_mount_options="$options"
+      done < /proc/self/mountinfo
+      [[ ",$home_mount_options," == *,ro,* ]]
       if [[ -n "$MISE_VALIDATION_CONFIG_FILE" ]]; then
         exec env HOME="$REAL_HOME" MISE_OFFLINE=1 MISE_CACHE_DIR="$TEMP_ROOT/cache" \
           MISE_STATE_DIR="$TEMP_ROOT/state" MISE_DATA_DIR="$REAL_HOME/.local/share/mise" \
@@ -535,7 +540,12 @@ run_sandboxed_bash_local_validation() {
     SELECTED_PROFILE="$SELECTED_PROFILE" /usr/bin/bash -c '
       set -Eeuo pipefail
       /usr/bin/mount --bind "$REAL_HOME" "$REAL_HOME"
-      /usr/bin/mount -o remount,bind,ro "$REAL_HOME"
+      /usr/bin/mount -o remount,bind,ro "$REAL_HOME" 2>/dev/null || true
+      home_mount_options=""
+      while read -r _ _ _ _ mountpoint options _; do
+        [[ "$mountpoint" == "$REAL_HOME" ]] && home_mount_options="$options"
+      done < /proc/self/mountinfo
+      [[ ",$home_mount_options," == *,ro,* ]]
       : > "$SANDBOX_READY"
       exec /usr/bin/setpriv --no-new-privs --bounding-set=-all --inh-caps=-all --ambient-caps=-all \
         /usr/bin/env HOME="$SANDBOX_HOME" PATH="$SENTINELS:/usr/bin:/bin" TERM=dumb PS1= BASH_ENV= HISTFILE=/dev/null \
