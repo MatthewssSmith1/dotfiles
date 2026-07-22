@@ -19,7 +19,7 @@
       "required": ["platform", "url", "sha256", "inventory_sha256", "format", "executable", "strip_components", "allowed_origins"],
       "properties": {
         "platform": {"const": "linux-x86_64"},
-        "url": {"type": "string", "pattern": "^https://[^[:space:]]+$"},
+        "url": {"type": "string", "pattern": "^https://\\S+$"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "format": {"enum": ["raw", "tar.gz", "tar.xz"]},

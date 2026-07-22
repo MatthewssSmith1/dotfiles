@@ -47,7 +47,7 @@
             "mode": {"const": "0755"},
             "size": {"type": "integer", "minimum": 1},
             "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "version_output": {"type": "string", "pattern": "^tmux [^[:space:]]+$"}
+            "version_output": {"type": "string", "pattern": "^tmux \\S+$"}
           }
         }
       }
