@@ -2,18 +2,16 @@
 
 ## Status
 
-This is manual client guidance for the accepted tmux workflow. Key, color,
-mouse, and clipboard behavior passed on Windows Terminal 1.24.11911.0 with tmux
-3.7b.
+Client-terminal guidance for anything typed into Windows Terminal: a WSL
+shell, or an SSH session into a remote Linux host. The host's profile does not
+matter; what matters is that Windows Terminal is the terminal. Key, color,
+mouse, and clipboard behavior passed on Windows Terminal 1.24.11911.0 with
+tmux 3.7b.
 
-Client-terminal guidance for any session typed into Windows Terminal: a WSL
-shell, or an SSH session into a VPS or other remote Linux host. The host's
-profile does not matter; what matters is that Windows Terminal is the
-terminal. Connecting to the same host from a Linux terminal instead makes all
-of this irrelevant.
-
-Windows Terminal settings are never patched automatically from WSL or by
-bootstrap. Everything here is an explicit manual action on the Windows side.
+Windows Terminal settings are never patched from WSL or by bootstrap. Theming
+is repo-managed from the Windows side via
+[windows/terminal/apply.ps1](../../windows/README.md); the keybinding unbinds
+below are still a manual step.
 
 ## Required Settings
 
@@ -55,41 +53,15 @@ expectations until the tmux gate records exact versions and observed input:
 The accepted policy is to document these rather than add WSL or host-local tmux
 rebinds. Revisit the shared design only if tested protocol support changes.
 
-## Recommended Palette
+## Color Scheme
 
-The Omarchy tmux status uses ANSI `black` on ANSI `blue` for its session badge.
-Windows Terminal's built-in Tango Dark colors have insufficient contrast for
-that pair. Use this custom scheme for the Ubuntu profile instead of overriding
-the pinned tmux baseline:
-
-```json
-{
-  "background": "#1A1B26",
-  "black": "#32344A",
-  "blue": "#7AA2F7",
-  "brightBlack": "#444B6A",
-  "brightBlue": "#7DA6FF",
-  "brightCyan": "#0DB9D7",
-  "brightGreen": "#B9F27C",
-  "brightPurple": "#BB9AF7",
-  "brightRed": "#FF7A93",
-  "brightWhite": "#ACB0D0",
-  "brightYellow": "#FF9E64",
-  "cursorColor": "#C0CAF5",
-  "cyan": "#449DAB",
-  "foreground": "#A9B1D6",
-  "green": "#9ECE6A",
-  "name": "Omarchy Tokyo Night",
-  "purple": "#AD8EE6",
-  "red": "#F7768E",
-  "selectionBackground": "#7AA2F7",
-  "white": "#787C99",
-  "yellow": "#E0AF68"
-}
-```
-
-Set the Ubuntu profile's `colorScheme` to `Omarchy Tokyo Night`. These are the
-exact color values from Omarchy v3.8.3's Tokyo Night `colors.toml`.
+The Omarchy tmux status uses ANSI `black` on ANSI `blue` for its session
+badge, and Windows Terminal's built-in schemes have insufficient contrast for
+that pair. The "Omarchy Tokyo Night" scheme in
+[windows/terminal/managed-settings.json](../../windows/terminal/managed-settings.json)
+(exact values from Omarchy v3.8.3's Tokyo Night `colors.toml`) is applied by
+`apply.ps1` as the `profiles.defaults` color scheme, so every profile (cmd,
+PowerShell, WSL, SSH) inherits it.
 
 ## Validated Client Behavior
 

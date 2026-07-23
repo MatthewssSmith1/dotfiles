@@ -1,0 +1,38 @@
+{
+    "profileDefaults": {
+        "colorScheme": "Omarchy Tokyo Night",
+        "cursorShape": "filledBox",
+        "font": {
+            "face": "FiraCode Nerd Font Mono",
+            "size": 14
+        },
+        "padding": "0",
+        "scrollbarState": "hidden",
+        "useAcrylic": false
+    },
+    "schemes": [
+        {
+            "background": "#1A1B26",
+            "black": "#32344A",
+            "blue": "#7AA2F7",
+            "brightBlack": "#444B6A",
+            "brightBlue": "#7DA6FF",
+            "brightCyan": "#0DB9D7",
+            "brightGreen": "#B9F27C",
+            "brightPurple": "#BB9AF7",
+            "brightRed": "#FF7A93",
+            "brightWhite": "#ACB0D0",
+            "brightYellow": "#FF9E64",
+            "cursorColor": "#C0CAF5",
+            "cyan": "#449DAB",
+            "foreground": "#A9B1D6",
+            "green": "#9ECE6A",
+            "name": "Omarchy Tokyo Night",
+            "purple": "#AD8EE6",
+            "red": "#F7768E",
+            "selectionBackground": "#7AA2F7",
+            "white": "#787C99",
+            "yellow": "#E0AF68"
+        }
+    ]
+}

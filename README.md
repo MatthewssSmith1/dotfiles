@@ -10,6 +10,7 @@ Neovim, and transitional zsh deploy through profile-aware
 - Git defaults with private identity stored outside the repository
 - Neovim based on pinned LazyVim and Omarchy release inputs
 - tmux with persistent layouts and AI assistant session restoration
+- Windows Terminal theming applied from the Windows host
 
 ## Setup
 
@@ -36,8 +37,7 @@ packages, and does not change the login shell. Ordinary apply, check, and
 removal stay offline. Git, Bash, tmux, Neovim, and transitional zsh are ready
 and selected by default on generic and WSL hosts. Native Omarchy Neovim
 integration remains deferred to Stage 9. Bootstrap preserves
-unrelated shell, agent, application, and authentication state. Do not run Stow
-against the repository root; that package is permanently retired and inert.
+unrelated shell, agent, application, and authentication state.
 
 The accepted Stage 6 contract makes Bash with Starship the primary configured
 workflow without changing the account's current zsh login shell. Generic and
@@ -95,6 +95,17 @@ is:
 Removal retains `~/.tmux/plugins/` and `~/.tmux/resurrect/`. See the full
 [tmux contract](docs/omarchy-alignment/tools/tmux.md) and manual
 [Windows Terminal unbinds](docs/environments/windows-terminal.md).
+
+## Windows Host
+
+Windows is a supported environment through [windows/](windows/README.md):
+repo-managed Windows Terminal theming applied by a merge script run manually
+from a Windows shell, outside bootstrap and Stow. The manual
+[Windows Terminal unbinds](docs/environments/windows-terminal.md) still apply.
+
+The repository contains in-repo symlinks (`CLAUDE.md`, `.claude/skills`); a
+Windows clone needs Developer Mode (or an elevated Git) so `core.symlinks`
+materializes them as real links.
 
 ## Git Identity
 
