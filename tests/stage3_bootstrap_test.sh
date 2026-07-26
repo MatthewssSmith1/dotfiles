@@ -10,7 +10,7 @@ readonly BOOTSTRAP="$REPO_DIR/bootstrap.sh"
 TEST_ROOT="$(mktemp -d)"
 TEST_BIN="$TEST_ROOT/bin"
 mkdir "$TEST_BIN"
-for command_name in eza bat fdfind fzf rg zoxide; do
+for command_name in eza bat fdfind fzf rg zoxide dpkg-query zsh; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$TEST_BIN/$command_name"
   chmod +x "$TEST_BIN/$command_name"
 done

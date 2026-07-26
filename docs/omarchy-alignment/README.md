@@ -2,25 +2,15 @@
 
 ## Status
 
-This is the temporary planning packet for the Omarchy alignment migration. It
-records accepted decisions, unresolved gates, implementation order, and
-acceptance criteria. The repository README remains authoritative for the
-currently implemented configuration until a migration stage is complete.
+This is the temporary planning packet for the Omarchy alignment migration. It records accepted decisions, unresolved gates, implementation order, and acceptance criteria. The repository README remains authoritative for the currently implemented configuration until a migration stage is complete.
 
-The packet is tracked in git so the work does not depend on conversation
-history or a single working copy. Decisions should be updated here as
-implementation proceeds.
+The packet is tracked in git so the work does not depend on conversation history or a single working copy. Decisions should be updated here as implementation proceeds.
 
 ## Objective
 
-Provide one Omarchy-oriented development workflow across native Omarchy,
-Ubuntu 24.04 and newer generic Linux systems, Ubuntu under WSL, and VPS or
-other remote Linux environments.
+Provide one Omarchy-oriented development workflow across native Omarchy, Ubuntu 24.04 and newer generic Linux systems, Ubuntu under WSL, and VPS or other remote Linux environments.
 
-Consistent behavior and muscle memory are the primary targets. Native Omarchy
-uses its installed defaults where possible. Other systems use pinned, reviewed
-copies of relevant defaults with portability and personal changes kept visibly
-separate.
+Consistent behavior and muscle memory are the primary targets. Native Omarchy uses its installed defaults where possible. Other systems use pinned, reviewed copies of relevant defaults with portability and personal changes kept visibly separate.
 
 ## Documents
 
@@ -37,12 +27,7 @@ separate.
 | [Neovim](tools/neovim.md) | Baseline reset, source model, personal override, refresh recovery, and open decisions |
 | [Artifacts](artifacts/README.md) | Preserved files that cannot be re-derived from git sources |
 
-Durable per-environment operational guidance lives outside the packet in
-[`docs/environments/`](../environments/): [Windows
-Terminal](../environments/windows-terminal.md) (client-terminal guidance),
-[WSL](../environments/wsl.md), [Omarchy](../environments/omarchy.md), and
-[generic Linux and VPS](../environments/generic.md). Those documents outlive
-the packet.
+Durable per-environment operational guidance lives outside the packet in [`docs/environments/`](../environments/): [Windows Terminal](../environments/windows-terminal.md) (client-terminal guidance), [WSL](../environments/wsl.md), [Omarchy](../environments/omarchy.md), and [generic Linux and VPS](../environments/generic.md). Those documents outlive the packet.
 
 ## Accepted Direction
 
@@ -109,15 +94,13 @@ The linked documents are canonical for the details behind these summaries.
 
 ## Remaining Planning Gates
 
-These questions do not block this documentation packet. They must be resolved
-before implementation reaches the affected stage:
+These questions do not block this documentation packet. They must be resolved before implementation reaches the affected stage:
 
 1. Specify the native Neovim personal loader and refresh-recovery behavior
    during the Omarchy native integration stage.
 2. Record the tested Windows Terminal version before closing the tmux gate.
 
-Tool-specific implications are recorded in [Deployment](deployment.md),
-[tmux](tools/tmux.md), and [Neovim](tools/neovim.md).
+Tool-specific implications are recorded in [Deployment](deployment.md), [tmux](tools/tmux.md), and [Neovim](tools/neovim.md).
 
 ## Documentation Rules
 
@@ -133,8 +116,7 @@ Tool-specific implications are recorded in [Deployment](deployment.md),
 
 ## Temporary Lifecycle
 
-This packet must not become permanent documentation by inertia. At the end of
-the migration:
+This packet must not become permanent documentation by inertia. At the end of the migration:
 
 - Move user setup and commands into the repository README.
 - Distill stable architecture into concise permanent docs or ADRs.

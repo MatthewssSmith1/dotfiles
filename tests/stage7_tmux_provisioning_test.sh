@@ -140,7 +140,7 @@ install_all_checkouts() {
 invoke_plugin() {
   local home="$1" operation="$2" fail_at="${3:-}" hold_at="${4:-}" hold_dir="${5:-}"
   HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$fixture" SCRIPT_NAME=stage7-plugin-test \
-    DOTFILES_TESTING=1 DOTFILES_TEST_TMUX_FETCH="$fetch_seam" DOTFILES_TEST_FAIL_AT="$fail_at" \
+    DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_TMUX_FETCH="$fetch_seam" DOTFILES_TEST_FAIL_AT="$fail_at" \
     DOTFILES_TEST_HOLD_AT="$hold_at" DOTFILES_TEST_HOLD_DIR="$hold_dir" \
     FIXTURE_REPOS="$repos" NETWORK_LOG="$network_log" bash -c '
       set -Eeuo pipefail
@@ -573,7 +573,7 @@ printf 'ID="ubuntu"\nVERSION_ID="24.04"\n' > "$host/etc/os-release"
 printf '6.8.0-generic\n' > "$host/proc/sys/kernel/osrelease"
 : > "$network_log"
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
+TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
   DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_BIN=/usr/bin/tmux DOTFILES_TEST_TMUX_OWNER=test-owner \
   DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" \
   NETWORK_LOG="$network_log" "$fixture/bootstrap.sh" --check --provision --area tmux 2>&1)"
@@ -605,7 +605,7 @@ SCRIPT
 chmod 0755 "$home/.local/bin/mise" "$TEST_ROOT/runtime-signal-bin/curl"
 : > "$network_log"
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$TEST_ROOT/runtime-signal-bin:/usr/bin:/bin" DOTFILES_TESTING=1 \
+TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$TEST_ROOT/runtime-signal-bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
   DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_BIN=/usr/bin/tmux \
   DOTFILES_TEST_TMUX_OWNER=test-owner DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 \
   DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" NETWORK_LOG="$network_log" \
@@ -621,7 +621,7 @@ pass
 for terminal_status in 70 130 143; do
   home="$(new_home "plugin-plan-status-$terminal_status")"
   set +e
-  TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
+  TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
     DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_PLUGIN_PLAN_STATUS="$terminal_status" \
     "$fixture/bootstrap.sh" --check --provision --area tmux 2>&1)"
   TEST_RC=$?
@@ -638,7 +638,7 @@ home="$(new_home ready-runtime-signal)"
 mkdir -p "$home/.local/bin"
 cp "$TEST_ROOT/home-runtime-signal/.local/bin/mise" "$home/.local/bin/mise"
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$TEST_ROOT/runtime-signal-bin:/usr/bin:/bin" DOTFILES_TESTING=1 \
+TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$TEST_ROOT/runtime-signal-bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
   DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_BIN=/usr/bin/tmux \
   DOTFILES_TEST_TMUX_OWNER=test-owner DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 GIT_USER_NAME='Ready Gate' \
   GIT_USER_EMAIL=ready-gate@example.invalid "$ready_fixture/bootstrap.sh" --provision 2>&1)"
@@ -659,7 +659,7 @@ sed -i 's/|tmux|apply,check|generic,wsl|infocmp|/|tmux|apply,check|generic,wsl|s
   "$dependency_fixture/manifests/dependencies.tsv"
 home="$(new_home ready-dependency)"
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
+TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
   DOTFILES_TEST_ARCH=x86_64 GIT_USER_NAME='Ready Dependency' GIT_USER_EMAIL=ready-dependency@example.invalid \
   "$dependency_fixture/bootstrap.sh" --check --provision --area tmux --area git 2>&1)"
 TEST_RC=$?
@@ -677,9 +677,13 @@ pass
 [[ "$(jq -r '.tools[] | select(.id == "tmux") | .native_minimum' "$fixture/manifests/provisioning.json")" == 3.5 ]] || \
   fail 'production WSL integration lost the real tmux native minimum'
 tmux_archive="${TMUX_37B_ARCHIVE:-/tmp/opencode/stage5-artifacts/tmux.tar.gz}"
-[[ -f "$tmux_archive" && "$(sha256sum "$tmux_archive" | cut -d' ' -f1)" == \
+# The locked 3.7b archive is a host-cached fixture; hosts without it skip the
+# production WSL integration groups instead of failing. A present-but-drifted
+# archive still fails.
+if [[ -f "$tmux_archive" ]]; then
+[[ "$(sha256sum "$tmux_archive" | cut -d' ' -f1)" == \
   f85e6c1c412750a774eb3f370f33bad05fc726fb8b6a0b174ad6f0b6d954df58 ]] || \
-  fail 'locked tmux 3.7b archive fixture is unavailable or drifted'
+  fail 'locked tmux 3.7b archive fixture drifted'
 wsl_host="$TEST_ROOT/wsl-host"
 mkdir -p "$wsl_host/etc" "$wsl_host/proc/sys/kernel"
 printf 'ID="ubuntu"\nVERSION_ID="24.04"\n' > "$wsl_host/etc/os-release"
@@ -724,7 +728,7 @@ chmod 0755 "$home/.local/bin/mise"
 : > "$network_log"
 runtime_network_log="$TEST_ROOT/wsl-runtime-network.log"; : > "$runtime_network_log"
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$runtime_bin:/usr/bin:/bin" DOTFILES_TESTING=1 \
+TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$runtime_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
   DOTFILES_TEST_HOST_ROOT="$wsl_host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 \
   DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" NETWORK_LOG="$network_log" \
   LOCKED_TMUX_ARCHIVE="$tmux_archive" RUNTIME_NETWORK_LOG="$runtime_network_log" \
@@ -765,7 +769,7 @@ plugin_signal_home="$TEST_ROOT/home-wsl-production"
 rm -rf "$plugin_signal_home/.tmux" "$plugin_signal_home/.config" "$plugin_signal_home/.local/state/dotfiles/v1"
 rm -f "$plugin_signal_home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
 set +e
-TEST_OUTPUT="$(HOME="$plugin_signal_home" PATH="$plugin_signal_home/.local/bin:/usr/bin:/bin" DOTFILES_TESTING=1 \
+TEST_OUTPUT="$(HOME="$plugin_signal_home" PATH="$plugin_signal_home/.local/bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
   DOTFILES_TEST_HOST_ROOT="$wsl_host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 \
   DOTFILES_TEST_TMUX_FETCH="$plugin_signal_seam" \
   "$fixture/bootstrap.sh" --provision --area tmux 2>&1)"
@@ -776,12 +780,17 @@ set -e
   fail 'plugin provisioning failure reached tmux configuration preflight or apply'
 pass
 
+else
+  printf 'SKIP: production WSL tmux 3.7b integration groups (locked archive fixture %s is absent)\n' \
+    "$tmux_archive" >&2
+fi
+
 # No-area provisioning never selects plugins, and a multi-area provisioning
 # command does not implicitly request the tmux plugin operation.
 home="$(new_home no-area)"
 : > "$network_log"
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
+TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
   DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" \
   NETWORK_LOG="$network_log" GIT_USER_NAME='Stage Seven User' GIT_USER_EMAIL=stage7@example.invalid \
   "$fixture/bootstrap.sh" --check --provision 2>&1)"
@@ -790,7 +799,7 @@ set -e
 [[ "$TEST_OUTPUT" != *'tmux plugin plan'* && ! -s "$network_log" ]] || fail 'no-area provisioning selected tmux plugins'
 [[ -z "$(/usr/bin/find "$home" -mindepth 1 -print -quit)" ]] || fail 'no-area provisioning check mutated HOME'
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
+TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
   GIT_USER_NAME='Stage Seven User' GIT_USER_EMAIL=stage7@example.invalid \
   "$fixture/bootstrap.sh" --check --provision --area tmux --area git 2>&1)"
 TEST_RC=$?

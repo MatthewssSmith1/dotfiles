@@ -83,7 +83,8 @@ validate_lock() {
     .schema_version == 1 and .managed_root == "tmux-parser-fixtures-v1" and
     .extractor == ["dpkg-deb", "--extract"] and
     (.fixtures | type == "array" and length == 1) and
-    .fixtures[0] as $fixture |
+    # Parenthesized so the binding parses identically on jq 1.7 and 1.8.
+    (.fixtures[0] as $fixture |
     ($fixture | keys_are(["id", "package", "executable"])) and
     $fixture.id == "ubuntu-jammy-tmux-3-2a-amd64" and
     ($fixture.package | keys_are(["name", "architecture", "version", "url", "archive", "size", "sha256"])) and
@@ -97,7 +98,7 @@ validate_lock() {
     $fixture.executable.path == "usr/bin/tmux" and $fixture.executable.mode == "0755" and
     $fixture.executable.size == 971320 and ($fixture.executable.sha256 | hex64) and
     $fixture.executable.sha256 == "6684c9b0bd4af08461f9e476e0abee9c3f08daa5d55ed6fb7c663c000e09f83d" and
-    $fixture.executable.version_output == "tmux 3.2a"
+    $fixture.executable.version_output == "tmux 3.2a")
   ' "$LOCK" >/dev/null || die 'tmux parser fixture lock does not conform to the accepted schema-v1 pin'
 }
 

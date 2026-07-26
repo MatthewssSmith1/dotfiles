@@ -379,10 +379,19 @@ resolve_mise_owner() {
         [[ ! -L "$candidate" && "$resolved" == "$candidate" ]] || { log 'error: user mise must be a directly owned regular executable'; return 1; }
         approved+=("$candidate")
         ;;
-      /usr/bin/mise|/usr/local/bin/mise)
-        [[ ! -L "$candidate" && "$resolved" == "$candidate" ]] || { log "error: system mise symlink is not approved: $candidate"; return 1; }
-        [[ "$(dpkg-query -S "$candidate" 2>/dev/null || true)" == mise:* ]] || { log "error: system mise has no approved package owner: $candidate"; return 1; }
-        approved+=("$candidate")
+      /usr/bin/mise|/usr/local/bin/mise|/bin/mise|/sbin/mise|/usr/sbin/mise)
+        # Fixture tests emulate hosts without a distro mise package.
+        [[ "${DOTFILES_TESTING:-}" == 1 && "${DOTFILES_TEST_IGNORE_SYSTEM_MISE:-}" == 1 ]] && continue
+        # Usr-merged hosts alias /bin, /sbin, and /usr/sbin to /usr/bin
+        # through directory symlinks; the executable itself must not be a
+        # symlink and must resolve into an approved system directory.
+        [[ ! -L "$candidate" && ( "$resolved" == /usr/bin/mise || "$resolved" == /usr/local/bin/mise ) ]] || \
+          { log "error: system mise symlink is not approved: $candidate"; return 1; }
+        if [[ "$(dpkg-query -S "$resolved" 2>/dev/null || true)" != mise:* ]] &&
+          [[ "$(/usr/bin/pacman -Qqo -- "$resolved" 2>/dev/null || true)" != mise ]]; then
+          log "error: system mise has no approved package owner: $candidate"; return 1
+        fi
+        array_contains "$resolved" "${approved[@]}" || approved+=("$resolved")
         ;;
       *) log "error: unapproved mise PATH candidate: $candidate"; return 1 ;;
     esac
@@ -709,7 +718,7 @@ resolve_protected_command() {
     candidate="${candidates[index]}"
     resolved="$(realpath -e -- "$candidate")" || return 1
     case "$candidate" in
-      /usr/bin/"$name"|/bin/"$name") ;;
+      /usr/bin/"$name"|/bin/"$name"|/sbin/"$name"|/usr/sbin/"$name") ;;
       *) log "error: protected command '$name' has an unapproved additional PATH candidate: $candidate"; return 1 ;;
     esac
   done

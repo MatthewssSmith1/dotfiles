@@ -157,7 +157,7 @@ home="$TEST_ROOT/home-guards"
 mkdir -p "$home/fake-bin"
 : > "$home/trace"
 TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_BASH_TRACE="$home/trace" \
-  bash --noprofile --norc -c "source '$COMMON_ROOT/rc.bash'; printf '%s' \"\${EDITOR-unset}\"")"
+  env -u EDITOR -u VISUAL bash --noprofile --norc -c "source '$COMMON_ROOT/rc.bash'; printf '%s' \"\${EDITOR-unset}\"")"
 [[ "$TEST_OUTPUT" == unset && ! -s "$home/trace" ]] || fail 'non-interactive dispatcher mutated shell state'
 TEST_OUTPUT="$(TERM=dumb run_payload "$home" generic 1 \
   'source "$DOTFILES_BASH_VALIDATION_ROOT/rc.bash"; printf "%s:%s" "$EDITOR" "$VISUAL"')"
@@ -263,7 +263,7 @@ cat > "$TEST_ROOT/controlled-dpkg-query" <<SCRIPT
 #!/usr/bin/env bash
 case "\$2" in
   */fzf) package=fzf ;; */zoxide) package=zoxide ;; */eza) package=eza ;; */rg) package=ripgrep ;;
-  */batcat) package=bat ;; */fdfind) package=fd-find ;; *) exit 1 ;;
+  */batcat|*/bat) package=bat ;; */fdfind|*/fd) package=fd-find ;; *) exit 1 ;;
 esac
 printf '%s: %s\n' "\$package" "\$2"
 SCRIPT
@@ -271,6 +271,7 @@ chmod 0755 "$TEST_ROOT/controlled-dpkg-query"
 run_production_controlled() {
   HOME="$controlled_home" TARGET_ROOT="$controlled_home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
     SCRIPT_NAME=stage6-shell-test SELECTED_PROFILE=generic MODE=check DOTFILES_TESTING=1 \
+    DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
     DOTFILES_TEST_BASH_DISTRO_BIN="$controlled_bin" DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/controlled-dpkg-query" \
     PATH="$controlled_home/.local/bin:$controlled_bin:/usr/bin:/bin" bash -c '
       set -Eeuo pipefail
@@ -439,7 +440,7 @@ cat > "$TEST_ROOT/dpkg-query" <<SCRIPT
 #!/usr/bin/env bash
 case "\$2" in
   */fzf) package=fzf ;; */zoxide) package=zoxide ;; */eza) package=eza ;; */rg) package=ripgrep ;;
-  */batcat) package=bat ;; */fdfind) package=fd-find ;; *) exit 1 ;;
+  */batcat|*/bat) package=bat ;; */fdfind|*/fd) package=fd-find ;; *) exit 1 ;;
 esac
 printf '%s: %s\n' "\$package" "\$2"
 SCRIPT
@@ -511,8 +512,7 @@ make_zsh_area_fixture() {
     "$checkout/packages/common/zsh" "$checkout/profiles" "$checkout/manifests" \
     "$checkout/lib/stow-preflight-target" "$old"
   cp -a "$REPO_DIR/packages/common/zsh/." "$checkout/packages/common/zsh/"
-  cp -a "$REPO_DIR/.zshrc" "$REPO_DIR/.zsh_aliases" "$REPO_DIR/.p10k.zsh" \
-    "$REPO_DIR/.zsh_aliases.local" "$checkout/"
+  cp -a "$REPO_DIR/.zshrc" "$REPO_DIR/.zsh_aliases" "$REPO_DIR/.p10k.zsh" "$checkout/"
   printf 'zsh common/zsh\n' > "$checkout/profiles/generic.conf"
   printf 'fixture local aliases\n' > "$checkout/.zsh_aliases.local"
   cp -a "$checkout/.zshrc" "$checkout/.zsh_aliases" "$checkout/.p10k.zsh" \
@@ -605,9 +605,16 @@ assert_same "$expected_zshrc" "$REPO_DIR/packages/common/zsh/.zshrc"
   fail 'managed zsh sources the unowned legacy FZF hook'
 ! grep -qF '.fzf/bin' "$REPO_DIR/packages/common/zsh/.zshrc" || \
   fail 'managed zsh restores the unowned legacy FZF path'
-zsh -n "$REPO_DIR/packages/common/zsh/.zshrc" "$REPO_DIR/packages/common/zsh/.zsh_aliases" \
-  "$REPO_DIR/packages/common/zsh/.p10k.zsh" || fail 'packaged zsh syntax is invalid'
+if command -v zsh >/dev/null 2>&1; then
+  zsh -n "$REPO_DIR/packages/common/zsh/.zshrc" "$REPO_DIR/packages/common/zsh/.zsh_aliases" \
+    "$REPO_DIR/packages/common/zsh/.p10k.zsh" || fail 'packaged zsh syntax is invalid'
+else
+  printf 'SKIP: packaged zsh syntax check (zsh is not installed on this host)\n' >&2
+fi
 pass
+
+# The zsh area is optional; hosts without zsh skip its lifecycle groups.
+if command -v zsh >/dev/null 2>&1; then
 
 # Full migration preserves exact host bytes, records distinct backups, converges, and retains on remove.
 make_zsh_area_fixture lifecycle
@@ -1129,5 +1136,9 @@ run_zsh_area_fixture "$zsh_home" "$zsh_checkout" remove
 [[ ! -e "$zsh_home/network-attempted" ]] || fail 'zsh check/apply/remove invoked a network sentinel'
 [[ ! -e "$zsh_home/chsh-invoked" ]] || fail 'zsh check/apply/remove invoked chsh'
 pass
+
+else
+  printf 'SKIP: zsh area lifecycle, migration, and Zinit groups (zsh is not installed on this host)\n' >&2
+fi
 
 printf 'PASS: %d managed shell payload and lifecycle test groups\n' "$TEST_COUNT"

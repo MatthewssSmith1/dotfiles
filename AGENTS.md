@@ -1,7 +1,6 @@
 # Agent Instructions
 
-Code and manifests are the source of truth; docs explain intent and stay
-terse. Do not restate in docs what the code already carries.
+Code and manifests are the source of truth; docs explain intent and stay terse. Do not restate in docs what the code already carries.
 
 ## Invariants
 
@@ -22,5 +21,4 @@ terse. Do not restate in docs what the code already carries.
 - `docs/environments/` — per-environment notes (omarchy, generic, wsl,
   windows-terminal).
 
-Configuration changes deploy through the apply procedures in the
-`applying-dotfiles` skill (`.agents/skills/applying-dotfiles/SKILL.md`).
+Configuration changes deploy through the apply procedures in the `applying-dotfiles` skill (`.agents/skills/applying-dotfiles/SKILL.md`).

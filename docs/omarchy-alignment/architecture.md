@@ -38,44 +38,25 @@ Omarchy baseline
 
 ### Omarchy Baseline
 
-The baseline is an untouched representation of selected upstream defaults. On
-native Omarchy, the installed files are authoritative. Generic systems use
-synchronized snapshots from pinned upstream inputs.
+The baseline is an untouched representation of selected upstream defaults. On native Omarchy, the installed files are authoritative. Generic systems use synchronized snapshots from pinned upstream inputs.
 
 ### Portability Adapter
 
-The adapter contains only changes needed to make the baseline work outside its
-native environment. It must not contain personal preferences.
+The adapter contains only changes needed to make the baseline work outside its native environment. It must not contain personal preferences.
 
 ### Shared Personal Configuration
 
-The personal layer contains deliberate preferences that apply across machines
-and override the baseline. Examples include Git's `main` default branch and
-Neovim relative line numbers.
+The personal layer contains deliberate preferences that apply across machines and override the baseline. Examples include Git's `main` default branch and Neovim relative line numbers.
 
 ### Host-Local Configuration
 
-The local layer contains untracked identity, machine-specific settings, and
-environment-specific overrides. It must remain outside Stow payloads.
+The local layer contains untracked identity, machine-specific settings, and environment-specific overrides. It must remain outside Stow payloads.
 
-Not every tool requires all four physical files, but every change must have a
-clear owner in this model.
+Not every tool requires all four physical files, but every change must have a clear owner in this model.
 
-For managed Bash, physical source order is explicit rather than inferred from
-package order. Generic portable initialization owns environment, pinned shell
-and alias inputs, tmux helpers, mise, Starship, zoxide, fzf, and Readline. The
-WSL adapter follows that generic layer only on WSL. Common configuration then
-owns Worktrunk and shared personal preferences, and the host owns the final
-local Bash layer. Native Omarchy keeps its native baseline and runs only those
-common and host-local layers afterward. See the exact order in
-[Shell](tools/shell.md#managed-bash-load-order).
+For managed Bash, physical source order is explicit rather than inferred from package order. Generic portable initialization owns environment, pinned shell and alias inputs, tmux helpers, mise, Starship, zoxide, fzf, and Readline. The WSL adapter follows that generic layer only on WSL. Common configuration then owns Worktrunk and shared personal preferences, and the host owns the final local Bash layer. Native Omarchy keeps its native baseline and runs only those common and host-local layers afterward. See the exact order in [Shell](tools/shell.md#managed-bash-load-order).
 
-tmux is a deliberate three-layer physical design with no host-local layer.
-Generic and WSL load the private pinned baseline, the generic adapter, an
-optional command-empty WSL adapter, and common persistence in explicit source
-order. Native Omarchy keeps its regular native baseline and attaches only the
-common persistence file. Guarded TPM initialization is the final common tmux
-action. See [tmux](tools/tmux.md#load-paths).
+tmux is a deliberate three-layer physical design with no host-local layer. Generic and WSL load the private pinned baseline, the generic adapter, an optional command-empty WSL adapter, and common persistence in explicit source order. Native Omarchy keeps its regular native baseline and attaches only the common persistence file. Guarded TPM initialization is the final common tmux action. See [tmux](tools/tmux.md#load-paths).
 
 ## Locations
 
@@ -86,19 +67,9 @@ action. See [tmux](tools/tmux.md#load-paths).
 ~/.local/state/dotfiles/       Applied profile and package state
 ```
 
-The checkout convention is not a hard-coded dependency. Bootstrap resolves its
-own location and must work from another path.
+The checkout convention is not a hard-coded dependency. Bootstrap resolves its own location and must work from another path.
 
-Tracked baseline, adapter, and personal files under `~/.config/dotfiles/` are
-normally Stow links. `local/` is always a real, untracked directory. Git
-identity is a deliberate exception stored as a real `~/.gitconfig.local` file.
-Existing generic and WSL Bash startup files are another deliberate exception:
-they remain host-owned regular files with exact, state-recorded, reversible
-managed blocks. Native Omarchy's additive Bash block is a different attachment
-strategy and never bypasses its native baseline.
-The generic tmux XDG entrypoint is a dispatcher; the pinned baseline is private
-managed content under `~/.config/dotfiles/upstream/tmux/`. Native Omarchy's XDG
-entrypoint remains a regular Omarchy-owned file.
+Tracked baseline, adapter, and personal files under `~/.config/dotfiles/` are normally Stow links. `local/` is always a real, untracked directory. Git identity is a deliberate exception stored as a real `~/.gitconfig.local` file. Existing generic and WSL Bash startup files are another deliberate exception: they remain host-owned regular files with exact, state-recorded, reversible managed blocks. Native Omarchy's additive Bash block is a different attachment strategy and never bypasses its native baseline. The generic tmux XDG entrypoint is a dispatcher; the pinned baseline is private managed content under `~/.config/dotfiles/upstream/tmux/`. Native Omarchy's XDG entrypoint remains a regular Omarchy-owned file.
 
 ## Profiles
 
@@ -108,14 +79,9 @@ entrypoint remains a regular Omarchy-owned file.
 | Generic | Deploy pinned snapshots plus generic portability adapters |
 | WSL | Inherit Generic and add only required WSL behavior |
 
-Profiles describe the host a configuration is deployed on. The client
-terminal is a separate concern: Windows Terminal guidance in
-[`docs/environments/windows-terminal.md`](../environments/windows-terminal.md)
-applies to any host reached from Windows Terminal, including generic VPSs
-over SSH, not only the WSL profile.
+Profiles describe the host a configuration is deployed on. The client terminal is a separate concern: Windows Terminal guidance in [`docs/environments/windows-terminal.md`](../environments/windows-terminal.md) applies to any host reached from Windows Terminal, including generic VPSs over SSH, not only the WSL profile.
 
-The primary implementation and validation host is the upgraded Ubuntu 24.04
-WSL distro. See [WSL](../environments/wsl.md).
+The primary implementation and validation host is the upgraded Ubuntu 24.04 WSL distro. See [WSL](../environments/wsl.md).
 
 ### Detection Signals
 
@@ -127,11 +93,7 @@ Bootstrap derives host facts without consulting saved deployment state:
 | WSL | Lowercased `/proc/sys/kernel/osrelease` contains `microsoft` |
 | Linux distribution | `ID` and `VERSION_ID` parsed from `/etc/os-release` without executing it |
 
-A partial Omarchy installation, where only one Omarchy signal exists, is an
-error rather than a generic fallback. Simultaneous valid Omarchy and WSL
-signals are an unsupported conflict. WSL environment variables such as
-`WSL_INTEROP` are diagnostic only because they may be absent in some process
-contexts.
+A partial Omarchy installation, where only one Omarchy signal exists, is an error rather than a generic fallback. Simultaneous valid Omarchy and WSL signals are an unsupported conflict. WSL environment variables such as `WSL_INTEROP` are diagnostic only because they may be absent in some process contexts.
 
 Automatic selection follows this order:
 
@@ -144,15 +106,11 @@ Automatic selection follows this order:
 | Other Linux | Generic | Detected but not initially validated |
 | Non-Linux or conflicting signals | None | Unsupported |
 
-`--check` reports detected-but-unsupported hosts without mutation. Mutating
-apply refuses them. Portable files should remain distro-neutral where
-practical, but support for another distribution is accepted only after its
-dependency and behavior tests exist.
+`--check` reports detected-but-unsupported hosts without mutation. Mutating apply refuses them. Portable files should remain distro-neutral where practical, but support for another distribution is accepted only after its dependency and behavior tests exist.
 
 ### Explicit Overrides
 
-An explicit `--profile` changes selection only where the host can safely
-support that profile:
+An explicit `--profile` changes selection only where the host can safely support that profile:
 
 | Detected host | `omarchy` | `wsl` | `generic` |
 |---------------|-----------|-------|-----------|
@@ -161,9 +119,7 @@ support that profile:
 | Supported generic Linux | Reject | Reject | Allow |
 | Unsupported or conflicting | Reject | Reject | Reject |
 
-Profile names are lowercase and exact. Bootstrap re-detects host facts on every
-run; state is used for cleanup and mismatch refusal, never as detection
-authority.
+Profile names are lowercase and exact. Bootstrap re-detects host facts on every run; state is used for cleanup and mismatch refusal, never as detection authority.
 
 ## Areas
 
@@ -175,15 +131,9 @@ The default areas are:
 - Neovim
 - Transitional zsh configuration
 
-No `--area` selection means all default areas. Repeated `--area` options select
-only those areas. Omitting a previously deployed area does not remove it. A
-conflict in one selected area must not prevent an unrelated area from being
-deployed independently.
+No `--area` selection means all default areas. Repeated `--area` options select only those areas. Omitting a previously deployed area does not remove it. A conflict in one selected area must not prevent an unrelated area from being deployed independently.
 
-The manifest, not this conceptual list, controls readiness. Git, Bash, tmux,
-Neovim, and transitional zsh are ready and default-selected after their
-isolated gates. Neovim readiness currently covers generic and WSL; native
-Omarchy integration remains Stage 9 work.
+The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected after their isolated gates. Neovim readiness currently covers generic and WSL; native Omarchy integration remains Stage 9 work.
 
 ## Ownership Boundaries
 
@@ -205,17 +155,9 @@ Omarchy integration remains Stage 9 work.
 - OpenCode and `opencode-openai-codex-auth` remain host-owned and untouched,
   pending a separately reviewed later lifecycle and preservation proof.
 
-Executable ownership checks cover inherited exported functions, candidates on
-bootstrap's effective `PATH`, mise resolution from neutral and controlled
-project directories, and, after Stage 6, a controlled managed interactive Bash
-that can observe aliases and non-exported functions without executing rejected
-objects.
-Unexported aliases and functions in an arbitrary parent shell are not inherited;
-bootstrap does not parse unrelated startup files in an attempt to infer them.
+Executable ownership checks cover inherited exported functions, candidates on bootstrap's effective `PATH`, mise resolution from neutral and controlled project directories, and, after Stage 6, a controlled managed interactive Bash that can observe aliases and non-exported functions without executing rejected objects. Unexported aliases and functions in an arbitrary parent shell are not inherited; bootstrap does not parse unrelated startup files in an attempt to infer them.
 
-Native refresh-managed destinations must remain regular files rather than
-links into this checkout. Concrete attachment and executable rules are in
-[Deployment](deployment.md).
+Native refresh-managed destinations must remain regular files rather than links into this checkout. Concrete attachment and executable rules are in [Deployment](deployment.md).
 
 ## Architecture Acceptance Criteria
 

@@ -274,7 +274,8 @@ bash_distro_owner_matches() {
 
 bash_candidate_is_distro_path() {
   local candidate="$1"
-  case "$candidate" in /usr/bin/*|/bin/*) return 0 ;; esac
+  # /sbin and /usr/sbin are usr-merged aliases of /usr/bin on Arch hosts.
+  case "$candidate" in /usr/bin/*|/bin/*|/sbin/*|/usr/sbin/*) return 0 ;; esac
   [[ "${DOTFILES_TESTING:-}" == 1 && -n "${DOTFILES_TEST_BASH_DISTRO_BIN:-}" && \
     "$candidate" == "${DOTFILES_TEST_BASH_DISTRO_BIN%/}/"* ]]
 }

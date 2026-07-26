@@ -2,13 +2,9 @@
 
 ## Working Rule
 
-Implement stages in order. A stage is complete only after its gate and
-stage-specific tests pass. Open questions may delay their affected stage but
-must not cause guessed behavior to enter implementation.
+Implement stages in order. A stage is complete only after its gate and stage-specific tests pass. Open questions may delay their affected stage but must not cause guessed behavior to enter implementation.
 
-The primary implementation host is the upgraded Ubuntu 24.04 WSL distro.
-Generic behavior is developed there first; Omarchy-specific code paths use
-isolated fixtures until the native integration stage.
+The primary implementation host is the upgraded Ubuntu 24.04 WSL distro. Generic behavior is developed there first; Omarchy-specific code paths use isolated fixtures until the native integration stage.
 
 ## 1. Documentation And Contract Closure (Status: Implemented)
 
@@ -20,15 +16,11 @@ isolated fixtures until the native integration stage.
 - Distinguish planned behavior from the current implementation.
 - Preserve the released Neovim lockfile and document its trust boundary.
 
-Gate: an implementation agent can begin the Git foundation without choosing
-undocumented profile, package, state, migration, network, or authentication
-behavior.
+Gate: an implementation agent can begin the Git foundation without choosing undocumented profile, package, state, migration, network, or authentication behavior.
 
 ## 2. Minimal Source Foundation And Git End-To-End (Status: Implemented)
 
-Build the smallest complete vertical slice. This stage includes the source data
-that Git deployment consumes rather than depending on the later general sync
-stage.
+Build the smallest complete vertical slice. This stage includes the source data that Git deployment consumes rather than depending on the later general sync stage.
 
 - Add the source-manifest schema and the pinned Omarchy Git snapshot.
 - Record Git source path, commit, blob identity, mode, and destination.
@@ -71,9 +63,7 @@ Tests added in this stage cover:
 - Git value origins, external identity mode, local setting preservation,
   repository precedence, and prompt-disabled fake credential helpers.
 
-Gate: Git deploys and removes independently on the fresh WSL host; every
-required value resolves from the expected layer; identity and credentials
-remain functional and external; root-package Stow is no longer reachable.
+Gate: Git deploys and removes independently on the fresh WSL host; every required value resolves from the expected layer; identity and credentials remain functional and external; root-package Stow is no longer reachable.
 
 ## 3. Generalize Deployment Mechanics And Migration Safety (Status: Implemented)
 
@@ -97,9 +87,7 @@ Tests added in this stage cover:
 - Unknown packages, stale checkout roots, malformed state, and newer schema.
 - Fixture package conflicts and shared-path refusal.
 
-Gate: the framework represents every in-scope area and proves its transaction
-semantics with fixtures, without claiming unfinished shell, tmux, or Neovim
-payloads are ready.
+Gate: the framework represents every in-scope area and proves its transaction semantics with fixtures, without claiming unfinished shell, tmux, or Neovim payloads are ready.
 
 ## 4. Full Upstream Synchronization (Status: Implemented)
 
@@ -123,8 +111,7 @@ Tests added in this stage cover:
 - Offline verification under denied network access.
 - Manifest and snapshot drift.
 
-Gate: all committed baseline files reproduce from explicit pinned inputs during
-sync, and the accepted snapshots verify offline against the manifest.
+Gate: all committed baseline files reproduce from explicit pinned inputs during sync, and the accepted snapshots verify offline against the manifest.
 
 ## 5. Ownership-Aware Provisioning (Status: Implemented)
 
@@ -158,21 +145,13 @@ Tests added in this stage cover:
 - Temporary homes, XDG roots, fixture mise/OpenCode installations, and
   controlled paths; automated gates perform no real provisioning apply.
 
-Gate: generic systems converge using approved owners, missing distro packages
-are reported exactly, runtime pins do not advance silently, and Omarchy keeps
-native ownership.
+Gate: generic systems converge using approved owners, missing distro packages are reported exactly, runtime pins do not advance silently, and Omarchy keeps native ownership.
 
 ## 6. Shell Migration (Status: Complete; Ready; WSL Operational Acceptance Passed)
 
-Phase 1 closes and reviews the documentation contract before code, payload,
-readiness, or live-home changes. Its accepted design is in
-[Shell](tools/shell.md): reversible generic/WSL bypass blocks and stable login
-selection, a distinct additive native attachment, exact runtime order and WSL
-adapter boundary, private `bat`/`fd` wrappers, actual conditional aliases, and
-the retained host-local Bash layer.
+Phase 1 closes and reviews the documentation contract before code, payload, readiness, or live-home changes. Its accepted design is in [Shell](tools/shell.md): reversible generic/WSL bypass blocks and stable login selection, a distinct additive native attachment, exact runtime order and WSL adapter boundary, private `bat`/`fd` wrappers, actual conditional aliases, and the retained host-local Bash layer.
 
-No implementation phase may begin until the Phase 1 documentation diff has
-been reviewed and the active documents pass the contract gate.
+No implementation phase may begin until the Phase 1 documentation diff has been reviewed and the active documents pass the contract gate.
 
 Implementation then proceeds in separate gated phases:
 
@@ -190,20 +169,11 @@ Implementation then proceeds in separate gated phases:
 5. Complete isolated startup, attachment, ownership, denied-network, migration,
    removal, retention, rollback, and earlier-stage regression tests.
 
-The reusable engine primitives, selected upstream Bash payloads, managed Bash
-payload/lifecycle, and transitional zsh packaging/migrations are implemented.
-The complete combined Stage 6 matrix passed before both shell areas changed to
-`ready`; WSL operational rollout acceptance passed after the ordered live
-deployment and smoke checks.
+The reusable engine primitives, selected upstream Bash payloads, managed Bash payload/lifecycle, and transitional zsh packaging/migrations are implemented. The complete combined Stage 6 matrix passed before both shell areas changed to `ready`; WSL operational rollout acceptance passed after the ordered live deployment and smoke checks.
 
-The implementation enforces the WSL operational sequence: first Bash apply is
-explicit and excludes zsh; first zsh apply is a later explicit command after
-Bash state exists and excludes Bash. Full checks remain available before
-rollout, and default apply is restored after both shell states exist.
+The implementation enforces the WSL operational sequence: first Bash apply is explicit and excludes zsh; first zsh apply is a later explicit command after Bash state exists and excludes Bash. Full checks remain available before rollout, and default apply is restored after both shell states exist.
 
-Shell removal is state-driven and reversible for managed attachments. It
-retains host-local files, tools, Zinit, history, migration backups and ledger
-records, and the durable Vite+ retirement, and never changes the login shell.
+Shell removal is state-driven and reversible for managed attachments. It retains host-local files, tools, Zinit, history, migration backups and ledger records, and the durable Vite+ retirement, and never changes the login shell.
 
 Tests added in this stage cover:
 
@@ -218,24 +188,11 @@ Tests added in this stage cover:
 - zsh local-file collisions, exact `.zshenv` retirement, retained migrations,
   and `.zshrc.local` non-ownership.
 
-Gate: Bash behavior is predictable across generic, WSL, SSH, and missing-tool
-scenarios; Bash startup remains offline; transitional zsh behavior remains
-available without a login-shell change. Only after the full isolated gate passes
-may Bash and zsh change from `framework` to `ready`; that flip occurs immediately
-before live rollout. On WSL, apply and smoke-test Bash first while current zsh
-remains the login-shell recovery path, then apply zsh separately. Operational
-acceptance completes only after both explicit checks and smoke tests pass. A
-rollout failure is fixed and regated rather than bypassing readiness checks.
+Gate: Bash behavior is predictable across generic, WSL, SSH, and missing-tool scenarios; Bash startup remains offline; transitional zsh behavior remains available without a login-shell change. Only after the full isolated gate passes may Bash and zsh change from `framework` to `ready`; that flip occurs immediately before live rollout. On WSL, apply and smoke-test Bash first while current zsh remains the login-shell recovery path, then apply zsh separately. Operational acceptance completes only after both explicit checks and smoke tests pass. A rollout failure is fixed and regated rather than bypassing readiness checks.
 
 ## 7. tmux Migration (Status: Complete; Ready; WSL Operational Acceptance Passed)
 
-The documentation, package layout, relocated byte-identical baseline,
-schema-backed locks, area lifecycle, migration, native attachment, isolated
-validation, active-server inspection, parser fixtures, and transactional plugin
-provisioning are implemented. tmux is `ready` after the automated Stage 7 gates
-passed. WSL operational acceptance passed after the explicit live rollout,
-server transition, restore, and Windows Terminal 1.24.11911.0 checks. The
-accepted design is in [tmux](tools/tmux.md).
+The documentation, package layout, relocated byte-identical baseline, schema-backed locks, area lifecycle, migration, native attachment, isolated validation, active-server inspection, parser fixtures, and transactional plugin provisioning are implemented. tmux is `ready` after the automated Stage 7 gates passed. WSL operational acceptance passed after the explicit live rollout, server transition, restore, and Windows Terminal 1.24.11911.0 checks. The accepted design is in [tmux](tools/tmux.md).
 
 Implemented lifecycle coverage includes:
 
@@ -249,8 +206,7 @@ Implemented lifecycle coverage includes:
 5. Validate selected client identity, socket-reported active-server versions,
    `/proc` owner/path identity, and denied-network isolated servers independently.
 
-The final manual gates completed with save/restart/restore after the executable
-transition and the documented Windows Terminal unbind/version acceptance.
+The final manual gates completed with save/restart/restore after the executable transition and the documented Windows Terminal unbind/version acceptance.
 
 Tests added in this stage cover:
 
@@ -265,11 +221,7 @@ Tests added in this stage cover:
 - Duplicate Stow target refusal and removal retention for plugins and Resurrect.
 - Manual Windows Terminal key checks on a recorded client version.
 
-Gate: prefixes, bindings, indexes, status, key protocol, plugin order, and
-persistence validate on generic and WSL; an upgraded active server is restarted
-and restored deliberately; terminal limitations are recorded against tested
-versions. Stage 7 marked tmux ready only after the automated gate passed;
-package and manifest presence alone never changes readiness.
+Gate: prefixes, bindings, indexes, status, key protocol, plugin order, and persistence validate on generic and WSL; an upgraded active server is restarted and restored deliberately; terminal limitations are recorded against tested versions. Stage 7 marked tmux ready only after the automated gate passed; package and manifest presence alone never changes readiness.
 
 ## 8. Generic And WSL Neovim Migration (Status: Complete; Ready; WSL Operational Acceptance Passed)
 
@@ -304,14 +256,11 @@ Tests added in this stage cover:
   denied-network ordinary startup after all runtime-asset policies are active.
 - Lockfile non-mutation and plugin commit convergence.
 
-Gate: generic and WSL provide the intended LazyVim/Omarchy workflow from pinned
-sources without activating old configuration; runtime state remains recoverable;
-plugin source commits converge to the committed lock.
+Gate: generic and WSL provide the intended LazyVim/Omarchy workflow from pinned sources without activating old configuration; runtime state remains recoverable; plugin source commits converge to the committed lock.
 
 ## 9. Omarchy Native Integration And Validation
 
-Run this stage from the native Omarchy machine. It includes the remaining
-native Neovim design, not only validation.
+Run this stage from the native Omarchy machine. It includes the remaining native Neovim design, not only validation.
 
 - Validate Bash, tmux, and Git attachments against real refresh-managed files.
 - Design and implement the native Neovim personal loader, drift detection,
@@ -320,9 +269,7 @@ native Neovim design, not only validation.
 - Verify native executable ownership and separate core/Neovim drift warnings.
 - Re-run apply and removal to prove convergence and cleanup.
 
-Gate: Omarchy uses native aligned tools; native refreshes can replace baselines
-without overwriting shared personal source; attachments and the Neovim loader
-reapply and remove safely.
+Gate: Omarchy uses native aligned tools; native refreshes can replace baselines without overwriting shared personal source; attachments and the Neovim loader reapply and remove safely.
 
 ## 10. Stabilization And Distillation
 
@@ -337,8 +284,7 @@ reapply and remove safely.
 - Distill source operations into a runbook or skill and exact pins into the
   manifest.
 
-Gate: all target profiles satisfy their acceptance criteria and temporary
-planning content has a reviewed durable destination.
+Gate: all target profiles satisfy their acceptance criteria and temporary planning content has a reviewed durable destination.
 
 ## Accepted Rollout
 
@@ -351,7 +297,4 @@ planning content has a reviewed durable destination.
 
 ## Documentation Cleanup
 
-After stabilization, distill this packet into permanent documentation,
-machine-readable manifests, operational skills, and nearby implementation
-comments as described in the [packet lifecycle](README.md#temporary-lifecycle).
-Delete the packet only after those replacements have been reviewed.
+After stabilization, distill this packet into permanent documentation, machine-readable manifests, operational skills, and nearby implementation comments as described in the [packet lifecycle](README.md#temporary-lifecycle). Delete the packet only after those replacements have been reviewed.

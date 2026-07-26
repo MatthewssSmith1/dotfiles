@@ -8,11 +8,8 @@
    `~/dotfiles/bootstrap.sh --provision --area <area>`.
 4. Done when `--check` passes cleanly and `tests/bootstrap_test.sh` passes.
 
-Contracts: `docs/omarchy-alignment/deployment.md` and
-`docs/omarchy-alignment/tools/`.
+Contracts: `docs/omarchy-alignment/deployment.md` and `docs/omarchy-alignment/tools/`.
 
 ## Native Omarchy
 
-Omarchy-installed files are authoritative; only common and personal
-attachments deploy on top. Read `docs/environments/omarchy.md` before
-touching anything baseline-adjacent.
+Omarchy-installed files are authoritative; only common and personal attachments deploy on top. Read `docs/environments/omarchy.md` before touching anything baseline-adjacent.

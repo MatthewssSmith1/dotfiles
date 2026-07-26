@@ -1,7 +1,6 @@
 # Windows Agent Instructions
 
-`windows/` is a distinct environment, not part of the Linux adapter layers.
-Apply scripts run manually from a Windows shell, outside bootstrap and Stow.
+`windows/` is a distinct environment, not part of the Linux adapter layers. Apply scripts run manually from a Windows shell, outside bootstrap and Stow.
 
 ## Invariants
 

@@ -23,19 +23,24 @@ PROVISION=false
 EXPLICIT_AREA_SELECTION=false
 
 usage() {
-  printf 'usage: %s [apply|--check|--remove] [--provision] [--profile omarchy|generic|wsl] [--area <area> ...]\n' "$SCRIPT_NAME" >&2
+  printf 'usage: %s [apply|--check|--remove] [--provision] [--profile omarchy|generic|wsl] [--area <area>[,<area>...] ...]\n' "$SCRIPT_NAME" >&2
   exit 1
 }
 
 add_area() {
-  local area="$1"
-  local existing
+  local area existing
+  local -a requested=()
 
-  [[ "$area" =~ ^[a-z0-9-]+$ ]] || die "invalid area name '$area'"
-  for existing in "${AREAS[@]}"; do
-    [[ "$existing" != "$area" ]] || return 0
+  # One --area accepts a comma-separated list; empty segments are invalid.
+  IFS=',' read -r -a requested <<< "$1"
+  ((${#requested[@]} > 0)) || die "invalid area name '$1'"
+  for area in "${requested[@]}"; do
+    [[ "$area" =~ ^[a-z0-9-]+$ ]] || die "invalid area name '$area'"
+    for existing in "${AREAS[@]}"; do
+      [[ "$existing" != "$area" ]] || continue 2
+    done
+    AREAS+=("$area")
   done
-  AREAS+=("$area")
 }
 
 parse_cli() {
@@ -75,13 +80,13 @@ parse_cli() {
         PROFILE_OVERRIDE="${1#*=}"
         profile_seen=true
         ;;
-      --area)
+      --area|--tool)
         (($# >= 2)) || usage
         EXPLICIT_AREA_SELECTION=true
         add_area "$2"
         shift
         ;;
-      --area=*)
+      --area=*|--tool=*)
         EXPLICIT_AREA_SELECTION=true
         add_area "${1#*=}"
         ;;

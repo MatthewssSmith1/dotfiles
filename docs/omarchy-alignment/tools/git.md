@@ -1,15 +1,10 @@
 # Git
 
-The Git area is the foundation slice: it is deployed end-to-end first because
-it exercises every foundation mechanism at once — explicit packages, profile
-detection, deployment state, and the guarded-attachment helper via the
-`~/.gitconfig` entrypoint. See
-[the implementation plan](../plan.md#2-minimal-source-foundation-and-git-end-to-end).
+The Git area is the foundation slice: it is deployed end-to-end first because it exercises every foundation mechanism at once — explicit packages, profile detection, deployment state, and the guarded-attachment helper via the `~/.gitconfig` entrypoint. See [the implementation plan](../plan.md#2-minimal-source-foundation-and-git-end-to-end).
 
 ## Accepted Design
 
-Use Omarchy's complete Git behavior as the untouched baseline, then layer a
-small shared personal override and external local identity.
+Use Omarchy's complete Git behavior as the untouched baseline, then layer a small shared personal override and external local identity.
 
 The baseline includes:
 
@@ -39,22 +34,13 @@ Expected effective order:
 repository .git/config
 ```
 
-On Omarchy, preserve the native XDG file as the untouched baseline. On generic
-systems, Stow the pinned synchronized XDG baseline.
+On Omarchy, preserve the native XDG file as the untouched baseline. On generic systems, Stow the pinned synchronized XDG baseline.
 
-Keep `~/.gitconfig` as a regular guarded include entrypoint. This allows native
-`git config --global` writes without mutating the checkout. Its managed include
-sequence loads the shared personal file, external identity file, and optional
-central host-local file in the order shown above.
+Keep `~/.gitconfig` as a regular guarded include entrypoint. This allows native `git config --global` writes without mutating the checkout. Its managed include sequence loads the shared personal file, external identity file, and optional central host-local file in the order shown above.
 
 ## Omarchy Baseline Pin
 
-On the `omarchy` profile, apply and `--check` hard-fail during preflight unless
-the native `~/.config/git/config` matches all sixteen required baseline values
-exactly. A new Omarchy release that changes its Git configuration therefore
-blocks deployment until the pin is deliberately reviewed and updated. Stage 2's
-contract is a hard refusal, not reconciliation; Stage 5 layers drift warnings
-on top of this same pin.
+On the `omarchy` profile, apply and `--check` hard-fail during preflight unless the native `~/.config/git/config` matches all sixteen required baseline values exactly. A new Omarchy release that changes its Git configuration therefore blocks deployment until the pin is deliberately reviewed and updated. Stage 2's contract is a hard refusal, not reconciliation; Stage 5 layers drift warnings on top of this same pin.
 
 ## Personal And Local Layers
 
@@ -65,12 +51,7 @@ on top of this same pin.
   `~/.config/dotfiles/local/git.conf`.
 - Let repository-local configuration retain final precedence.
 
-Migration must preserve effective credential helpers as host-local settings in
-`~/.config/dotfiles/local/git.conf`. The current hard-coded helper paths should
-not enter a shared layer, but they must not disappear silently: migration
-reports each effective helper and preserves it until the user explicitly
-replaces or removes it. `rebase.autostash` is not retained unless another
-host-local or repository layer supplies it.
+Migration must preserve effective credential helpers as host-local settings in `~/.config/dotfiles/local/git.conf`. The current hard-coded helper paths should not enter a shared layer, but they must not disappear silently: migration reports each effective helper and preserves it until the user explicitly replaces or removes it. `rebase.autostash` is not retained unless another host-local or repository layer supplies it.
 
 ## Migration
 
@@ -88,8 +69,7 @@ host-local or repository layer supplies it.
    symlink. The rename itself replaces the symlink; do not unlink afterward.
 9. Validate every required value and source.
 
-Migration must stop rather than overwrite an unrelated regular file or
-malformed managed block.
+Migration must stop rather than overwrite an unrelated regular file or malformed managed block.
 
 ## Non-Goals
 

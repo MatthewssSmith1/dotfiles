@@ -356,7 +356,8 @@ verify_tree() {
       --arg destination "$expected_destination" '
         ([.sources[] | select(.id == $deployable_id)] | length) == 1 and
         ([.sources[] | select(.id == $reference_id)] | length) == 1 and
-        (.sources[] | select(.id == $deployable_id)) as $deployable |
+        # Parenthesized so the bindings parse identically on jq 1.7 and 1.8.
+        ((.sources[] | select(.id == $deployable_id)) as $deployable |
         (.sources[] | select(.id == $reference_id)) as $reference |
         $deployable.source.path == $source and
         $deployable.snapshot == $snapshot and
@@ -368,7 +369,7 @@ verify_tree() {
         $reference.destination == {root: "reference"} and
         $reference.transform == "none" and
         ($deployable | {repository, release, commit, source}) ==
-          ($reference | {repository, release, commit, source})
+          ($reference | {repository, release, commit, source}))
       ' "$manifest" >/dev/null || \
       die "deployable Bash source mapping is invalid for $deployable_id"
   done

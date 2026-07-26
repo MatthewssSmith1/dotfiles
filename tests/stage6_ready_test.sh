@@ -2,6 +2,8 @@
 
 set -Eeuo pipefail
 
+unset XDG_CONFIG_HOME GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT
+
 readonly TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SOURCE_REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
 TEST_ROOT="$(mktemp -d)"
@@ -52,7 +54,7 @@ exit 97
 SCRIPT
 chmod 0755 "$sentinel_bin/chsh"
 
-for name in fzf zoxide eza rg batcat fdfind; do
+for name in fzf zoxide eza rg batcat fdfind dpkg-query zsh; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$distro_bin/$name"
   chmod 0755 "$distro_bin/$name"
 done
@@ -60,7 +62,7 @@ cat > "$TEST_ROOT/dpkg-query" <<'SCRIPT'
 #!/usr/bin/env bash
 case "$2" in
   */fzf) package=fzf ;; */zoxide) package=zoxide ;; */eza) package=eza ;; */rg) package=ripgrep ;;
-  */batcat) package=bat ;; */fdfind) package=fd-find ;; *) exit 1 ;;
+  */batcat|*/bat) package=bat ;; */fdfind|*/fd) package=fd-find ;; *) exit 1 ;;
 esac
 printf '%s: %s\n' "$package" "$2"
 SCRIPT
@@ -106,14 +108,14 @@ chmod 0600 "$home/.local/state/dotfiles/provisioning/v1/receipt.json"
 cp -a "$home" "$TEST_ROOT/home-before"
 run_check() {
   HOME="$home" PATH="$home/.local/bin:$distro_bin:$sentinel_bin:/usr/bin:/bin" \
-    DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
+    DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
     DOTFILES_TEST_BASH_DISTRO_BIN="$distro_bin" DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/dpkg-query" \
     GIT_USER_NAME='Ready Fixture' GIT_USER_EMAIL=ready@example.com \
     "$REPO_DIR/bootstrap.sh" --check "$@"
 }
 run_apply() {
   HOME="$home" PATH="$home/.local/bin:$distro_bin:$sentinel_bin:/usr/bin:/bin" \
-    DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
+    DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
     DOTFILES_TEST_BASH_DISTRO_BIN="$distro_bin" DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/dpkg-query" \
     GIT_USER_NAME='Ready Fixture' GIT_USER_EMAIL=ready@example.com \
     "$REPO_DIR/bootstrap.sh" "$@"

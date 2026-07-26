@@ -2,13 +2,9 @@
 
 ## omarchy-nvim 2026.6.17-1 lazy-lock.json
 
-The `lazy-lock.json` shipped inside the built package
-`omarchy-nvim 2026.6.17-1`, extracted from
-`/usr/share/omarchy-nvim/config/lazy-lock.json` in the artifact.
+The `lazy-lock.json` shipped inside the built package `omarchy-nvim 2026.6.17-1`, extracted from `/usr/share/omarchy-nvim/config/lazy-lock.json` in the artifact.
 
-This file cannot be re-derived from any git source. The package build runs
-`nvim --headless "+Lazy! sync"`, which resolves every plugin to its branch
-HEAD at build time and generates the lockfile inside the artifact only.
+This file cannot be re-derived from any git source. The package build runs `nvim --headless "+Lazy! sync"`, which resolves every plugin to its branch HEAD at build time and generates the lockfile inside the artifact only.
 
 Provenance:
 
@@ -36,30 +32,10 @@ Provenance:
 
 ## Trust Boundary
 
-The package remained available during the Stage 8 reevaluation. Its signature
-was verified using the key committed in the selected `omarchy-pkgs` revision,
-its hash matched current stable repository metadata, and its complete packaged
-configuration was byte-identical to the committed snapshot. This closes the
-former uncertainty about the original extraction.
+The package remained available during the Stage 8 reevaluation. Its signature was verified using the key committed in the selected `omarchy-pkgs` revision, its hash matched current stable repository metadata, and its complete packaged configuration was byte-identical to the committed snapshot. This closes the former uncertainty about the original extraction.
 
-The 177,497,908-byte package is not committed because it is disproportionate
-to this small source repository and there is no existing large-artifact or LFS
-convention. The detached signature and key, exact package and database hashes,
-package metadata, PKGBUILD identity, and per-member hashes are retained. Future
-offline verification can check snapshot drift and authenticate any copy of the
-exact archive, but without the archive cannot independently replay package
-membership. The accepted member-hash record therefore remains the final
-trust-on-verification boundary.
+The 177,497,908-byte package is not committed because it is disproportionate to this small source repository and there is no existing large-artifact or LFS convention. The detached signature and key, exact package and database hashes, package metadata, PKGBUILD identity, and per-member hashes are retained. Future offline verification can check snapshot drift and authenticate any copy of the exact archive, but without the archive cannot independently replay package membership. The accepted member-hash record therefore remains the final trust-on-verification boundary.
 
-For every future package revision, retain this evidence set immediately. Use
-durable external artifact storage when available if committing the complete
-package would remain disproportionate.
+For every future package revision, retain this evidence set immediately. Use durable external artifact storage when available if committing the complete package would remain disproportionate.
 
-The lockfile contains 51 pinned plugins. Stage 4 relocated it without changing
-its bytes, and Stage 8 confirmed those bytes against the signed stable package.
-Its canonical committed location is
-[`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../../packages/upstream/nvim/.config/nvim/lazy-lock.json).
-Its fixed SHA-256 and provenance are carried in
-[`manifests/sources.json`](../../../manifests/sources.json). Sync copies only
-this hash-verified artifact into candidates; offline verify checks it without
-network access. See [Upstream](../upstream.md) for the full source model.
+The lockfile contains 51 pinned plugins. Stage 4 relocated it without changing its bytes, and Stage 8 confirmed those bytes against the signed stable package. Its canonical committed location is [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../../packages/upstream/nvim/.config/nvim/lazy-lock.json). Its fixed SHA-256 and provenance are carried in [`manifests/sources.json`](../../../manifests/sources.json). Sync copies only this hash-verified artifact into candidates; offline verify checks it without network access. See [Upstream](../upstream.md) for the full source model.
