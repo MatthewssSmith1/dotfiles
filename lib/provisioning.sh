@@ -1227,7 +1227,10 @@ check_omarchy_neovim_drift() {
   [[ -n "$path" ]] || { log 'error: missing native nvim executable'; return 1; }
   path="$(realpath -e -- "$path")" || { log 'error: native nvim executable cannot be resolved'; return 1; }
   owner="$(pacman -Qo "$path" 2>/dev/null)" || { log 'error: native nvim has no pacman owner'; return 1; }
-  [[ "$owner" =~ [[:space:]]owned[[:space:]]by[[:space:]]omarchy-nvim[[:space:]] ]] || { log 'error: native nvim is not owned by omarchy-nvim'; return 1; }
+  # Older omarchy-nvim releases shipped the executable; current releases ship
+  # only the configuration skeleton and depend on the distro neovim package.
+  [[ "$owner" =~ [[:space:]]owned[[:space:]]by[[:space:]](omarchy-nvim|neovim)[[:space:]] ]] || \
+    { log 'error: native nvim is not owned by omarchy-nvim or neovim'; return 1; }
   output="$(pacman -Q omarchy-nvim 2>/dev/null)" || { log 'error: missing native omarchy-nvim package'; return 1; }
   [[ "$output" =~ ^omarchy-nvim[[:space:]]+([^[:space:]]+)$ ]] || { log 'error: malformed omarchy-nvim package identity'; return 1; }
   installed="${BASH_REMATCH[1]}"

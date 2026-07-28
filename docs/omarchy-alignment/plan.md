@@ -258,16 +258,17 @@ Tests added in this stage cover:
 
 Gate: generic and WSL provide the intended LazyVim/Omarchy workflow from pinned sources without activating old configuration; runtime state remains recoverable; plugin source commits converge to the committed lock.
 
-## 9. Omarchy Native Integration And Validation
+## 9. Omarchy Native Integration And Validation (Status: In Progress On The Native Machine)
 
 Run this stage from the native Omarchy machine. It includes the remaining native Neovim design, not only validation.
 
-- Validate Bash, tmux, and Git attachments against real refresh-managed files.
-- Design and implement the native Neovim personal loader, drift detection,
-  removal, and refresh recovery.
-- Run `omarchy-nvim-refresh`, reattach the loader, and verify recovery.
-- Verify native executable ownership and separate core/Neovim drift warnings.
+- Validate Bash, tmux, and Git attachments against real refresh-managed files. (Done: live apply, byte-identical remove, and reapply passed for all three.)
+- Design and implement the native Neovim personal loader, drift detection, removal, and refresh recovery. (Done: guarded loader at `~/.config/nvim/plugin/dotfiles-personal.lua`; see [Neovim](tools/neovim.md#native-loader-stage-9-implemented).)
+- Run the native Neovim refresh (`omarchy-nvim-setup`; `omarchy-nvim-refresh` in older Omarchy releases), reattach the loader, and verify recovery.
+- Verify native executable ownership and separate core/Neovim drift warnings. (Adjusted: `/usr/bin/nvim` is distro-`neovim`-owned on current Omarchy; the drift check accepts that and verifies the `omarchy-nvim` package identity separately. System mise is pacman-owned and accepted through usr-merged paths.)
 - Re-run apply and removal to prove convergence and cleanup.
+
+Tests added in this stage cover the native loader lifecycle in `tests/stage9_nvim_native_test.sh`: non-mutating checks, exact creation, idempotent reapply, simulated refresh reattachment, drift/foreign-file/forged-state refusals, byte-identical removal, and rollback at both attachment fault points.
 
 Gate: Omarchy uses native aligned tools; native refreshes can replace baselines without overwriting shared personal source; attachments and the Neovim loader reapply and remove safely.
 

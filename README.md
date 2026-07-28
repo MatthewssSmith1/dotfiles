@@ -28,7 +28,7 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
   ~/dotfiles/bootstrap.sh --check --area git
 ```
 
-Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline. Git, Bash, tmux, Neovim, and transitional zsh are ready and selected by default on generic and WSL hosts. Native Omarchy Neovim integration remains deferred to Stage 9. Bootstrap preserves unrelated shell, agent, application, and authentication state.
+Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline. Git, Bash, tmux, Neovim, and transitional zsh are ready and selected by default on generic and WSL hosts; native Omarchy attaches Git, Bash, tmux, and the Neovim personal loader to installed baselines. Bootstrap preserves unrelated shell, agent, application, and authentication state.
 
 The accepted Stage 6 contract makes Bash with Starship the primary configured workflow without changing the account's current zsh login shell. Generic and WSL Bash use byte-reversible startup-file blocks; native Omarchy uses a separate additive attachment. Shell rollout is Bash-first and remains gated on isolated tests and live smoke checks. See the [shell contract](docs/omarchy-alignment/tools/shell.md).
 

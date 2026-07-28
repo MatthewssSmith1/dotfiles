@@ -133,7 +133,7 @@ The default areas are:
 
 No `--area` selection means all default areas. Repeated `--area` options select only those areas. Omitting a previously deployed area does not remove it. A conflict in one selected area must not prevent an unrelated area from being deployed independently.
 
-The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected after their isolated gates. Neovim readiness currently covers generic and WSL; native Omarchy integration remains Stage 9 work.
+The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected after their isolated gates. Neovim readiness covers generic, WSL, and native Omarchy; the native personal loader is implemented as a guarded attachment.
 
 ## Ownership Boundaries
 

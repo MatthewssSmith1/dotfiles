@@ -101,13 +101,13 @@ HOME="$home" XDG_CONFIG_HOME="$home/xdg/config" XDG_DATA_HOME="$home/xdg/data" \
 [[ "$(< "$fixture/report")" == runtime-policy-ok ]] || fail 'real startup did not evaluate runtime policy'
 [[ ! -s "$fixture/network.log" ]] || fail 'ordinary restored startup attempted a network-capable command'
 
-# Native remains deferred even though the area is ready for generic and WSL.
+# A generic deployment refuses an omarchy-profile preflight until removed.
 if HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
   SCRIPT_NAME=stage8-ready SELECTED_PROFILE=omarchy DOTFILES_TESTING=1 DOTFILES_TEST_NVIM_BIN="$(command -v nvim)" \
   bash -c 'set -Eeuo pipefail; source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh";
     source "$DOTFILES_DIR/lib/provisioning.sh"; source "$DOTFILES_DIR/lib/areas/nvim.sh"; preflight_nvim' \
   >/dev/null 2>&1; then
-  fail 'ready Neovim area admitted native Omarchy before Stage 9'
+  fail 'ready Neovim area ignored a generic-to-omarchy profile mismatch'
 fi
 
 printf 'stage8_nvim_readiness_test: PASS\n'

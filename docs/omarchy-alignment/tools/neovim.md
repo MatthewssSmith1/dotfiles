@@ -64,15 +64,15 @@ Accepted backup policy: git history is the configuration backup. The live `~/.co
 
 Accepted first-start network policy: on a fresh generic host, network access is permitted on the first explicit `nvim` launch. A small pre-start loader runs a one-time locked restore before normal editor startup, verifies applicable plugin commits, and records the restored lockfile blob identity in Neovim area state only after success. An interrupted restore leaves the marker absent and retries on the next explicit launch without changing `lazy-lock.json`. Later plugin network access occurs only through an explicit restore command after a lock change. Bootstrap itself never fetches Neovim plugins. First start therefore requires connectivity; that is accepted. This guarantee covers plugin restoration. Mason packages, Treesitter parsers, Lua rocks, generated build outputs, and project-local Lazy specs are outside the plugin lockfile. Before the Neovim stage closes, inventory every automatic downloader and assign each asset one policy: pinned provisioning, explicit user-initiated network access, or disabled automatic installation. Ordinary startup must remain offline after that policy is implemented.
 
-## Open Questions
+## Native Loader (Stage 9, Implemented)
 
-Resolve these during the [Omarchy native integration and validation stage](../plan.md#9-omarchy-native-integration-and-validation):
+The loader is the regular file `~/.config/nvim/plugin/dotfiles-personal.lua`, mode 0644, whose entire content is one guarded block (`-- >>> dotfiles nvim >>>` … `-- <<< dotfiles nvim <<<`). Config-dir `plugin/*.lua` files are sourced after init, so its `dofile` of `~/.config/dotfiles/nvim/personal.lua` (deployed by `common/nvim`, the only native package) overrides baseline options. A missing personal file is skipped silently; a runtime error notifies without breaking startup.
 
-1. What exact file and content load the personal layer on native Omarchy?
-2. How does bootstrap detect loader drift and remove the loader safely?
-3. What clean-install and post-refresh commands prove the workflow?
+Drift detection: area state records exactly one attachment (`nvim-native-loader-v1.created`) with the block's content hash. Preflight refuses a modified block, any bytes outside the markers, a symlink or foreign file at the path, or a forged state record. Removal deletes the loader file exactly and refuses when the loader is absent or drifted.
 
-These questions are stage gates, not recommendations.
+Refresh facts verified on the live host: the config is a plain skel copy owned by the `omarchy-nvim` package, not a git checkout; refresh is the package-owned `omarchy-nvim-setup` (the `omarchy-nvim-refresh` name in older notes), which backs up `~/.config/nvim`, clears nvim data/state/cache, and re-copies skel. After refresh the loader is absent: `--check --area nvim` fails with reattachment guidance and apply recreates it byte-identically. The `nvim` executable is owned by the distro `neovim` package; the drift warning verifies `omarchy-nvim` package identity separately.
+
+Workflow proof: `bootstrap.sh --check --area nvim`, apply, `nvim --headless "+lua print(vim.o.relativenumber)" +q`, refresh, failing check, reapply, and a `--remove --area nvim` round trip leaving the native tree byte-identical.
 
 Generic and WSL runtime-asset policy is also a Stage 8 gate: identify Mason, Treesitter, rocks, build outputs, and project-local behavior before asserting ordinary startup is offline.
 

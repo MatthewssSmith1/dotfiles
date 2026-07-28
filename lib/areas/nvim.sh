@@ -3,6 +3,30 @@
 readonly NVIM_LEGACY_MIGRATION_ID='nvim-kickstart-links-v1'
 readonly NVIM_RUNTIME_MIGRATION_PREFIX='nvim-runtime-v1'
 
+# Native Omarchy loader: a regular file wholly owned by bootstrap. Config-dir
+# plugin/*.lua files are sourced after init, so personal overrides win over the
+# native baseline's options.lua. A native refresh replaces ~/.config/nvim and
+# leaves the loader absent; reattachment recreates it from these exact bytes.
+readonly NVIM_NATIVE_PATH='.config/nvim/plugin/dotfiles-personal.lua'
+readonly NVIM_NATIVE_BEGIN='-- >>> dotfiles nvim >>>'
+readonly NVIM_NATIVE_END='-- <<< dotfiles nvim <<<'
+readonly NVIM_NATIVE_TOKEN='dotfiles nvim'
+readonly NVIM_NATIVE_BLOCK="$NVIM_NATIVE_BEGIN
+-- Managed by dotfiles bootstrap; the native Omarchy baseline owns everything else.
+local personal = vim.fn.expand('~/.config/dotfiles/nvim/personal.lua')
+if (vim.uv or vim.loop).fs_stat(personal) then
+  local ok, err = pcall(dofile, personal)
+  if not ok then
+    vim.schedule(function()
+      vim.notify('dotfiles personal layer failed: ' .. tostring(err), vim.log.levels.WARN)
+    end)
+  end
+end
+$NVIM_NATIVE_END"
+
+NVIM_NATIVE_ACTION=none
+NVIM_NATIVE_ORIGIN=""
+
 NVIM_FOLDED_LEGACY=false
 NVIM_LEGACY_PATHS=()
 NVIM_LEGACY_IDENTITIES=()
@@ -32,6 +56,8 @@ init_nvim_area() {
   NVIM_PRESERVED_RESTORE=""
   NVIM_TRANSITIONAL_MARKER=""
   NVIM_TRANSITIONAL_MARKER_IDENTITY=""
+  NVIM_NATIVE_ACTION=none
+  NVIM_NATIVE_ORIGIN=""
   register_migration_ledger_journal
 }
 
@@ -55,6 +81,10 @@ area_requires_isolated_stow_preflight() {
 }
 
 nvim_expected_targets() {
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    NVIM_EXPECTED_TARGETS=(.config/dotfiles/nvim/personal.lua)
+    return 0
+  fi
   NVIM_EXPECTED_TARGETS=(
     .config/dotfiles/nvim/generic.lua
     .config/dotfiles/nvim/personal.lua
@@ -89,8 +119,13 @@ validate_nvim_target_inventory() {
   local path
   local -A expected=() actual=()
   nvim_expected_targets
-  [[ "${PACKAGES[*]}" == 'upstream/nvim generic/nvim common/nvim' ]] || \
-    die 'Neovim package closure must be exactly upstream/generic/common'
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    [[ "${PACKAGES[*]}" == 'common/nvim' ]] || \
+      die 'native Omarchy Neovim package closure must be exactly common/nvim'
+  else
+    [[ "${PACKAGES[*]}" == 'upstream/nvim generic/nvim common/nvim' ]] || \
+      die 'Neovim package closure must be exactly upstream/generic/common'
+  fi
   for path in "${NVIM_EXPECTED_TARGETS[@]}"; do expected["$path"]=1; done
   for path in "${TARGET_PATHS[@]}"; do actual["$path"]=1; done
   for path in "${NVIM_EXPECTED_TARGETS[@]}"; do
@@ -113,6 +148,9 @@ validate_nvim_payload() {
     fi
     file_contains_nul "${TARGET_SOURCES[index]}" && die "Neovim payload contains NUL bytes: $path"
   done
+  # Native Omarchy deploys no upstream snapshot or lockfile; the installed
+  # baseline owns plugins and their lock.
+  [[ "$SELECTED_PROFILE" != omarchy ]] || return 0
   jq -e 'type == "object" and length > 0 and (.["lazy.nvim"].commit | test("^[0-9a-f]{40}$"))' \
     "$DOTFILES_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json" >/dev/null || die 'invalid deployed Neovim lockfile'
   "$DOTFILES_DIR/scripts/upstream" verify >/dev/null || die 'pinned upstream Neovim snapshot verification failed'
@@ -314,10 +352,51 @@ preflight_nvim_transitional_marker() {
   AREA_JOURNAL_PATHS+=("$marker")
 }
 
+# The loader file is wholly bootstrap-owned: only origin `created` is legal,
+# and any bytes outside the guarded block are drift, not host content.
+nvim_attachment_preflight() {
+  local policy="$1"
+  guarded_attachment_preflight "$NVIM_NATIVE_PATH" "$NVIM_NATIVE_BEGIN" "$NVIM_NATIVE_END" "$NVIM_NATIVE_TOKEN" \
+    "$NVIM_NATIVE_BLOCK" append "$policy"
+  NVIM_NATIVE_ACTION="$GUARDED_ATTACHMENT_ACTION"
+  NVIM_NATIVE_ORIGIN="$GUARDED_ATTACHMENT_ORIGIN"
+  if [[ "$NVIM_NATIVE_ACTION" == insert ]]; then
+    [[ "$NVIM_NATIVE_ORIGIN" == created ]] || \
+      die "unrelated file exists at the native Neovim loader path: $HOME/$NVIM_NATIVE_PATH"
+  else
+    [[ "$(sha256_file "$HOME/$NVIM_NATIVE_PATH")" == "$(sha256_string "$NVIM_NATIVE_BLOCK"$'\n')" ]] || \
+      die "native Neovim loader contains unmanaged content: $HOME/$NVIM_NATIVE_PATH"
+  fi
+}
+
+preflight_new_nvim_attachment() {
+  local root="$HOME/.config/nvim"
+  validate_home_parent_chain "$root"
+  [[ -d "$root" && ! -L "$root" && "$(stat -c %u -- "$root")" == "$EUID" ]] || \
+    die "native Omarchy Neovim config is missing or unsafe: $root"
+  [[ -f "$root/init.lua" && ! -L "$root/init.lua" ]] || \
+    die "native Omarchy Neovim baseline is incomplete: $root/init.lua"
+  nvim_attachment_preflight new
+}
+
 validate_nvim_state() {
-  local state="$1" restored lock target
+  local state="$1" restored lock target profile id path hash
+  profile="$(jq -r .profile "$state")"
+  if [[ "$profile" == omarchy ]]; then
+    [[ "$(jq '.attachments | length' "$state")" == 1 ]] || \
+      die 'native Neovim state does not record exactly one attachment'
+    IFS=$'\t' read -r id path hash < <(jq -r '.attachments[0] | [.id,.path,.content_hash] | @tsv' "$state")
+    [[ "$id" == nvim-native-loader-v1.created && "$path" == "$NVIM_NATIVE_PATH" && \
+      "$hash" == "$(sha256_string "$NVIM_NATIVE_BLOCK")" ]] || \
+      die 'native Neovim state records an unknown attachment'
+    [[ -z "$(jq -r '.restored_lock_sha256 // empty' "$state")" ]] || \
+      die 'native Neovim state records a generic restore marker'
+    [[ "$(jq '.backups | length' "$state")" == 0 ]] || die 'native Neovim state records unknown backups'
+    nvim_attachment_preflight "$([[ "$MODE" == remove ]] && printf exact || printf new)"
+    return 0
+  fi
   [[ "$(jq '.attachments | length' "$state")" == 0 ]] || die 'Neovim state records unknown attachments'
-  [[ "$(jq -r .profile "$state")" == generic || "$(jq -r .profile "$state")" == wsl ]] || die 'native Omarchy Neovim remains deferred to Stage 9'
+  [[ "$profile" == generic || "$profile" == wsl ]] || die 'unknown Neovim state profile'
   restored="$(jq -r '.restored_lock_sha256 // empty' "$state")"
   if [[ -n "$restored" ]]; then
     target="$HOME/.config/nvim/lazy-lock.json"
@@ -338,6 +417,14 @@ require_nvim_runtime_ledger_for_state() {
 
 check_nvim_restore_convergence() {
   local restored lock
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    [[ "$OLD_STATE" == true ]] || { log 'pending native Neovim loader: deployment state is absent'; return 1; }
+    if [[ "$NVIM_NATIVE_ACTION" == insert ]]; then
+      log 'pending native Neovim loader reattachment: apply --area nvim to reattach after the native refresh'
+      return 1
+    fi
+    return 0
+  fi
   [[ "$OLD_STATE" == true ]] || { log 'pending Neovim restore: deployment state is absent'; return 1; }
   restored="$(jq -r '.restored_lock_sha256 // empty' "$AREA_STATE")"
   lock="$(sha256_file "$HOME/.config/nvim/lazy-lock.json")"
@@ -353,7 +440,24 @@ check_nvim_restore_convergence() {
 
 preflight_nvim() {
   init_nvim_area
-  [[ "$SELECTED_PROFILE" == generic || "$SELECTED_PROFILE" == wsl ]] || die 'native Omarchy Neovim is deferred to Stage 9'
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    # The native package owns the baseline, plugins, lock, and runtime state;
+    # Kickstart retirement, XDG renames, and restore machinery never run here.
+    load_profile_closure nvim
+    scan_packages
+    validate_nvim_target_inventory
+    validate_nvim_payload
+    validate_nvim_executable
+    record_managed_parents '.local/state/dotfiles/v1/nvim.json'
+    AREA_JOURNAL_PATHS+=("$HOME/$NVIM_NATIVE_PATH")
+    preflight_existing_state
+    [[ "$OLD_STATE" == true ]] || preflight_new_nvim_attachment
+    preflight_desired_targets
+    run_stow_preflight
+    return 0
+  fi
+  [[ "$SELECTED_PROFILE" == generic || "$SELECTED_PROFILE" == wsl ]] || \
+    die "unsupported Neovim profile: $SELECTED_PROFILE"
   load_profile_closure nvim
   preflight_nvim_legacy
   scan_packages
@@ -410,16 +514,26 @@ nvim_backups_json() {
 }
 
 build_nvim_state_json() {
-  local packages='[]' targets='[]' dirs='[]' backups index state
+  local packages='[]' targets='[]' dirs='[]' attachments='[]' backups index state
   for index in "${!PACKAGES[@]}"; do packages="$(jq -c --arg v "${PACKAGES[index]}" '. + [$v]' <<< "$packages")"; done
   for index in "${!TARGET_PATHS[@]}"; do
     targets="$(jq -c --arg path "${TARGET_PATHS[index]}" --arg source "${TARGET_LEXICAL[index]}" --arg resolved "${TARGET_SOURCES[index]}" '. + [{path:$path,source:$source,resolved_source:$resolved}]' <<< "$targets")"
   done
   for index in "${!MANAGED_DIRS[@]}"; do dirs="$(jq -c --arg v "${MANAGED_DIRS[index]}" '. + [$v]' <<< "$dirs")"; done
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    attachments="$(jq -cn --arg id 'nvim-native-loader-v1.created' --arg path "$NVIM_NATIVE_PATH" \
+      --arg hash "$(sha256_string "$NVIM_NATIVE_BLOCK")" '[{id:$id,path:$path,content_hash:$hash}]')"
+  fi
   backups="$(nvim_backups_json)"
-  state="$(jq -cn --arg profile "$SELECTED_PROFILE" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" --argjson backups "$backups" '{schema_version:1,profile:$profile,area:"nvim",checkout_root:$checkout,target_root:$target,packages:$packages,targets:$targets,managed_directories:$dirs,attachments:[],backups:$backups}')"
+  state="$(jq -cn --arg profile "$SELECTED_PROFILE" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" --argjson attachments "$attachments" --argjson backups "$backups" '{schema_version:1,profile:$profile,area:"nvim",checkout_root:$checkout,target_root:$target,packages:$packages,targets:$targets,managed_directories:$dirs,attachments:$attachments,backups:$backups}')"
   [[ -z "$NVIM_PRESERVED_RESTORE" ]] || state="$(jq -c --arg hash "$NVIM_PRESERVED_RESTORE" '.restored_lock_sha256=$hash' <<< "$state")"
   printf '%s' "$state"
+}
+
+install_nvim_attachment() {
+  [[ "$SELECTED_PROFILE" == omarchy ]] || return 0
+  [[ "$NVIM_NATIVE_ACTION" == insert ]] || return 0
+  write_guarded_attachment_only_atomic "$NVIM_NATIVE_PATH" "$NVIM_NATIVE_BLOCK" 0644 absent
 }
 
 commit_nvim_migrations() {
@@ -438,6 +552,21 @@ commit_nvim_migrations() {
 
 apply_nvim() {
   local state_json
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    begin_transaction
+    remove_recorded_links_for_apply
+    apply_stow_packages
+    validate_applied_targets
+    fault nvim-after-stow
+    install_nvim_attachment
+    fault nvim-after-attachment
+    state_json="$(build_nvim_state_json)"
+    write_transaction_string_atomic "$state_json" "$AREA_STATE" 0600
+    fault nvim-after-state
+    TRANSACTION_ACTIVE=false
+    log "applied Neovim area for profile 'omarchy'; native baseline retained with personal loader"
+    return 0
+  fi
   begin_transaction
   retire_nvim_legacy_links
   retire_nvim_transitional_marker
@@ -470,7 +599,13 @@ remove_nvim() {
   while IFS= read -r dir; do validate_home_directory "$HOME/$dir"; managed_directories+=("$dir"); done < <(jq -r '.managed_directories[]' "$state")
   AREA_STATE="$state"; OLD_STATE=true; TARGET_PATHS=()
   while IFS= read -r dir; do TARGET_PATHS+=("$dir"); done < <(jq -r '.targets[].path' "$state")
+  [[ "$SELECTED_PROFILE" != omarchy ]] || AREA_JOURNAL_PATHS+=("$HOME/$NVIM_NATIVE_PATH")
   begin_transaction
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    remove_guarded_attachment "$NVIM_NATIVE_PATH" "$NVIM_NATIVE_BEGIN" "$NVIM_NATIVE_END" "$NVIM_NATIVE_TOKEN" \
+      "$NVIM_NATIVE_BLOCK" append created
+    fault nvim-remove-after-attachment
+  fi
   for ((index=0; index<count; index++)); do remove_recorded_target "$state" "$index"; done
   fault nvim-remove-after-links
   remove_current_regular_path "$state" 'Neovim area state'

@@ -251,7 +251,7 @@ Attach shared behavior using small regular-file changes:
 
 - Bash: append a guarded source block to native `.bashrc`.
 - tmux: append a guarded source line to native tmux configuration.
-- Neovim: recreate a small regular loader after refresh.
+- Neovim: recreate the regular loader `~/.config/nvim/plugin/dotfiles-personal.lua` after refresh.
 - Git: preserve the native XDG baseline and use a regular `~/.gitconfig`
   include entrypoint.
 - Starship: leave the native configuration unchanged initially.
