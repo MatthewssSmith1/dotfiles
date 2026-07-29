@@ -117,6 +117,20 @@ select_default_areas() {
   ((${#AREAS[@]} > 0)) || die 'no ready areas are defined in manifests/areas.tsv'
 }
 
+# The transitional zsh area preserves an existing zsh setup. A host with no
+# zsh executable and no recorded zsh deployment has nothing to preserve, so
+# default selection skips the area; explicit --area zsh still requires zsh.
+skip_unprovisioned_transitional_zsh() {
+  local remaining=() area
+  [[ "$EXPLICIT_AREA_SELECTION" != true ]] || return 0
+  array_contains zsh "${AREAS[@]}" || return 0
+  ! command_capability_exists zsh || return 0
+  [[ ! -f "$HOME/.local/state/dotfiles/v1/zsh.json" ]] || return 0
+  for area in "${AREAS[@]}"; do [[ "$area" == zsh ]] || remaining+=("$area"); done
+  AREAS=("${remaining[@]}")
+  log "area 'zsh' skipped: zsh is not installed and has never been deployed here; select --area zsh to require it"
+}
+
 select_recorded_areas() {
   local file base
   local state_dir="$HOME/.local/state/dotfiles/v1"
@@ -351,6 +365,7 @@ main() {
     return
   fi
   select_default_areas
+  skip_unprovisioned_transitional_zsh
   validate_selected_areas
   detect_host
   select_profile

@@ -18,7 +18,7 @@ Use one active tracked baseline. Git history provides rollback; do not retain a 
 | LazyVim starter | `https://github.com/LazyVim/starter` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` |
 | Omarchy Neovim overlay | `https://github.com/omacom-io/omarchy-pkgs` | `2026.7.17-1` | `2eb15bc7265c5293985f7e5f483e39df7be9c548` |
 
-The accepted refresh is recorded in [`manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json`](../../manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json). Both Neovim inputs record package identity `omarchy-nvim 2026.7.17-1`. The v3.8.3-to-v3.8.4 core diff touched none of the tracked paths, so every core snapshot is byte-identical to the previous baseline.
+The accepted refresh is recorded in [`manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json`](../manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json). Both Neovim inputs record package identity `omarchy-nvim 2026.7.17-1`. The v3.8.3-to-v3.8.4 core diff touched none of the tracked paths, so every core snapshot is byte-identical to the previous baseline.
 
 There is no standalone Omarchy Neovim repository. The released configuration is assembled from three inputs:
 
@@ -36,13 +36,13 @@ There is no standalone Omarchy Neovim repository. The released configuration is 
    vim.g.autoformat = false
    ```
 
-The `omarchy-pkgs` commit above is the commit associated with `2026.7.17-1`; the artifact's recorded build date follows it by five minutes. The built package generated `lazy-lock.json` at build time; the extracted copy is committed at [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../packages/upstream/nvim/.config/nvim/lazy-lock.json) with fixed artifact and extracted-file hashes recorded in [Artifacts](artifacts/README.md). On 2026-07-29 the package and detached signature were retrieved from stable. The signature, repository checksum, PKGBUILD identity, package metadata, and complete packaged configuration were verified against the assembled snapshot.
+The `omarchy-pkgs` commit above is the commit associated with `2026.7.17-1`; the artifact's recorded build date follows it by five minutes. The built package generated `lazy-lock.json` at build time; the extracted copy is committed at [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../packages/upstream/nvim/.config/nvim/lazy-lock.json) with fixed artifact and extracted-file hashes recorded in [Artifacts](artifacts/README.md). On 2026-07-29 the package and detached signature were retrieved from stable. The signature, repository checksum, PKGBUILD identity, package metadata, and complete packaged configuration were verified against the assembled snapshot.
 
-The `2026.7.17-1` refresh adopts the OSC-52/tmux remote-clipboard module first seen on edge as `2026.7.15-1` during Stage 8, when the latest-stable policy correctly refused it; it reached authoritative stable metadata as part of `2026.7.17-1`. Newer pkgvers in `omarchy-pkgs` git history (`2026.7.23`, `2026.7.27`) were absent from stable metadata at refresh time and were not selected; edge content must not be assembled into this baseline.
+The `2026.7.17-1` refresh adopts the OSC-52/tmux remote-clipboard module first seen on edge as `2026.7.15-1`, when the latest-stable policy correctly refused it; it reached authoritative stable metadata as part of `2026.7.17-1`. Newer pkgvers in `omarchy-pkgs` git history (`2026.7.23`, `2026.7.27`) were absent from stable metadata at refresh time and were not selected; edge content must not be assembled into this baseline.
 
 ## Manifest
 
-The active [`manifests/sources.json`](../../manifests/sources.json) records one entry per snapshot file, rather than one entry per source tree. Source-manifest schema v1 remains compatible with the Stage 2 records and adds optional reference destinations, append and overwrite transforms, and artifact records. Each entry records:
+The active [`manifests/sources.json`](../manifests/sources.json) records one entry per snapshot file, rather than one entry per source tree. Source-manifest schema v1 supports optional reference destinations, append and overwrite transforms, and artifact records. Each entry records:
 
 - Schema version.
 - Upstream repository URL and immutable commit.

@@ -14,7 +14,7 @@
 
 ## Non-Goals
 
-The initial migration does not aim to:
+This configuration deliberately does not:
 
 - Reproduce Hyprland, Waybar, wallpaper, hardware, or other desktop setup.
 - Preserve the current Kickstart Neovim configuration.
@@ -79,9 +79,9 @@ Tracked baseline, adapter, and personal files under `~/.config/dotfiles/` are no
 | Generic | Deploy pinned snapshots plus generic portability adapters |
 | WSL | Inherit Generic and add only required WSL behavior |
 
-Profiles describe the host a configuration is deployed on. The client terminal is a separate concern: Windows Terminal guidance in [`docs/environments/windows-terminal.md`](../environments/windows-terminal.md) applies to any host reached from Windows Terminal, including generic VPSs over SSH, not only the WSL profile.
+Profiles describe the host a configuration is deployed on. The client terminal is a separate concern: Windows Terminal guidance in [`docs/environments/windows-terminal.md`](environments/windows-terminal.md) applies to any host reached from Windows Terminal, including generic VPSs over SSH, not only the WSL profile.
 
-The primary implementation and validation host is the upgraded Ubuntu 24.04 WSL distro. See [WSL](../environments/wsl.md).
+Ubuntu 24.04 under WSL is the primary generic-profile target. See [WSL](environments/wsl.md).
 
 ### Detection Signals
 
@@ -131,9 +131,9 @@ The default areas are:
 - Neovim
 - Transitional zsh configuration
 
-No `--area` selection means all default areas. Repeated `--area` options select only those areas. Omitting a previously deployed area does not remove it. A conflict in one selected area must not prevent an unrelated area from being deployed independently.
+No `--area` selection means all default areas, except that default selection skips the transitional zsh area when zsh is not installed and has never been deployed on the host; explicit `--area zsh` still requires it. Repeated `--area` options select only those areas. Omitting a previously deployed area does not remove it. A conflict in one selected area must not prevent an unrelated area from being deployed independently.
 
-The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected after their isolated gates. Neovim readiness covers generic, WSL, and native Omarchy; the native personal loader is implemented as a guarded attachment.
+The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected. Neovim readiness covers generic, WSL, and native Omarchy; the native personal loader is implemented as a guarded attachment.
 
 ## Ownership Boundaries
 
@@ -155,7 +155,7 @@ The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neo
 - OpenCode and `opencode-openai-codex-auth` remain host-owned and untouched,
   pending a separately reviewed later lifecycle and preservation proof.
 
-Executable ownership checks cover inherited exported functions, candidates on bootstrap's effective `PATH`, mise resolution from neutral and controlled project directories, and, after Stage 6, a controlled managed interactive Bash that can observe aliases and non-exported functions without executing rejected objects. Unexported aliases and functions in an arbitrary parent shell are not inherited; bootstrap does not parse unrelated startup files in an attempt to infer them.
+Executable ownership checks cover inherited exported functions, candidates on bootstrap's effective `PATH`, mise resolution from neutral and controlled project directories, and a controlled managed interactive Bash that can observe aliases and non-exported functions without executing rejected objects. Unexported aliases and functions in an arbitrary parent shell are not inherited; bootstrap does not parse unrelated startup files in an attempt to infer them.
 
 Native refresh-managed destinations must remain regular files rather than links into this checkout. Concrete attachment and executable rules are in [Deployment](deployment.md).
 

@@ -13,7 +13,7 @@ readonly TEMP_ROOT="$TEST_ROOT"
 readonly UPSTREAM="$REPO_DIR/scripts/upstream"
 readonly EXPECTED_COMMIT='8fcc9d6048af4cb0e3af8512c78049857a3b53dd'
 readonly EXPECTED_BLOB='0f8e979785bb2a451f42cd494517d12eabcd54bf'
-readonly NVIM_EVIDENCE_REL='docs/omarchy-alignment/artifacts/omarchy-nvim-2026.7.17-1'
+readonly NVIM_EVIDENCE_REL='docs/artifacts/omarchy-nvim-2026.7.17-1'
 readonly NVIM_EVIDENCE="$REPO_DIR/$NVIM_EVIDENCE_REL"
 readonly STABLE_DB_SHA256='6a957256fc29395488276516c4fa977f34bd5746cb927bf9214ef613eb5d5e5a'
 readonly PACKAGE_SHA256='97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519'
@@ -58,13 +58,13 @@ copy_fixture() {
     "$destination/manifests" \
     "$destination/lib" \
     "$destination/packages" \
-    "$destination/docs/omarchy-alignment/artifacts"
+    "$destination/docs/artifacts"
   cp -p "$REPO_DIR/scripts/upstream" "$destination/scripts/upstream"
   cp -p "$REPO_DIR/lib/common.sh" "$destination/lib/common.sh"
   cp -p "$REPO_DIR/schemas/source-manifest-v1.schema.json" "$destination/schemas/"
   cp -p "$REPO_DIR/manifests/sources.json" "$destination/manifests/"
   cp -a "$REPO_DIR/packages/upstream" "$destination/packages/upstream"
-  cp -a "$NVIM_EVIDENCE" "$destination/docs/omarchy-alignment/artifacts/"
+  cp -a "$NVIM_EVIDENCE" "$destination/docs/artifacts/"
 }
 
 new_fixture() {
@@ -164,7 +164,7 @@ seed_active_checkout() {
        destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"},
        sha256:$lock_hash, provenance:{artifact:"fixture package", artifact_sha256:("2"*64),
          build_date:"2026-06-17", extracted:"/usr/share/omarchy-nvim/config/lazy-lock.json",
-         trust:"accepted fixture", record:"docs/omarchy-alignment/artifacts/README.md"}
+         trust:"accepted fixture", record:"docs/artifacts/README.md"}
      }]}
   ' > "$checkout/manifests/sources.json"
 }
@@ -266,7 +266,7 @@ jq -e '
       build_date: "2026-07-20T03:57:48Z",
       extracted: "2026-07-29; full packaged config matched committed snapshot",
       trust: "verified signed stable package; archive omitted due size",
-      record: "docs/omarchy-alignment/artifacts/omarchy-nvim-2026.7.17-1/README.md"
+      record: "docs/artifacts/omarchy-nvim-2026.7.17-1/README.md"
     }
   }]
 ' "$REPO_DIR/manifests/sources.json" >/dev/null || fail 'accepted stable artifact provenance drifted'

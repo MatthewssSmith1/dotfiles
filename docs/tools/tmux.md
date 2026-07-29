@@ -1,8 +1,6 @@
 # tmux
 
-## Stage Status
-
-Stage 7 now has implemented area lifecycle, migration, native attachment, isolated parser validation, active-server inspection, exact plugin provisioning, parser fixtures, and adversarial automated tests. Its payload and schema-backed locks are committed, and `manifests/areas.tsv` marks tmux `ready` after those gates passed. It is now default-selected. A fresh host still needs the explicit `--provision --area tmux` lifecycle described below so the runtime and plugin closure converge before configuration preflight and apply. WSL operational acceptance completed on Windows Terminal 1.24.11911.0 after the live server transition, Resurrect restore, and terminal checks passed.
+A fresh host needs the explicit `--provision --area tmux` lifecycle described below so the runtime and plugin closure converge before configuration preflight and apply.
 
 ## Accepted Design
 
@@ -28,7 +26,7 @@ There is no tmux host-local layer. tmux startup does not clone, update, clean, o
 
 The dispatcher sources the optional WSL path with `source-file -q`. Generic hosts do not deploy that path; WSL hosts deploy the command-empty file. No package has a duplicate Stow destination.
 
-Native Omarchy keeps its regular Omarchy-owned `~/.config/tmux/tmux.conf`. Stage 7 appends one state-recorded, guarded source attachment after the native baseline:
+Native Omarchy keeps its regular Omarchy-owned `~/.config/tmux/tmux.conf`. Bootstrap appends one state-recorded, guarded source attachment after the native baseline:
 
 ```tmux
 # >>> dotfiles tmux >>>
@@ -71,7 +69,7 @@ TPM is first, Resurrect follows it, and Continuum is the final TPM plugin so no 
 
 ## Plugin Lock
 
-[`manifests/tmux-plugins.lock.json`](../../../manifests/tmux-plugins.lock.json) is the machine-readable source of truth and conforms to [`schemas/tmux-plugin-lock-v1.schema.json`](../../../schemas/tmux-plugin-lock-v1.schema.json). Array order is checkout/persistence order. Filtering it to `loading: "tpm"` is the exact TPM declaration/load order; the `managed-hooks` row is not passed to TPM.
+[`manifests/tmux-plugins.lock.json`](../../manifests/tmux-plugins.lock.json) is the machine-readable source of truth and conforms to [`schemas/tmux-plugin-lock-v1.schema.json`](../../schemas/tmux-plugin-lock-v1.schema.json). Array order is checkout/persistence order. Filtering it to `loading: "tpm"` is the exact TPM declaration/load order; the `managed-hooks` row is not passed to TPM.
 
 | Checkout | Loading | Repository | Commit | Expected directory |
 |----------|---------|------------|--------|--------------------|
@@ -82,7 +80,7 @@ TPM is first, Resurrect follows it, and Continuum is the final TPM plugin so no 
 
 An exact local closure has all and only the declared checkout directories, each at its locked commit with the exact `origin`, a clean worktree and index, and an EUID-owned, non-symlinked checkout path. The plugin root and every path component bootstrap manages must also be EUID-owned real directories rather than symlinks. A missing checkout, unexpected entry, dirty checkout, repository mismatch, non-Git object, linked worktree, unsafe owner, symlinked path, or unreadable metadata is not an exact closure. All read-only Git inspection runs with `GIT_OPTIONAL_LOCKS=0`; exact validation must leave every checkout's `.git/index` identity, bytes, mode, size, and mtime unchanged.
 
-Exactness is also receipted at `~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. The retained, EUID-owned regular mode-`0600` file conforms to [`schemas/tmux-plugin-receipt-v1.schema.json`](../../../schemas/tmux-plugin-receipt-v1.schema.json) and records schema version 1, the SHA-256 identity of the complete lock, and the lock-ordered `id`, canonical repository, commit, tree, and directory for every plugin. Ordinary apply and check require both the active receipt and its exact filesystem closure; an unreceipted checkout is not implicitly trusted. Receipt lock hashes are accepted only when they equal the active lock. There is no reviewed historical lock catalog, so every non-active hash refuses rather than treating the checkouts as unreceipted adoption candidates. Plugin directories `.` and `..` are invalid in both lock and receipt contracts.
+Exactness is also receipted at `~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. The retained, EUID-owned regular mode-`0600` file conforms to [`schemas/tmux-plugin-receipt-v1.schema.json`](../../schemas/tmux-plugin-receipt-v1.schema.json) and records schema version 1, the SHA-256 identity of the complete lock, and the lock-ordered `id`, canonical repository, commit, tree, and directory for every plugin. Ordinary apply and check require both the active receipt and its exact filesystem closure; an unreceipted checkout is not implicitly trusted. Receipt lock hashes are accepted only when they equal the active lock. There is no reviewed historical lock catalog, so every non-active hash refuses rather than treating the checkouts as unreceipted adoption candidates. Plugin directories `.` and `..` are invalid in both lock and receipt contracts.
 
 ## Plugin Lifecycle
 
@@ -121,7 +119,7 @@ Ubuntu 24.04's tmux 3.4 shows the `extended-keys-format` notice; Ubuntu 22.04's 
 
 ### Real Parser Fixtures
 
-Parser compatibility uses the real distro executables, not a version-printing wrapper and not an assumed-equivalent static build. The test-only 3.2a input is the official Ubuntu Jammy package locked in [`manifests/tmux-parser-fixtures.lock.json`](../../../manifests/tmux-parser-fixtures.lock.json), which conforms to [`schemas/tmux-parser-fixture-lock-v1.schema.json`](../../../schemas/tmux-parser-fixture-lock-v1.schema.json). The accepted package is `tmux 3.2a-4ubuntu0.2` for `amd64`, archive size `428388`, SHA-256 `b51865a24b78d68459421ee68e1e35d53112d9c08c4e823b241141342efb21dd`. Its extracted `usr/bin/tmux` is mode `0755`, size `971320`, SHA-256 `6684c9b0bd4af08461f9e476e0abee9c3f08daa5d55ed6fb7c663c000e09f83d`, and reports `tmux 3.2a`.
+Parser compatibility uses the real distro executables, not a version-printing wrapper and not an assumed-equivalent static build. The test-only 3.2a input is the official Ubuntu Jammy package locked in [`manifests/tmux-parser-fixtures.lock.json`](../../manifests/tmux-parser-fixtures.lock.json), which conforms to [`schemas/tmux-parser-fixture-lock-v1.schema.json`](../../schemas/tmux-parser-fixture-lock-v1.schema.json). The accepted package is `tmux 3.2a-4ubuntu0.2` for `amd64`, archive size `428388`, SHA-256 `b51865a24b78d68459421ee68e1e35d53112d9c08c4e823b241141342efb21dd`. Its extracted `usr/bin/tmux` is mode `0755`, size `971320`, SHA-256 `6684c9b0bd4af08461f9e476e0abee9c3f08daa5d55ed6fb7c663c000e09f83d`, and reports `tmux 3.2a`.
 
 Noble's `libtinfo` package relationship prevents safely installing this old Jammy package. It is always extracted with `dpkg-deb --extract` and must never be passed to `dpkg`, `apt`, or `apt-get` for installation. Prepare an external fixture cache explicitly:
 
@@ -162,13 +160,13 @@ Runtime validation must:
 - Require a denied-network user/network namespace for production check and
   apply validation; inability to create it fails closed.
 
-The observable active-server scope is deliberately bounded: the default socket derived from `TMUX_TMPDIR` (or `/tmp`) and the absolute current-client socket in `TMUX` when distinct. Stage 7 does not enumerate arbitrary socket directories. Inspection sends only `display-message -p` to those sockets and never reloads, restarts, or kills them. Isolated validation uses a unique explicit test socket; cleanup must prove that server is gone before deleting its socket and home. A failed cleanup retains and reports the recovery root.
+The observable active-server scope is deliberately bounded: the default socket derived from `TMUX_TMPDIR` (or `/tmp`) and the absolute current-client socket in `TMUX` when distinct. Bootstrap does not enumerate arbitrary socket directories. Inspection sends only `display-message -p` to those sockets and never reloads, restarts, or kills them. Isolated validation uses a unique explicit test socket; cleanup must prove that server is gone before deleting its socket and home. A failed cleanup retains and reports the recovery root.
 
 Reloading configuration cannot replace a server process. After an executable or owner transition, bootstrap reports the mismatch and leaves the server untouched even when versions compare equal. The user saves sessions, exits clients, deliberately runs `tmux kill-server`, starts the approved binary, and restores. A same-owner server instead receives the one-time explicit `source-file` instruction. These manual transitions are part of the later tmux gate; bootstrap never performs them.
 
 ## Windows Terminal Clients
 
-Windows Terminal is a client concern for WSL and SSH sessions alike. All eight documented Windows Terminal keybindings are required manual unbinds: `alt+enter`, all four Alt arrow keys, both Alt+Shift horizontal arrow keys, and `ctrl+alt+left`. The complete `settings.json` fragment and checks live in [Windows Terminal](../../environments/windows-terminal.md).
+Windows Terminal is a client concern for WSL and SSH sessions alike. All eight documented Windows Terminal keybindings are required manual unbinds: `alt+enter`, all four Alt arrow keys, both Alt+Shift horizontal arrow keys, and `ctrl+alt+left`. The complete `settings.json` fragment and checks live in [Windows Terminal](../environments/windows-terminal.md).
 
 Protocol analysis predicts that `M-S-Enter` and `M-Escape` remain unavailable on the targeted versions. Use `prefix + h` and `prefix + x`; do not add a WSL or host-local rebind. Truecolor, mouse behavior, and OSC 52 clipboard export were validated separately on Windows Terminal 1.24.11911.0.
 

@@ -148,6 +148,9 @@ validate_test_environment() {
   if [[ -n "${DOTFILES_TEST_HOLD_AT:-}${DOTFILES_TEST_HOLD_DIR:-}" && "${DOTFILES_TESTING:-}" != 1 ]]; then
     die 'DOTFILES_TEST_HOLD_* requires DOTFILES_TESTING=1'
   fi
+  if [[ -n "${DOTFILES_TEST_HIDE_COMMANDS:-}" && "${DOTFILES_TESTING:-}" != 1 ]]; then
+    die 'DOTFILES_TEST_HIDE_COMMANDS requires DOTFILES_TESTING=1'
+  fi
   if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
     if [[ -n "${DOTFILES_TEST_HOST_ROOT:-}" ]]; then
       [[ "$DOTFILES_TEST_HOST_ROOT" == /* && -d "$DOTFILES_TEST_HOST_ROOT" ]] || \

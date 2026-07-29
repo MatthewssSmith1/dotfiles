@@ -17,8 +17,9 @@ Code and manifests are the source of truth; docs explain intent and stay terse. 
 - `packages/`, `profiles/`, `lib/`, `bootstrap.sh` — Stow deployment for
   Linux and WSL hosts.
 - `windows/` — Windows-host configuration; see `windows/AGENTS.md`.
-- `docs/omarchy-alignment/` — architecture and per-tool contracts.
-- `docs/environments/` — per-environment notes (omarchy, generic, wsl,
-  windows-terminal).
+- `docs/` — architecture, deployment, and upstream contracts;
+  `docs/tools/` per-tool contracts; `docs/artifacts/` preserved package
+  evidence; `docs/environments/` per-environment notes (omarchy, generic,
+  wsl, windows-terminal); `docs/deferred.md` future work.
 
-Configuration changes deploy through the apply procedures in the `applying-dotfiles` skill (`.agents/skills/applying-dotfiles/SKILL.md`).
+Configuration changes deploy through the apply procedures in the `applying-dotfiles` skill (`.agents/skills/applying-dotfiles/SKILL.md`). Upstream pin refreshes follow the `updating-dependencies` skill.

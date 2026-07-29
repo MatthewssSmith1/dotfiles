@@ -2,7 +2,7 @@
 
 ## Accepted Design
 
-Bash with Starship is the primary configured Omarchy-oriented shell workflow. Bootstrap configures it but never changes the login shell. Existing zsh remains a transitional escape hatch during migration; the account login shell remains unchanged. Bash and zsh are ready after the Stage 6 implementation and isolated gates passed; WSL live-host acceptance passed after the ordered rollout and smoke checks.
+Bash with Starship is the primary configured Omarchy-oriented shell workflow. Bootstrap configures it but never changes the login shell. Existing zsh remains a behaviorally frozen transitional escape hatch; the account login shell remains unchanged.
 
 ## Native Omarchy Bash
 
@@ -95,7 +95,7 @@ Initialization must be capability-guarded. Missing optional commands may reduce 
 
 Shell startup activates the shared mise fragments after environment setup and before mise-provided tools are initialized. Executable ownership and locking are defined in [Deployment](../deployment.md#mise).
 
-Worktrunk has a separate capability-guarded initialization hook when available. Its initializer child runs with `MISE_OFFLINE=1` in a denied-network user namespace after `setpriv` removes every capability and enables no-new-privileges. If that isolation cannot be established at runtime, startup silently skips the optional integration rather than running it unrestricted; check requires the isolation primitives to be usable. Vite+ remains project-owned through project mise files; the Bash migration must not add a global Vite+ environment hook. NVM, Deno, legacy `~/.fzf.bash`, and the duplicate legacy Worktrunk initializer are also retired from managed Bash. Stage 5 does not install, update, configure, or inspect OpenCode or `opencode-openai-codex-auth`, and unrelated shell deployment preserves the existing executable, configuration, plugins, and authentication state.
+Worktrunk has a separate capability-guarded initialization hook when available. Its initializer child runs with `MISE_OFFLINE=1` in a denied-network user namespace after `setpriv` removes every capability and enables no-new-privileges. If that isolation cannot be established at runtime, startup silently skips the optional integration rather than running it unrestricted; check requires the isolation primitives to be usable. Vite+ remains project-owned through project mise files; managed Bash must not add a global Vite+ environment hook. NVM, Deno, legacy `~/.fzf.bash`, and the duplicate legacy Worktrunk initializer are also retired from managed Bash. Bootstrap does not install, update, configure, or inspect OpenCode or `opencode-openai-codex-auth`, and unrelated shell deployment preserves the existing executable, configuration, plugins, and authentication state.
 
 The final layer is the readable real, untracked `~/.config/dotfiles/local/bash.sh`; bootstrap sources but does not own or delete it. The initial WSL file sources Cargo's `~/.cargo/env` only when readable, adds and initializes rbenv only when `~/.rbenv/bin` and the command exist, and adds `~/.elan/bin` only when that directory exists. It must remain silent when those tools are absent, must not move protected mise-owned commands behind host-local paths, and contains no Node, NVM, Deno, Vite+, installer, updater, authentication, or network behavior.
 

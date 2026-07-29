@@ -66,13 +66,13 @@ Bash with Starship is the evaluated primary shell during the migration, while th
 
 ## Agent Skills
 
-Migrating `~/.agents/skills` is deferred from the initial Omarchy alignment. The historical repository copy was ignored, its contents are currently absent, and the existing skill lock was not a complete physical inventory. Stage 2 records those paths for review but does not restore, relocate, or manage them. Broken bridges to absent skills may be removed as explicit user-approved host cleanup; bootstrap never performs that cleanup.
+Migrating `~/.agents/skills` is deferred from the initial Omarchy alignment. The historical repository copy was ignored, its contents are currently absent, and the existing skill lock was not a complete physical inventory. Deployment records those paths for review but does not restore, relocate, or manage them. Broken bridges to absent skills may be removed as explicit user-approved host cleanup; bootstrap never performs that cleanup.
 
 A later agent-skills project must first produce a reviewed inventory that classifies every physical skill as shared personal, vendored third-party, or host-local. It must record immutable third-party provenance, preserve host-local skills as real external files, define same-name conflict behavior, and decide whether tool-generated lock metadata is deployed. Only then should it introduce a separate Stow package with `--no-folding`.
 
 ## Fuller Windows Terminal Integration
 
-The minimal client-terminal handling — documented manual unbinds and key checks — is in scope for the migration (see [Windows Terminal](../environments/windows-terminal.md)). The fuller integration remains deferred:
+The minimal client-terminal handling — documented manual unbinds and key checks — is in scope for the migration (see [Windows Terminal](environments/windows-terminal.md)). The fuller integration remains deferred:
 
 - A tracked settings-fragment JSONC file containing the unbind actions and
   optional profile settings, with a documented manual merge step. It is never

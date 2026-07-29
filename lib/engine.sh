@@ -137,10 +137,17 @@ validate_dependency_manifest() {
 }
 
 command_capability_exists() {
-  local capability="$1" candidate
+  local capability="$1" candidate hidden hidden_match
   local candidates=()
   IFS='+' read -r -a candidates <<< "$capability"
   for candidate in "${candidates[@]}"; do
+    if [[ "${DOTFILES_TESTING:-}" == 1 && -n "${DOTFILES_TEST_HIDE_COMMANDS:-}" ]]; then
+      hidden_match=false
+      for hidden in ${DOTFILES_TEST_HIDE_COMMANDS}; do
+        [[ "$candidate" != "$hidden" ]] || { hidden_match=true; break; }
+      done
+      [[ "$hidden_match" == false ]] || continue
+    fi
     [[ "$(type -t -- "$candidate" 2>/dev/null || true)" == file ]] && return 0
   done
   return 1

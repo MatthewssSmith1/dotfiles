@@ -3,6 +3,8 @@
 
 set -Eeuo pipefail
 
+unset XDG_CONFIG_HOME GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT
+
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
 readonly COMMON_ROOT="$REPO_DIR/packages/common/bash/.config/dotfiles/bash"
@@ -287,7 +289,7 @@ cat > "$TEST_ROOT/controlled-dpkg-query" <<SCRIPT
 #!/usr/bin/env bash
 case "\$2" in
   */fzf) package=fzf ;; */zoxide) package=zoxide ;; */eza) package=eza ;; */rg) package=ripgrep ;;
-  */batcat) package=bat ;; */fdfind) package=fd-find ;; *) exit 1 ;;
+  */batcat|*/bat) package=bat ;; */fdfind|*/fd) package=fd-find ;; *) exit 1 ;;
 esac
 printf '%s: %s\n' "\$package" "\$2"
 SCRIPT
@@ -295,6 +297,7 @@ chmod 0755 "$TEST_ROOT/controlled-dpkg-query"
 run_production_controlled() {
   HOME="$controlled_home" TARGET_ROOT="$controlled_home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
     SCRIPT_NAME=stage6-shell-test SELECTED_PROFILE=generic MODE=check DOTFILES_TESTING=1 \
+    DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
     DOTFILES_TEST_BASH_DISTRO_BIN="$controlled_bin" DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/controlled-dpkg-query" \
     PATH="$controlled_home/.local/bin:$controlled_bin:/usr/bin:/bin" bash -c '
       set -Eeuo pipefail
@@ -468,7 +471,7 @@ cat > "$TEST_ROOT/dpkg-query" <<SCRIPT
 #!/usr/bin/env bash
 case "\$2" in
   */fzf) package=fzf ;; */zoxide) package=zoxide ;; */eza) package=eza ;; */rg) package=ripgrep ;;
-  */batcat) package=bat ;; */fdfind) package=fd-find ;; *) exit 1 ;;
+  */batcat|*/bat) package=bat ;; */fdfind|*/fd) package=fd-find ;; *) exit 1 ;;
 esac
 printf '%s: %s\n' "\$package" "\$2"
 SCRIPT
@@ -886,8 +889,7 @@ make_zsh_area_fixture() {
     "$checkout/packages/common/zsh" "$checkout/profiles" "$checkout/manifests" \
     "$checkout/lib/stow-preflight-target" "$old"
   cp -a "$REPO_DIR/packages/common/zsh/." "$checkout/packages/common/zsh/"
-  cp -a "$REPO_DIR/.zshrc" "$REPO_DIR/.zsh_aliases" "$REPO_DIR/.p10k.zsh" \
-    "$REPO_DIR/.zsh_aliases.local" "$checkout/"
+  cp -a "$REPO_DIR/.zshrc" "$REPO_DIR/.zsh_aliases" "$REPO_DIR/.p10k.zsh" "$checkout/"
   printf 'zsh common/zsh\n' > "$checkout/profiles/generic.conf"
   printf 'fixture local aliases\n' > "$checkout/.zsh_aliases.local"
   cp -a "$checkout/.zshrc" "$checkout/.zsh_aliases" "$checkout/.p10k.zsh" \
@@ -980,9 +982,16 @@ assert_same "$expected_zshrc" "$REPO_DIR/packages/common/zsh/.zshrc"
   fail 'managed zsh sources the unowned legacy FZF hook'
 ! grep -qF '.fzf/bin' "$REPO_DIR/packages/common/zsh/.zshrc" || \
   fail 'managed zsh restores the unowned legacy FZF path'
-zsh -n "$REPO_DIR/packages/common/zsh/.zshrc" "$REPO_DIR/packages/common/zsh/.zsh_aliases" \
-  "$REPO_DIR/packages/common/zsh/.p10k.zsh" || fail 'packaged zsh syntax is invalid'
+if command -v zsh >/dev/null 2>&1; then
+  zsh -n "$REPO_DIR/packages/common/zsh/.zshrc" "$REPO_DIR/packages/common/zsh/.zsh_aliases" \
+    "$REPO_DIR/packages/common/zsh/.p10k.zsh" || fail 'packaged zsh syntax is invalid'
+else
+  printf 'SKIP: packaged zsh syntax check (zsh is not installed on this host)\n' >&2
+fi
 pass
+
+# The zsh area is optional; hosts without zsh skip its lifecycle groups.
+if command -v zsh >/dev/null 2>&1; then
 
 # Full migration preserves exact host bytes, records distinct backups, converges, and retains on remove.
 make_zsh_area_fixture lifecycle
@@ -1505,6 +1514,10 @@ run_zsh_area_fixture "$zsh_home" "$zsh_checkout" remove
 [[ ! -e "$zsh_home/chsh-invoked" ]] || fail 'zsh check/apply/remove invoked chsh'
 pass
 
+else
+  printf 'SKIP: zsh area lifecycle, migration, and Zinit groups (zsh is not installed on this host)\n' >&2
+fi
+
 # ---------------------------------------------------------------------------
 # Ready-area gating sections (from stage6_ready_test.sh)
 # ---------------------------------------------------------------------------
@@ -1537,7 +1550,7 @@ exit 97
 SCRIPT
 chmod 0755 "$sentinel_bin/chsh"
 
-for name in fzf zoxide eza rg batcat fdfind; do
+for name in fzf zoxide eza rg batcat fdfind dpkg-query zsh; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$distro_bin/$name"
   chmod 0755 "$distro_bin/$name"
 done
@@ -1545,7 +1558,7 @@ cat > "$TEST_ROOT/dpkg-query" <<'SCRIPT'
 #!/usr/bin/env bash
 case "$2" in
   */fzf) package=fzf ;; */zoxide) package=zoxide ;; */eza) package=eza ;; */rg) package=ripgrep ;;
-  */batcat) package=bat ;; */fdfind) package=fd-find ;; *) exit 1 ;;
+  */batcat|*/bat) package=bat ;; */fdfind|*/fd) package=fd-find ;; *) exit 1 ;;
 esac
 printf '%s: %s\n' "$package" "$2"
 SCRIPT
@@ -1591,14 +1604,14 @@ chmod 0600 "$home/.local/state/dotfiles/provisioning/v1/receipt.json"
 cp -a "$home" "$TEST_ROOT/home-before"
 run_check() {
   HOME="$home" PATH="$home/.local/bin:$distro_bin:$sentinel_bin:/usr/bin:/bin" \
-    DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
+    DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
     DOTFILES_TEST_BASH_DISTRO_BIN="$distro_bin" DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/dpkg-query" \
     GIT_USER_NAME='Ready Fixture' GIT_USER_EMAIL=ready@example.com \
     "$READY_REPO/bootstrap.sh" --check "$@"
 }
 run_apply() {
   HOME="$home" PATH="$home/.local/bin:$distro_bin:$sentinel_bin:/usr/bin:/bin" \
-    DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
+    DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 \
     DOTFILES_TEST_BASH_DISTRO_BIN="$distro_bin" DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/dpkg-query" \
     GIT_USER_NAME='Ready Fixture' GIT_USER_EMAIL=ready@example.com \
     "$READY_REPO/bootstrap.sh" "$@"
@@ -1619,6 +1632,28 @@ done
 [[ ! -e "$home/network-attempted" ]] || fail 'ready-area checks invoked a network sentinel'
 HOME_DIFF="$(diff --no-dereference -r "$home" "$TEST_ROOT/home-before" || true)"
 [[ -z "$HOME_DIFF" ]] || { TEST_OUTPUT="$HOME_DIFF"; fail 'ready-area checks mutated fixture HOME'; }
+
+# A host with no zsh executable and no recorded zsh deployment has nothing for
+# the transitional area to preserve: default selection skips zsh and the rest
+# of the default set converges, while explicit selection still requires zsh.
+run_check_no_zsh() {
+  DOTFILES_TEST_HIDE_COMMANDS=zsh run_check "$@"
+}
+TEST_OUTPUT="$(run_check_no_zsh 2>&1)" || fail 'default check without zsh or zsh state failed to converge'
+[[ "$TEST_OUTPUT" == *"area 'zsh' skipped: zsh is not installed and has never been deployed here"* ]] || \
+  fail 'default check without zsh did not report the transitional skip'
+[[ "$TEST_OUTPUT" != *"area 'zsh' preflight"* ]] || fail 'skipped zsh area still ran its preflight'
+for area in git bash; do
+  [[ "$TEST_OUTPUT" == *"area '$area' preflight passed"* ]] || \
+    fail "default check without zsh omitted ready area $area"
+done
+set +e
+TEST_OUTPUT="$(run_check_no_zsh --area zsh 2>&1)"
+status=$?
+set -e
+[[ "$status" != 0 && "$TEST_OUTPUT" == *'missing required commands'* ]] || \
+  fail 'explicit zsh selection without a zsh executable did not fail with dependency guidance'
+[[ "$TEST_OUTPUT" != *"area 'zsh' skipped"* ]] || fail 'explicit zsh selection was skipped instead of required'
 
 # First-time WSL rollout is explicitly Bash-first and zsh requires a later command.
 cp -a "$home" "$TEST_ROOT/home-before-sequence"
@@ -1659,6 +1694,16 @@ set -e
   fail 'default apply deployed first-time zsh without an explicit second step'
 run_apply --area zsh >/dev/null || fail 'explicit post-Bash zsh apply failed'
 [[ -f "$home/.local/state/dotfiles/v1/zsh.json" ]] || fail 'explicit zsh apply did not record zsh state'
+
+# A recorded zsh deployment keeps the executable requirement even in default
+# selection: a managed deployment is never silently skipped.
+set +e
+TEST_OUTPUT="$(run_check_no_zsh 2>&1)"
+status=$?
+set -e
+[[ "$status" != 0 && "$TEST_OUTPUT" == *'missing required commands'* ]] || \
+  fail 'default check with recorded zsh state accepted a missing zsh executable'
+[[ "$TEST_OUTPUT" != *"area 'zsh' skipped"* ]] || fail 'deployed zsh area was skipped without its executable'
 run_apply >/dev/null || fail 'later default apply failed after both shell areas were deployed'
 run_apply --remove >/dev/null || fail 'ready-area fixture removal failed'
 

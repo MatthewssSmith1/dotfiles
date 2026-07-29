@@ -103,7 +103,7 @@ seed_active_checkout() {
        destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"},
        sha256:$lock_hash, provenance:{artifact:"fixture package", artifact_sha256:("2"*64),
          build_date:"2026-06-17", extracted:"/usr/share/omarchy-nvim/config/lazy-lock.json",
-         trust:"accepted fixture", record:"docs/omarchy-alignment/artifacts/README.md"}
+         trust:"accepted fixture", record:"docs/artifacts/README.md"}
      }]}
   ' > "$checkout/manifests/sources.json"
 }

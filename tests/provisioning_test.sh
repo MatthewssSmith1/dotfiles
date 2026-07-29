@@ -106,7 +106,7 @@ invoke_fixture() {
   local home="$1"; shift
   HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" \
     XDG_STATE_HOME="$home/.local/state" XDG_CACHE_HOME="$home/.cache" \
-    PATH="$home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \
+    PATH="$home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
     DOTFILES_TEST_HOST_ROOT="$host" FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" \
     GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' "$fixture/bootstrap.sh" "$@"
 }
@@ -432,7 +432,7 @@ jq '.unexpected=true' "$broken/manifests/provisioning.json" > "$broken/manifests
 mv "$broken/manifests/provisioning.json.new" "$broken/manifests/provisioning.json"
 broken_home="$(new_home broken)"
 set +e
-TEST_OUTPUT="$(HOME="$broken_home" PATH="$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \
+TEST_OUTPUT="$(HOME="$broken_home" PATH="$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
   DOTFILES_TEST_HOST_ROOT="$host" "$broken/bootstrap.sh" --check 2>&1)"
 TEST_RC=$?
 set -e
@@ -464,7 +464,7 @@ printf 'starship 1.26.0\n'
 SCRIPT
 chmod +x "$shadow_bin/starship"
 set +e
-TEST_OUTPUT="$(HOME="$home" PATH="$shadow_bin:$home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \
+TEST_OUTPUT="$(HOME="$home" PATH="$shadow_bin:$home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
   DOTFILES_TEST_HOST_ROOT="$host" DENY_DOWNLOAD=1 "$fixture/bootstrap.sh" --check --provision 2>&1)"
 TEST_RC=$?
 set -e
@@ -477,7 +477,7 @@ pass
 shadow_apply_home="$(new_home shadow-apply)"
 set +e
 TEST_OUTPUT="$(HOME="$shadow_apply_home" PATH="$shadow_bin:$shadow_apply_home/.local/bin:$fake_bin:/usr/bin:/bin" \
-  DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_HOST_ROOT="$host" \
+  DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_HOST_ROOT="$host" \
   FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" GIT_USER_NAME='Stage Five User' \
   GIT_USER_EMAIL='stage5@example.com' "$fixture/bootstrap.sh" --provision 2>&1)"
 TEST_RC=$?
@@ -505,7 +505,7 @@ jq '.mise.artifact.sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 mv "$bad_hash_repo/manifests/provisioning.json.new" "$bad_hash_repo/manifests/provisioning.json"
 bad_hash_home="$(new_home bad-hash)"
 set +e
-TEST_OUTPUT="$(HOME="$bad_hash_home" PATH="$bad_hash_home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \
+TEST_OUTPUT="$(HOME="$bad_hash_home" PATH="$bad_hash_home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
   DOTFILES_TEST_HOST_ROOT="$host" FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" \
   GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' "$bad_hash_repo/bootstrap.sh" --provision 2>&1)"
 TEST_RC=$?
@@ -530,7 +530,7 @@ SCRIPT
 chmod +x "$redirect_bin/curl"
 redirect_home="$(new_home redirect)"
 set +e
-TEST_OUTPUT="$(HOME="$redirect_home" PATH="$redirect_home/.local/bin:$redirect_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \
+TEST_OUTPUT="$(HOME="$redirect_home" PATH="$redirect_home/.local/bin:$redirect_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
   DOTFILES_TEST_HOST_ROOT="$host" GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' \
   "$fixture/bootstrap.sh" --provision 2>&1)"
 TEST_RC=$?
@@ -634,7 +634,10 @@ sed -i 's/|bash|apply,check|generic,wsl|fzf|/|bash|apply,check|generic,wsl|stage
   "$isolation_repo/manifests/dependencies.tsv"
 isolation_home="$(new_home isolation)"
 set +e
-TEST_OUTPUT="$(HOME="$isolation_home" PATH="$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_ARCH=x86_64 \
+TEST_OUTPUT="$(HOME="$isolation_home" XDG_CONFIG_HOME="$isolation_home/.config" \
+  XDG_DATA_HOME="$isolation_home/.local/share" XDG_STATE_HOME="$isolation_home/.local/state" \
+  XDG_CACHE_HOME="$isolation_home/.cache" \
+  PATH="$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
   DOTFILES_TEST_HOST_ROOT="$host" GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' \
   "$isolation_repo/bootstrap.sh" --area bash --area git 2>&1)"
 TEST_RC=$?

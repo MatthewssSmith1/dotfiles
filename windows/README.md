@@ -1,6 +1,6 @@
 # Windows-side configuration
 
-Configuration applied on the Windows host itself, as opposed to the Stow packages that target WSL and Linux hosts. Windows is a distinct supported environment — not a layer in the Linux adapter model of [architecture.md](../docs/omarchy-alignment/architecture.md) — and this area brings the Windows host up to the same Omarchy-derived behavior, starting with Windows Terminal theming.
+Configuration applied on the Windows host itself, as opposed to the Stow packages that target WSL and Linux hosts. Windows is a distinct supported environment — not a layer in the Linux adapter model of [architecture.md](../docs/architecture.md) — and this area brings the Windows host up to the same Omarchy-derived behavior, starting with Windows Terminal theming.
 
 Nothing here runs from `bootstrap.sh`; apply scripts run manually from a Windows shell.
 

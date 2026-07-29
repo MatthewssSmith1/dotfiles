@@ -20,7 +20,7 @@ There is no standalone Omarchy Neovim repository. The released configuration is 
 
 Two baseline facts worth knowing while evaluating the stock experience: the Omarchy baseline sets `relativenumber = false` (the personal layer visibly inverts this) and `autoformat = false`.
 
-The OSC-52/tmux remote-clipboard module was first evaluated during Stage 8 as edge-only `omarchy-nvim 2026.7.15-1` and correctly refused by the latest-stable policy. It reached stable in `omarchy-nvim 2026.7.17-1` and is part of the accepted baseline since the 2026-07-28 refresh (see [Upstream](../upstream.md)).
+The OSC-52/tmux remote-clipboard module was first evaluated as edge-only `omarchy-nvim 2026.7.15-1` and correctly refused by the latest-stable policy. It reached stable in `omarchy-nvim 2026.7.17-1` and is part of the accepted baseline since the 2026-07-28 refresh (see [Upstream](../upstream.md)).
 
 ## Native Omarchy
 
@@ -62,9 +62,9 @@ Migration must recognize the current individually Stowed Kickstart links and rem
 
 Accepted backup policy: git history is the configuration backup. The live `~/.config/nvim` consists of Stow links into this repository, so the Kickstart tree needs no copy — removal of the links is sufficient, and any revert is a checkout of history. Host-local runtime state is preserved by renaming `~/.local/share/nvim`, `~/.local/state/nvim`, and `~/.cache/nvim` to timestamped `.bak` siblings rather than deleting them.
 
-Accepted first-start network policy: on a fresh generic host, network access is permitted on the first explicit `nvim` launch. A small pre-start loader runs a one-time locked restore before normal editor startup, verifies applicable plugin commits, and records the restored lockfile blob identity in Neovim area state only after success. An interrupted restore leaves the marker absent and retries on the next explicit launch without changing `lazy-lock.json`. Later plugin network access occurs only through an explicit restore command after a lock change. Bootstrap itself never fetches Neovim plugins. First start therefore requires connectivity; that is accepted. This guarantee covers plugin restoration. Mason packages, Treesitter parsers, Lua rocks, generated build outputs, and project-local Lazy specs are outside the plugin lockfile. Before the Neovim stage closes, inventory every automatic downloader and assign each asset one policy: pinned provisioning, explicit user-initiated network access, or disabled automatic installation. Ordinary startup must remain offline after that policy is implemented.
+Accepted first-start network policy: on a fresh generic host, network access is permitted on the first explicit `nvim` launch. A small pre-start loader runs a one-time locked restore before normal editor startup, verifies applicable plugin commits, and records the restored lockfile blob identity in Neovim area state only after success. An interrupted restore leaves the marker absent and retries on the next explicit launch without changing `lazy-lock.json`. Later plugin network access occurs only through an explicit restore command after a lock change. Bootstrap itself never fetches Neovim plugins. First start therefore requires connectivity; that is accepted. This guarantee covers plugin restoration. Mason packages, Treesitter parsers, Lua rocks, generated build outputs, and project-local Lazy specs are outside the plugin lockfile. Every automatic downloader is inventoried and assigned one policy — pinned provisioning, explicit user-initiated network access, or disabled automatic installation — so ordinary startup remains offline; see the downloader policy at the end of this document.
 
-## Native Loader (Stage 9, Implemented)
+## Native Loader
 
 The loader is the regular file `~/.config/nvim/plugin/dotfiles-personal.lua`, mode 0644, whose entire content is one guarded block (`-- >>> dotfiles nvim >>>` … `-- <<< dotfiles nvim <<<`). Config-dir `plugin/*.lua` files are sourced after init, so its `dofile` of `~/.config/dotfiles/nvim/personal.lua` (deployed by `common/nvim`, the only native package) overrides baseline options. A missing personal file is skipped silently; a runtime error notifies without breaking startup.
 
@@ -73,8 +73,6 @@ Drift detection: area state records exactly one attachment (`nvim-native-loader-
 Refresh facts verified on the live host: the config is a plain skel copy owned by the `omarchy-nvim` package, not a git checkout; refresh is the package-owned `omarchy-nvim-setup` (the `omarchy-nvim-refresh` name in older notes), which backs up `~/.config/nvim`, clears nvim data/state/cache, and re-copies skel. After refresh the loader is absent: `--check --area nvim` fails with reattachment guidance and apply recreates it byte-identically. The `nvim` executable is owned by the distro `neovim` package; the drift warning verifies `omarchy-nvim` package identity separately.
 
 Workflow proof: `bootstrap.sh --check --area nvim`, apply, `nvim --headless "+lua print(vim.o.relativenumber)" +q`, refresh, failing check, reapply, and a `--remove --area nvim` round trip leaving the native tree byte-identical.
-
-Generic and WSL runtime-asset policy is also a Stage 8 gate: identify Mason, Treesitter, rocks, build outputs, and project-local behavior before asserting ordinary startup is offline.
 
 ## Non-Goals
 
@@ -110,7 +108,7 @@ Generic and WSL runtime-asset policy is also a Stage 8 gate: identify Mason, Tre
 
 ## Generic/WSL Lifecycle And Restore
 
-The dedicated Neovim area is ready for generic and WSL in `manifests/areas.tsv`; native Omarchy remains refused until Stage 9 defines its refresh-safe attachment. Generic/WSL apply validates the exact upstream/generic/common package and target closure before mutation. It retires only exact reviewed individual or folded Kickstart links, including reviewed broken links whose lexical non-dereferencing normalization and resolved normalization both match the reviewed source. Only exact reviewed container ancestors are accepted, and links and containers must be user-owned. Unrelated or modified topology refuses before mutation; the tracked legacy source tree is never changed.
+The dedicated Neovim area is ready for generic, WSL, and native Omarchy in `manifests/areas.tsv`; the native attachment is the guarded loader above. Generic/WSL apply validates the exact upstream/generic/common package and target closure before mutation. It retires only exact reviewed individual or folded Kickstart links, including reviewed broken links whose lexical non-dereferencing normalization and resolved normalization both match the reviewed source. Only exact reviewed container ancestors are accepted, and links and containers must be user-owned. Unrelated or modified topology refuses before mutation; the tracked legacy source tree is never changed.
 
 The first apply resolves data, state, and cache roots from XDG variables, requires canonical, non-symlink, user-owned ancestor paths beneath `HOME`, and records completion even when a root is absent. Existing roots are renamed without clobber to timestamped `.bak` siblings. Source fingerprints and backup paths are retained in `migrations.json`; collisions gain a numeric suffix. A directory-move journal restores every rename and reviewed legacy link if deployment, state, or ledger commit fails. Removal retains current runtime roots, backups, preserved plugin checkouts, credentials, and the migration ledger.
 

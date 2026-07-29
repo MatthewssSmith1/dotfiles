@@ -137,6 +137,28 @@ done
 HOME_DIFF="$(diff --no-dereference -r "$home" "$TEST_ROOT/home-before" || true)"
 [[ -z "$HOME_DIFF" ]] || { TEST_OUTPUT="$HOME_DIFF"; fail 'ready-area checks mutated fixture HOME'; }
 
+# A host with no zsh executable and no recorded zsh deployment has nothing for
+# the transitional area to preserve: default selection skips zsh and the rest
+# of the default set converges, while explicit selection still requires zsh.
+run_check_no_zsh() {
+  DOTFILES_TEST_HIDE_COMMANDS=zsh run_check "$@"
+}
+TEST_OUTPUT="$(run_check_no_zsh 2>&1)" || fail 'default check without zsh or zsh state failed to converge'
+[[ "$TEST_OUTPUT" == *"area 'zsh' skipped: zsh is not installed and has never been deployed here"* ]] || \
+  fail 'default check without zsh did not report the transitional skip'
+[[ "$TEST_OUTPUT" != *"area 'zsh' preflight"* ]] || fail 'skipped zsh area still ran its preflight'
+for area in git bash; do
+  [[ "$TEST_OUTPUT" == *"area '$area' preflight passed"* ]] || \
+    fail "default check without zsh omitted ready area $area"
+done
+set +e
+TEST_OUTPUT="$(run_check_no_zsh --area zsh 2>&1)"
+status=$?
+set -e
+[[ "$status" != 0 && "$TEST_OUTPUT" == *'missing required commands'* ]] || \
+  fail 'explicit zsh selection without a zsh executable did not fail with dependency guidance'
+[[ "$TEST_OUTPUT" != *"area 'zsh' skipped"* ]] || fail 'explicit zsh selection was skipped instead of required'
+
 # First-time WSL rollout is explicitly Bash-first and zsh requires a later command.
 cp -a "$home" "$TEST_ROOT/home-before-sequence"
 set +e
@@ -176,6 +198,16 @@ set -e
   fail 'default apply deployed first-time zsh without an explicit second step'
 run_apply --area zsh >/dev/null || fail 'explicit post-Bash zsh apply failed'
 [[ -f "$home/.local/state/dotfiles/v1/zsh.json" ]] || fail 'explicit zsh apply did not record zsh state'
+
+# A recorded zsh deployment keeps the executable requirement even in default
+# selection: a managed deployment is never silently skipped.
+set +e
+TEST_OUTPUT="$(run_check_no_zsh 2>&1)"
+status=$?
+set -e
+[[ "$status" != 0 && "$TEST_OUTPUT" == *'missing required commands'* ]] || \
+  fail 'default check with recorded zsh state accepted a missing zsh executable'
+[[ "$TEST_OUTPUT" != *"area 'zsh' skipped"* ]] || fail 'deployed zsh area was skipped without its executable'
 run_apply >/dev/null || fail 'later default apply failed after both shell areas were deployed'
 run_apply --remove >/dev/null || fail 'ready-area fixture removal failed'
 

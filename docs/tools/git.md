@@ -1,6 +1,6 @@
 # Git
 
-The Git area is the foundation slice: it is deployed end-to-end first because it exercises every foundation mechanism at once — explicit packages, profile detection, deployment state, and the guarded-attachment helper via the `~/.gitconfig` entrypoint. See [the implementation plan](../plan.md#2-minimal-source-foundation-and-git-end-to-end).
+The Git area is the foundation slice: it exercises every foundation mechanism at once — explicit packages, profile detection, deployment state, and the guarded-attachment helper via the `~/.gitconfig` entrypoint.
 
 ## Accepted Design
 
@@ -40,7 +40,7 @@ Keep `~/.gitconfig` as a regular guarded include entrypoint. This allows native 
 
 ## Omarchy Baseline Pin
 
-On the `omarchy` profile, apply and `--check` hard-fail during preflight unless the native `~/.config/git/config` matches all sixteen required baseline values exactly. A new Omarchy release that changes its Git configuration therefore blocks deployment until the pin is deliberately reviewed and updated. Stage 2's contract is a hard refusal, not reconciliation; Stage 5 layers drift warnings on top of this same pin.
+On the `omarchy` profile, apply and `--check` hard-fail during preflight unless the native `~/.config/git/config` matches all sixteen required baseline values exactly. A new Omarchy release that changes its Git configuration therefore blocks deployment until the pin is deliberately reviewed and updated. The contract is a hard refusal, not reconciliation; the separate non-blocking drift warnings layer on top of this same pin.
 
 ## Personal And Local Layers
 

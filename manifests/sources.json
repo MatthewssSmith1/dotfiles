@@ -721,7 +721,7 @@
         "build_date": "2026-07-20T03:57:48Z",
         "extracted": "2026-07-29; full packaged config matched committed snapshot",
         "trust": "verified signed stable package; archive omitted due size",
-        "record": "docs/omarchy-alignment/artifacts/omarchy-nvim-2026.7.17-1/README.md"
+        "record": "docs/artifacts/omarchy-nvim-2026.7.17-1/README.md"
       }
     }
   ]

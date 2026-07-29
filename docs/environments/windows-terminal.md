@@ -8,7 +8,7 @@ Windows Terminal settings are never patched from WSL or by bootstrap. Theming is
 
 ## Required Settings
 
-Windows Terminal binds `alt+enter` to fullscreen toggle by default, which consumes the Omarchy tmux vertical-split binding (`M-Enter`) before the terminal ever sees it. The arrow combinations may fall through in some states but are intercepted when Windows Terminal has panes to act on. Stage 7 requires all eight unbinds so tmux behavior does not depend on client pane state. Windows Terminal 1.24 stores assignments separately from actions; add them to the `keybindings` array in `settings.json` (Settings > Open JSON file):
+Windows Terminal binds `alt+enter` to fullscreen toggle by default, which consumes the Omarchy tmux vertical-split binding (`M-Enter`) before the terminal ever sees it. The arrow combinations may fall through in some states but are intercepted when Windows Terminal has panes to act on. tmux requires all eight unbinds so its behavior does not depend on client pane state. Windows Terminal 1.24 stores assignments separately from actions; add them to the `keybindings` array in `settings.json` (Settings > Open JSON file):
 
 ```json
 "keybindings": [

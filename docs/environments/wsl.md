@@ -2,17 +2,17 @@
 
 ## Status
 
-This document defines the accepted migration host and manual preparation. The dotfiles behavior described here remains planned until its implementation stage passes.
+This document records WSL host preparation and operational notes.
 
-Notes for Ubuntu under WSL2 on Windows. The WSL profile inherits the generic profile and adds only required WSL behavior; see [Architecture](../omarchy-alignment/architecture.md). Key handling is a client-terminal concern covered in [Windows Terminal](windows-terminal.md).
+Notes for Ubuntu under WSL2 on Windows. The WSL profile inherits the generic profile and adds only required WSL behavior; see [Architecture](../architecture.md). Key handling is a client-terminal concern covered in [Windows Terminal](windows-terminal.md).
 
-The Stage 6 WSL shell contract inherits the complete generic Bash path and adds an explicit adapter after generic portable initialization and before common personal integrations. The initial adapter intentionally has no runtime settings. Existing regular `.bashrc` and the selected login file are preserved through reversible managed blocks; bootstrap never changes the login shell. See [Shell](../omarchy-alignment/tools/shell.md).
+The WSL shell contract inherits the complete generic Bash path and adds an explicit adapter after generic portable initialization and before common personal integrations. The initial adapter intentionally has no runtime settings. Existing regular `.bashrc` and the selected login file are preserved through reversible managed blocks; bootstrap never changes the login shell. See [Shell](../tools/shell.md).
 
 The ready tmux contract likewise inherits the complete generic path. Its WSL adapter is a tracked, command-empty fragment, so WSL adds no host behavior and there is no host-local tmux layer. Windows-specific keys are a client concern: apply all eight manual unbinds in [Windows Terminal](windows-terminal.md).
 
 ## Current State And Target
 
-The current WSL host was upgraded to Ubuntu 24.04 LTS and is the primary implementation and validation host. Ubuntu 24.04 ships tmux 3.4, below the 3.5 baseline target; see [tmux](../omarchy-alignment/tools/tmux.md#runtime-and-terminals).
+The current WSL host was upgraded to Ubuntu 24.04 LTS and is the primary implementation and validation host. Ubuntu 24.04 ships tmux 3.4, below the 3.5 baseline target; see [tmux](../tools/tmux.md#runtime-and-terminals).
 
 ## Completed Upgrade
 
