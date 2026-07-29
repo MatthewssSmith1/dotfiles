@@ -39,7 +39,7 @@ The accepted policy is to document these rather than add WSL or host-local tmux 
 
 ## Color Scheme
 
-The Omarchy tmux status uses ANSI `black` on ANSI `blue` for its session badge, and Windows Terminal's built-in schemes have insufficient contrast for that pair. The "Omarchy Tokyo Night" scheme in [windows/terminal/managed-settings.json](../../windows/terminal/managed-settings.json) (exact values from Omarchy v3.8.3's Tokyo Night `colors.toml`) is applied by `apply.ps1` as the `profiles.defaults` color scheme, so every profile (cmd, PowerShell, WSL, SSH) inherits it.
+The Omarchy tmux status uses ANSI `black` on ANSI `blue` for its session badge, and Windows Terminal's built-in schemes have insufficient contrast for that pair. The "Omarchy Tokyo Night" scheme in [windows/terminal/managed-settings.json](../../windows/terminal/managed-settings.json) (exact values from Omarchy v3.8.4's Tokyo Night `colors.toml`) is applied by `apply.ps1` as the `profiles.defaults` color scheme, so every profile (cmd, PowerShell, WSL, SSH) inherits it.
 
 ## Validated Client Behavior
 

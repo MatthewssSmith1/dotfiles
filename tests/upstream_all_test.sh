@@ -11,13 +11,13 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 readonly TEMP_ROOT="$TEST_ROOT"
 
 readonly UPSTREAM="$REPO_DIR/scripts/upstream"
-readonly EXPECTED_COMMIT='6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3'
+readonly EXPECTED_COMMIT='8fcc9d6048af4cb0e3af8512c78049857a3b53dd'
 readonly EXPECTED_BLOB='0f8e979785bb2a451f42cd494517d12eabcd54bf'
-readonly NVIM_EVIDENCE_REL='docs/omarchy-alignment/artifacts/omarchy-nvim-2026.6.17-1'
+readonly NVIM_EVIDENCE_REL='docs/omarchy-alignment/artifacts/omarchy-nvim-2026.7.17-1'
 readonly NVIM_EVIDENCE="$REPO_DIR/$NVIM_EVIDENCE_REL"
-readonly STABLE_DB_SHA256='3ea5428b2ec4109cbd634026c3f88d1103a135e93bcffa658a99e21aedff5289'
-readonly PACKAGE_SHA256='b4a6704df33709e4265cab31d2b8e725fa0dc49cd0872ce22b208a13b0f4e67a'
-readonly SIGNATURE_SHA256='a88bda5a1dadab3617655a122cc697d50a5601cd5f010e5f33bf0420c8ef43d0'
+readonly STABLE_DB_SHA256='6a957256fc29395488276516c4fa977f34bd5746cb927bf9214ef613eb5d5e5a'
+readonly PACKAGE_SHA256='97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519'
+readonly SIGNATURE_SHA256='25aa5948f3377752876936debb8a6d2c1bd44a7b393ebe446b78a70be21e1ce7'
 readonly BASH_REFERENCE_ROOT='packages/upstream/reference/omarchy/default/bash'
 readonly BASH_PAYLOAD_ROOT='packages/upstream/bash/.config/dotfiles/upstream/bash'
 readonly BASH_MAPPINGS=(
@@ -27,7 +27,7 @@ readonly BASH_MAPPINGS=(
   'inputrc|inputrc'
 )
 readonly LOCK_SOURCE="$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json"
-readonly LOCK_SHA256='0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de'
+readonly LOCK_SHA256='1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601'
 
 # Local override: these tests exercise arbitrary commands (scripts/upstream,
 # sync_checkout) with a description argument, unlike the harness expect_failure
@@ -159,7 +159,7 @@ seed_active_checkout() {
        snapshot:"packages/upstream/git/.config/git/config",
        destination:{root:"home", path:".config/git/config", mode:"100644"}, transform:"none"
      }], artifacts:[{
-       id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.6.17-1",
+       id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.7.17-1",
        snapshot:"packages/upstream/nvim/.config/nvim/lazy-lock.json",
        destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"},
        sha256:$lock_hash, provenance:{artifact:"fixture package", artifact_sha256:("2"*64),
@@ -217,18 +217,18 @@ for evidence_file in README.md SHA256SUMS package.sig.b64 omarchy-signing-key.as
 done
 grep -Fx "$STABLE_DB_SHA256  omarchy.db" "$NVIM_EVIDENCE/SHA256SUMS" >/dev/null || \
   fail 'stable repository database checksum evidence drifted'
-grep -Fx "$PACKAGE_SHA256  omarchy-nvim-2026.6.17-1-any.pkg.tar.zst" \
+grep -Fx "$PACKAGE_SHA256  omarchy-nvim-2026.7.17-1-any.pkg.tar.zst" \
   "$NVIM_EVIDENCE/SHA256SUMS" >/dev/null || fail 'stable package checksum evidence drifted'
-grep -Fx "$SIGNATURE_SHA256  omarchy-nvim-2026.6.17-1-any.pkg.tar.zst.sig" \
+grep -Fx "$SIGNATURE_SHA256  omarchy-nvim-2026.7.17-1-any.pkg.tar.zst.sig" \
   "$NVIM_EVIDENCE/SHA256SUMS" >/dev/null || fail 'stable package signature checksum evidence drifted'
 [[ "$(base64 -d "$NVIM_EVIDENCE/package.sig.b64" | sha256sum | cut -d' ' -f1)" == \
   "$SIGNATURE_SHA256" ]] || fail 'preserved detached signature bytes drifted'
 [[ "$(sha256sum "$NVIM_EVIDENCE/omarchy-signing-key.asc" | cut -d' ' -f1)" == \
   '15d6aac44df688165b2ea35fe0b23af239bbc66a6909c10a5c219e8d94b707de' ]] || \
   fail 'preserved Omarchy signing key drifted'
-grep -Fx 'pkgver = 2026.6.17-1' "$NVIM_EVIDENCE/.PKGINFO" >/dev/null || \
+grep -Fx 'pkgver = 2026.7.17-1' "$NVIM_EVIDENCE/.PKGINFO" >/dev/null || \
   fail 'preserved package identity drifted'
-grep -Fx 'pkgbuild_sha256sum = 92bbc655801be780fddcf04144c60fdcac7ec74572488024dec25257b65ed491' \
+grep -Fx 'pkgbuild_sha256sum = 290ef38620d729cd2a72c0f20f77daf8271d8a489b1ef0336a1fb3878605b83b' \
   "$NVIM_EVIDENCE/.BUILDINFO" >/dev/null || fail 'preserved PKGBUILD identity drifted'
 grep -Fx '%VERSION%' "$NVIM_EVIDENCE/repository.desc" >/dev/null || \
   fail 'stable repository package record is malformed'
@@ -256,28 +256,28 @@ cmp -s "$snapshot_hashes" "$NVIM_EVIDENCE/config.sha256" || \
 jq -e '
   .artifacts == [{
     id: "omarchy-nvim-lazy-lock",
-    release: "omarchy-nvim 2026.6.17-1",
+    release: "omarchy-nvim 2026.7.17-1",
     snapshot: "packages/upstream/nvim/.config/nvim/lazy-lock.json",
     destination: {root: "home", path: ".config/nvim/lazy-lock.json", mode: "100644"},
-    sha256: "0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de",
+    sha256: "1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601",
     provenance: {
-      artifact: "omarchy-nvim-2026.6.17-1-any.pkg.tar.zst",
-      artifact_sha256: "b4a6704df33709e4265cab31d2b8e725fa0dc49cd0872ce22b208a13b0f4e67a",
-      build_date: "2026-06-20T19:46:26Z",
-      extracted: "2026-07-20; full packaged config matched committed snapshot",
+      artifact: "omarchy-nvim-2026.7.17-1-any.pkg.tar.zst",
+      artifact_sha256: "97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519",
+      build_date: "2026-07-20T03:57:48Z",
+      extracted: "2026-07-29; full packaged config matched committed snapshot",
       trust: "verified signed stable package; archive omitted due size",
-      record: "docs/omarchy-alignment/artifacts/omarchy-nvim-2026.6.17-1/README.md"
+      record: "docs/omarchy-alignment/artifacts/omarchy-nvim-2026.7.17-1/README.md"
     }
   }]
 ' "$REPO_DIR/manifests/sources.json" >/dev/null || fail 'accepted stable artifact provenance drifted'
 jq -e '
   [.pins[] | [.id, .commit, (.package_identity // "-")]] == [
-    ["omarchy", "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3", "-"],
-    ["lazyvim-starter", "803bc181d7c0d6d5eeba9274d9be49b287294d99", "omarchy-nvim 2026.6.17-1"],
-    ["omarchy-pkgs", "78e5cc81953c44c804eb00e5be093e2674e09503", "omarchy-nvim 2026.6.17-1"]
+    ["omarchy", "8fcc9d6048af4cb0e3af8512c78049857a3b53dd", "-"],
+    ["lazyvim-starter", "803bc181d7c0d6d5eeba9274d9be49b287294d99", "omarchy-nvim 2026.7.17-1"],
+    ["omarchy-pkgs", "2eb15bc7265c5293985f7e5f483e39df7be9c548", "omarchy-nvim 2026.7.17-1"]
   ]
-' "$REPO_DIR/manifests/proposals/2026-07-20-stage8-neovim-stable.json" >/dev/null || \
-  fail 'Stage 8 stable reevaluation proposal drifted'
+' "$REPO_DIR/manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json" >/dev/null || \
+  fail 'accepted stable pin proposal drifted'
 
 # Verification succeeds from a moved checkout with spaces and prints its pins.
 new_fixture 'moved checkout with spaces'
@@ -286,7 +286,7 @@ success_output="$(HOME="$TEMP_ROOT/empty-home" "$moved_checkout/scripts/upstream
   fail 'verification failed from a moved checkout'
 [[ "$success_output" == *"$EXPECTED_COMMIT"* ]] || fail 'verification did not print the commit pin'
 [[ "$success_output" == *"$EXPECTED_BLOB"* ]] || fail 'verification did not print the blob pin'
-[[ "$success_output" == *'v3.8.3'* ]] || fail 'verification did not print the release pin'
+[[ "$success_output" == *'v3.8.4'* ]] || fail 'verification did not print the release pin'
 
 # The deployable Bash payload matches its pinned reference and manifest
 # mapping, and excluded sources are never materialized.
@@ -460,8 +460,8 @@ new_fixture 'artifact-hash'
 mkdir -p "$FIXTURE/packages/upstream/nvim/.config/nvim"
 cp -p "$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json" \
   "$FIXTURE/packages/upstream/nvim/.config/nvim/lazy-lock.json"
-rewrite_manifest "$FIXTURE" --arg hash '0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de' '
-  .artifacts = [{id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.6.17-1",
+rewrite_manifest "$FIXTURE" --arg hash '1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601' '
+  .artifacts = [{id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.7.17-1",
     snapshot:"packages/upstream/nvim/.config/nvim/lazy-lock.json",
     destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"}, sha256:$hash,
     provenance:{artifact:"fixture", artifact_sha256:("2"*64), build_date:"2026-06-17",

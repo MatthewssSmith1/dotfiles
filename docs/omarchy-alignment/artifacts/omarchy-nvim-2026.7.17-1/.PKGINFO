@@ -3,12 +3,12 @@
 pkgname = omarchy-nvim
 pkgbase = omarchy-nvim
 xdata = pkgtype=pkg
-pkgver = 2026.6.17-1
+pkgver = 2026.7.17-1
 pkgdesc = Pre-built LazyVim configuration with cached plugins
 url = https://github.com/LazyVim/LazyVim
-builddate = 1781984786
+builddate = 1784519868
 packager = Unknown Packager
-size = 242319393
+size = 242839808
 arch = any
 license = MIT
 conflict = omarchy-lazyvim

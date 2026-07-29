@@ -1,5 +1,5 @@
 %FILENAME%
-omarchy-nvim-2026.6.17-1-any.pkg.tar.zst
+omarchy-nvim-2026.7.17-1-any.pkg.tar.zst
 
 %NAME%
 omarchy-nvim
@@ -8,19 +8,19 @@ omarchy-nvim
 omarchy-nvim
 
 %VERSION%
-2026.6.17-1
+2026.7.17-1
 
 %DESC%
 Pre-built LazyVim configuration with cached plugins
 
 %CSIZE%
-177497908
+177781788
 
 %ISIZE%
-242319393
+242839808
 
 %SHA256SUM%
-b4a6704df33709e4265cab31d2b8e725fa0dc49cd0872ce22b208a13b0f4e67a
+97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519
 
 %URL%
 https://github.com/LazyVim/LazyVim
@@ -32,7 +32,7 @@ MIT
 any
 
 %BUILDDATE%
-1781984786
+1784519868
 
 %PACKAGER%
 Unknown Packager
@@ -49,3 +49,4 @@ git
 nodejs
 npm
 tree-sitter-cli
+

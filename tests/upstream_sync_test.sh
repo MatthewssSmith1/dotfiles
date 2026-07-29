@@ -5,7 +5,7 @@ set -Eeuo pipefail
 readonly TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
 readonly LOCK_SOURCE="$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json"
-readonly LOCK_SHA256='0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de'
+readonly LOCK_SHA256='1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601'
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -98,7 +98,7 @@ seed_active_checkout() {
        snapshot:"packages/upstream/git/.config/git/config",
        destination:{root:"home", path:".config/git/config", mode:"100644"}, transform:"none"
      }], artifacts:[{
-       id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.6.17-1",
+       id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.7.17-1",
        snapshot:"packages/upstream/nvim/.config/nvim/lazy-lock.json",
        destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"},
        sha256:$lock_hash, provenance:{artifact:"fixture package", artifact_sha256:("2"*64),

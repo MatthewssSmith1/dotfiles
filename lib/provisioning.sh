@@ -1234,7 +1234,9 @@ check_omarchy_neovim_drift() {
   output="$(pacman -Q omarchy-nvim 2>/dev/null)" || { log 'error: missing native omarchy-nvim package'; return 1; }
   [[ "$output" =~ ^omarchy-nvim[[:space:]]+([^[:space:]]+)$ ]] || { log 'error: malformed omarchy-nvim package identity'; return 1; }
   installed="${BASH_REMATCH[1]}"
-  package="$(jq -r '.pins[] | select(.id == "omarchy-pkgs") | .package_identity' "$DOTFILES_DIR/manifests/proposals/2026-07-20-stage8-neovim-stable.json")"
+  package="$(jq -er '.artifacts[] | select(.id == "omarchy-nvim-lazy-lock") | .release' "$DOTFILES_DIR/manifests/sources.json")" || {
+    log 'error: active source manifest has no accepted omarchy-nvim release'; return 1;
+  }
   accepted="${package#omarchy-nvim }"
   [[ "$installed" == "$accepted" ]] || log "warning: omarchy-nvim package drift: installed=$installed recorded=$accepted"
 }

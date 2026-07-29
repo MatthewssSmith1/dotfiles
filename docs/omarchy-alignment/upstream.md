@@ -14,11 +14,11 @@ Use one active tracked baseline. Git history provides rollback; do not retain a 
 
 | Source | Repository | Version | Commit |
 |--------|------------|---------|--------|
-| Omarchy | `https://github.com/basecamp/omarchy` | `v3.8.3` | `6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3` |
+| Omarchy | `https://github.com/basecamp/omarchy` | `v3.8.4` | `8fcc9d6048af4cb0e3af8512c78049857a3b53dd` |
 | LazyVim starter | `https://github.com/LazyVim/starter` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` | `803bc181d7c0d6d5eeba9274d9be49b287294d99` |
-| Omarchy Neovim overlay | `https://github.com/omacom-io/omarchy-pkgs` | `2026.6.17-1` | `78e5cc81953c44c804eb00e5be093e2674e09503` |
+| Omarchy Neovim overlay | `https://github.com/omacom-io/omarchy-pkgs` | `2026.7.17-1` | `2eb15bc7265c5293985f7e5f483e39df7be9c548` |
 
-The Stage 8 stable-channel reevaluation is recorded in [`manifests/proposals/2026-07-20-stage8-neovim-stable.json`](../../manifests/proposals/2026-07-20-stage8-neovim-stable.json). Both Neovim inputs record package identity `omarchy-nvim 2026.6.17-1`.
+The accepted refresh is recorded in [`manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json`](../../manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json). Both Neovim inputs record package identity `omarchy-nvim 2026.7.17-1`. The v3.8.3-to-v3.8.4 core diff touched none of the tracked paths, so every core snapshot is byte-identical to the previous baseline.
 
 There is no standalone Omarchy Neovim repository. The released configuration is assembled from three inputs:
 
@@ -36,9 +36,9 @@ There is no standalone Omarchy Neovim repository. The released configuration is 
    vim.g.autoformat = false
    ```
 
-The `omarchy-pkgs` commit above is the commit associated with `2026.6.17-1`; the artifact's recorded build date follows it by four minutes. The built package generated `lazy-lock.json` at build time; the extracted copy is committed at [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../packages/upstream/nvim/.config/nvim/lazy-lock.json) with fixed artifact and extracted-file hashes recorded in [Artifacts](artifacts/README.md). On 2026-07-20 the package and detached signature were still available from stable. The signature, repository checksum, PKGBUILD identity, package metadata, and complete packaged configuration were verified; the packaged configuration was byte-identical to the committed snapshot.
+The `omarchy-pkgs` commit above is the commit associated with `2026.7.17-1`; the artifact's recorded build date follows it by five minutes. The built package generated `lazy-lock.json` at build time; the extracted copy is committed at [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../../packages/upstream/nvim/.config/nvim/lazy-lock.json) with fixed artifact and extracted-file hashes recorded in [Artifacts](artifacts/README.md). On 2026-07-29 the package and detached signature were retrieved from stable. The signature, repository checksum, PKGBUILD identity, package metadata, and complete packaged configuration were verified against the assembled snapshot.
 
-`omarchy-nvim 2026.7.15-1`, including its newer OSC-52/tmux clipboard module, was explicitly evaluated. It existed on the edge endpoint but was absent from authoritative stable metadata, and its stable archive URL returned HTTP 404. The approved latest-stable policy therefore retains `2026.6.17-1`; edge content must not be assembled into this baseline.
+The `2026.7.17-1` refresh adopts the OSC-52/tmux remote-clipboard module first seen on edge as `2026.7.15-1` during Stage 8, when the latest-stable policy correctly refused it; it reached authoritative stable metadata as part of `2026.7.17-1`. Newer pkgvers in `omarchy-pkgs` git history (`2026.7.23`, `2026.7.27`) were absent from stable metadata at refresh time and were not selected; edge content must not be assembled into this baseline.
 
 ## Manifest
 
@@ -83,7 +83,7 @@ The implemented interface has separate verification and update modes:
 
 ```text
 scripts/upstream verify
-scripts/upstream sync --proposal manifests/proposals/2026-07-20-stage8-neovim-stable.json
+scripts/upstream sync --proposal manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json
 ```
 
 The proposal records every requested human-readable version, immutable commit, repository, and package identity. Sync refuses version-only inputs and writes a candidate active manifest from the reviewed proposal plus verified source blob data.
@@ -126,11 +126,11 @@ Selected upstream files are committed directly so ordinary Git diffs show baseli
 ## References
 
 - [Omarchy repository](https://github.com/basecamp/omarchy)
-- [Omarchy v3.8.3](https://github.com/basecamp/omarchy/tree/v3.8.3)
-- [Omarchy tmux configuration](https://github.com/basecamp/omarchy/blob/v3.8.3/config/tmux/tmux.conf)
-- [Omarchy Git configuration](https://github.com/basecamp/omarchy/blob/v3.8.3/config/git/config)
-- [Omarchy Bash defaults](https://github.com/basecamp/omarchy/tree/v3.8.3/default/bash)
-- [Tokyo Night Neovim theme input](https://github.com/basecamp/omarchy/blob/v3.8.3/themes/tokyo-night/neovim.lua)
+- [Omarchy v3.8.4](https://github.com/basecamp/omarchy/tree/v3.8.4)
+- [Omarchy tmux configuration](https://github.com/basecamp/omarchy/blob/v3.8.4/config/tmux/tmux.conf)
+- [Omarchy Git configuration](https://github.com/basecamp/omarchy/blob/v3.8.4/config/git/config)
+- [Omarchy Bash defaults](https://github.com/basecamp/omarchy/tree/v3.8.4/default/bash)
+- [Tokyo Night Neovim theme input](https://github.com/basecamp/omarchy/blob/v3.8.4/themes/tokyo-night/neovim.lua)
 - [LazyVim starter](https://github.com/LazyVim/starter)
 - [Omarchy Neovim PKGBUILD and overlay](https://github.com/omacom-io/omarchy-pkgs/tree/master/pkgbuilds/omarchy-nvim)
 - [LazyVim configuration](https://www.lazyvim.org/configuration)

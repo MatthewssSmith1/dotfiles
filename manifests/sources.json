@@ -6,8 +6,8 @@
     {
       "id": "omarchy-git-config",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "config/git/config",
         "blob": "0f8e979785bb2a451f42cd494517d12eabcd54bf",
@@ -24,8 +24,8 @@
     {
       "id": "omarchy-tmux-config",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "config/tmux/tmux.conf",
         "blob": "470040a3bcc3f22e7b4c3ff32ff641198b487f8e",
@@ -42,8 +42,8 @@
     {
       "id": "omarchy-starship-config",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "config/starship.toml",
         "blob": "36f15d1326a40d2693710a3a98efe52e2751cf57",
@@ -60,8 +60,8 @@
     {
       "id": "omarchy-theme-tokyo-night-neovim",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "themes/tokyo-night/neovim.lua",
         "blob": "39327c9b4ce88ceff70f3f3e90c9525b78801940",
@@ -76,8 +76,8 @@
     {
       "id": "omarchy-bash-aliases",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/aliases",
         "blob": "8bbfa5f54302df1bcdba30e24d5822e065b700d6",
@@ -92,8 +92,8 @@
     {
       "id": "omarchy-bash-completions",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/completions",
         "blob": "8a82713753e26f82cd227c2eafeb9de5f6607abf",
@@ -108,8 +108,8 @@
     {
       "id": "omarchy-bash-envs",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/envs",
         "blob": "a8d01dda23805a54ccca6e119921c40e437bbf43",
@@ -124,8 +124,8 @@
     {
       "id": "omarchy-bash-fns-compression",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/fns/compression",
         "blob": "4e8bb81431fa0a5b5c6fc92252fa9e8399250f9f",
@@ -140,8 +140,8 @@
     {
       "id": "omarchy-bash-fns-drives",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/fns/drives",
         "blob": "412faaba00737340bdd7f38960a5c21db3a95c19",
@@ -156,8 +156,8 @@
     {
       "id": "omarchy-bash-fns-ssh-port-forwarding",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/fns/ssh-port-forwarding",
         "blob": "4ee6c9243e9378aa575405e750fb044066c1a005",
@@ -172,8 +172,8 @@
     {
       "id": "omarchy-bash-fns-tmux",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/fns/tmux",
         "blob": "0144f2ebba7143ac1c1eab277c0fc0443331b3ce",
@@ -188,8 +188,8 @@
     {
       "id": "omarchy-bash-fns-transcoding",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/fns/transcoding",
         "blob": "017ddb6640567eaf58207fb285af38bd2a1c3828",
@@ -204,8 +204,8 @@
     {
       "id": "omarchy-bash-fns-worktrees",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/fns/worktrees",
         "blob": "a175a6473f07174063e7e5cd14e2e4882e33a6ea",
@@ -220,8 +220,8 @@
     {
       "id": "omarchy-bash-functions",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/functions",
         "blob": "9f26f9b5124653d269ebb0bae1bba0f9092eef11",
@@ -236,8 +236,8 @@
     {
       "id": "omarchy-bash-init",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/init",
         "blob": "c3d8c97a18b5967bff3bf1243d43cddf1ddcc452",
@@ -252,8 +252,8 @@
     {
       "id": "omarchy-bash-inputrc",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/inputrc",
         "blob": "3b48e55447a6afbb1b86b30ecd46d533652c416e",
@@ -268,8 +268,8 @@
     {
       "id": "omarchy-bash-rc",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/rc",
         "blob": "3042e427bd46174f5c08468bb32ce5a64691d760",
@@ -284,8 +284,8 @@
     {
       "id": "omarchy-bash-shell",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/shell",
         "blob": "7eb48672bf1d635026a44372a7a4dd6f4db6f7bb",
@@ -300,8 +300,8 @@
     {
       "id": "omarchy-bash-deployable-shell",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/shell",
         "blob": "7eb48672bf1d635026a44372a7a4dd6f4db6f7bb",
@@ -318,8 +318,8 @@
     {
       "id": "omarchy-bash-deployable-aliases",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/aliases",
         "blob": "8bbfa5f54302df1bcdba30e24d5822e065b700d6",
@@ -336,8 +336,8 @@
     {
       "id": "omarchy-bash-deployable-fns-tmux",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/fns/tmux",
         "blob": "0144f2ebba7143ac1c1eab277c0fc0443331b3ce",
@@ -354,8 +354,8 @@
     {
       "id": "omarchy-bash-deployable-inputrc",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v3.8.3",
-      "commit": "6aa2aec1c035d50cfb6871d490cdf9a1169f5ac3",
+      "release": "v3.8.4",
+      "commit": "8fcc9d6048af4cb0e3af8512c78049857a3b53dd",
       "source": {
         "path": "default/bash/inputrc",
         "blob": "3b48e55447a6afbb1b86b30ecd46d533652c416e",
@@ -372,7 +372,7 @@
     {
       "id": "lazyvim-starter-gitignore",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": ".gitignore",
@@ -390,7 +390,7 @@
     {
       "id": "lazyvim-starter-neoconf-json",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": ".neoconf.json",
@@ -408,7 +408,7 @@
     {
       "id": "lazyvim-starter-license",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "LICENSE",
@@ -426,7 +426,7 @@
     {
       "id": "lazyvim-starter-readme-md",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "README.md",
@@ -444,7 +444,7 @@
     {
       "id": "lazyvim-starter-init-lua",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "init.lua",
@@ -465,7 +465,7 @@
     {
       "id": "lazyvim-starter-lua-config-autocmds-lua",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "lua/config/autocmds.lua",
@@ -483,7 +483,7 @@
     {
       "id": "lazyvim-starter-lua-config-keymaps-lua",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "lua/config/keymaps.lua",
@@ -501,7 +501,7 @@
     {
       "id": "lazyvim-starter-lua-config-lazy-lua",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "lua/config/lazy.lua",
@@ -522,7 +522,7 @@
     {
       "id": "lazyvim-starter-lua-config-options-lua",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "lua/config/options.lua",
@@ -544,7 +544,7 @@
     {
       "id": "lazyvim-starter-lua-plugins-example-lua",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "lua/plugins/example.lua",
@@ -562,7 +562,7 @@
     {
       "id": "lazyvim-starter-stylua-toml",
       "repository": "https://github.com/LazyVim/starter",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "commit": "803bc181d7c0d6d5eeba9274d9be49b287294d99",
       "source": {
         "path": "stylua.toml",
@@ -580,11 +580,11 @@
     {
       "id": "omarchy-nvim-overlay-lua-config-remote-clipboard-lua",
       "repository": "https://github.com/omacom-io/omarchy-pkgs",
-      "release": "omarchy-nvim 2026.6.17-1",
-      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "release": "omarchy-nvim 2026.7.17-1",
+      "commit": "2eb15bc7265c5293985f7e5f483e39df7be9c548",
       "source": {
         "path": "pkgbuilds/omarchy-nvim/lua/config/remote_clipboard.lua",
-        "blob": "c43aa23424c75a0e0e004679994801029e3ec669",
+        "blob": "b54c54e670de20c2e2baf02bc5838c27089ae75b",
         "mode": "100644"
       },
       "snapshot": "packages/upstream/nvim/.config/nvim/lua/config/remote_clipboard.lua",
@@ -598,8 +598,8 @@
     {
       "id": "omarchy-nvim-overlay-lua-plugins-all-themes-lua",
       "repository": "https://github.com/omacom-io/omarchy-pkgs",
-      "release": "omarchy-nvim 2026.6.17-1",
-      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "release": "omarchy-nvim 2026.7.17-1",
+      "commit": "2eb15bc7265c5293985f7e5f483e39df7be9c548",
       "source": {
         "path": "pkgbuilds/omarchy-nvim/lua/plugins/all-themes.lua",
         "blob": "cc459c3801a59604df92f4c777e05533f560d71d",
@@ -616,8 +616,8 @@
     {
       "id": "omarchy-nvim-overlay-lua-plugins-disable-news-alert-lua",
       "repository": "https://github.com/omacom-io/omarchy-pkgs",
-      "release": "omarchy-nvim 2026.6.17-1",
-      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "release": "omarchy-nvim 2026.7.17-1",
+      "commit": "2eb15bc7265c5293985f7e5f483e39df7be9c548",
       "source": {
         "path": "pkgbuilds/omarchy-nvim/lua/plugins/disable-news-alert.lua",
         "blob": "5b3cd763ad7638432c441fa441d8407cdc579a45",
@@ -634,11 +634,11 @@
     {
       "id": "omarchy-nvim-overlay-lua-plugins-omarchy-theme-hotreload-lua",
       "repository": "https://github.com/omacom-io/omarchy-pkgs",
-      "release": "omarchy-nvim 2026.6.17-1",
-      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "release": "omarchy-nvim 2026.7.17-1",
+      "commit": "2eb15bc7265c5293985f7e5f483e39df7be9c548",
       "source": {
         "path": "pkgbuilds/omarchy-nvim/lua/plugins/omarchy-theme-hotreload.lua",
-        "blob": "054ff2973dd38a71f88f0f26bf3b48d685ce2867",
+        "blob": "ec493780f30d25cdf46d3fe43ea8097834b663e2",
         "mode": "100644"
       },
       "snapshot": "packages/upstream/nvim/.config/nvim/lua/plugins/omarchy-theme-hotreload.lua",
@@ -652,8 +652,8 @@
     {
       "id": "omarchy-nvim-overlay-lua-plugins-snacks-animated-scrolling-off-lua",
       "repository": "https://github.com/omacom-io/omarchy-pkgs",
-      "release": "omarchy-nvim 2026.6.17-1",
-      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "release": "omarchy-nvim 2026.7.17-1",
+      "commit": "2eb15bc7265c5293985f7e5f483e39df7be9c548",
       "source": {
         "path": "pkgbuilds/omarchy-nvim/lua/plugins/snacks-animated-scrolling-off.lua",
         "blob": "cbb0a58e029a60f3335d70da963f9b95b0bd1f79",
@@ -670,8 +670,8 @@
     {
       "id": "omarchy-nvim-overlay-plugin-after-transparency-lua",
       "repository": "https://github.com/omacom-io/omarchy-pkgs",
-      "release": "omarchy-nvim 2026.6.17-1",
-      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "release": "omarchy-nvim 2026.7.17-1",
+      "commit": "2eb15bc7265c5293985f7e5f483e39df7be9c548",
       "source": {
         "path": "pkgbuilds/omarchy-nvim/plugin/after/transparency.lua",
         "blob": "add6fd60f89b2c7ca6c6d9333ae97c4a3e5b59e0",
@@ -688,8 +688,8 @@
     {
       "id": "omarchy-nvim-overlay-lazyvim-json",
       "repository": "https://github.com/omacom-io/omarchy-pkgs",
-      "release": "omarchy-nvim 2026.6.17-1",
-      "commit": "78e5cc81953c44c804eb00e5be093e2674e09503",
+      "release": "omarchy-nvim 2026.7.17-1",
+      "commit": "2eb15bc7265c5293985f7e5f483e39df7be9c548",
       "source": {
         "path": "pkgbuilds/omarchy-nvim/lazyvim.json",
         "blob": "71fc832519cfe690624c451495bad1d79097f0e4",
@@ -707,21 +707,21 @@
   "artifacts": [
     {
       "id": "omarchy-nvim-lazy-lock",
-      "release": "omarchy-nvim 2026.6.17-1",
+      "release": "omarchy-nvim 2026.7.17-1",
       "snapshot": "packages/upstream/nvim/.config/nvim/lazy-lock.json",
       "destination": {
         "root": "home",
         "path": ".config/nvim/lazy-lock.json",
         "mode": "100644"
       },
-      "sha256": "0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de",
+      "sha256": "1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601",
       "provenance": {
-        "artifact": "omarchy-nvim-2026.6.17-1-any.pkg.tar.zst",
-        "artifact_sha256": "b4a6704df33709e4265cab31d2b8e725fa0dc49cd0872ce22b208a13b0f4e67a",
-        "build_date": "2026-06-20T19:46:26Z",
-        "extracted": "2026-07-20; full packaged config matched committed snapshot",
+        "artifact": "omarchy-nvim-2026.7.17-1-any.pkg.tar.zst",
+        "artifact_sha256": "97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519",
+        "build_date": "2026-07-20T03:57:48Z",
+        "extracted": "2026-07-29; full packaged config matched committed snapshot",
         "trust": "verified signed stable package; archive omitted due size",
-        "record": "docs/omarchy-alignment/artifacts/omarchy-nvim-2026.6.17-1/README.md"
+        "record": "docs/omarchy-alignment/artifacts/omarchy-nvim-2026.7.17-1/README.md"
       }
     }
   ]

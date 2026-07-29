@@ -226,7 +226,8 @@ Gate: prefixes, bindings, indexes, status, key protocol, plugin order, and persi
 ## 8. Generic And WSL Neovim Migration (Status: Complete; Ready; WSL Operational Acceptance Passed)
 
 - Use the completed 2026-07-20 stable-channel reevaluation: authoritative
-  stable remains `omarchy-nvim 2026.6.17-1`; do not substitute edge releases.
+  stable was `omarchy-nvim 2026.6.17-1` at Stage 8 close (refreshed to
+  `2026.7.17-1` on 2026-07-28); do not substitute edge releases.
 - Remove only recognized Kickstart links; use Git history as configuration
   backup.
 - Rename runtime data, state, and cache to collision-free timestamped siblings

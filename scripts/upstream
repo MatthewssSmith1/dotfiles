@@ -48,14 +48,14 @@ readonly NVIM_APPEND_TARGET='lua/config/options.lua'
 readonly NVIM_INIT_POLICY_BLOB='343e7df3f01c2379c5bff5b4c79059c08e8ce4b8'
 readonly NVIM_LAZY_POLICY_BLOB='d1fdc89c37b8798f06a1283637745ea88b4e7921'
 readonly LAZY_LOCK_ID='omarchy-nvim-lazy-lock'
-readonly LAZY_LOCK_RELEASE='omarchy-nvim 2026.6.17-1'
+readonly LAZY_LOCK_RELEASE='omarchy-nvim 2026.7.17-1'
 readonly LAZY_LOCK_SNAPSHOT='packages/upstream/nvim/.config/nvim/lazy-lock.json'
 readonly LAZY_LOCK_DESTINATION='.config/nvim/lazy-lock.json'
-readonly LAZY_LOCK_SHA256='0bf36c5e91f71bc3659391761b3856ab7dfcaeda8aca6a3de954d9a06e7e28de'
-readonly NVIM_EVIDENCE_DIR='docs/omarchy-alignment/artifacts/omarchy-nvim-2026.6.17-1'
-readonly STABLE_DB_SHA256='3ea5428b2ec4109cbd634026c3f88d1103a135e93bcffa658a99e21aedff5289'
-readonly PACKAGE_SHA256='b4a6704df33709e4265cab31d2b8e725fa0dc49cd0872ce22b208a13b0f4e67a'
-readonly SIGNATURE_SHA256='a88bda5a1dadab3617655a122cc697d50a5601cd5f010e5f33bf0420c8ef43d0'
+readonly LAZY_LOCK_SHA256='1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601'
+readonly NVIM_EVIDENCE_DIR='docs/omarchy-alignment/artifacts/omarchy-nvim-2026.7.17-1'
+readonly STABLE_DB_SHA256='6a957256fc29395488276516c4fa977f34bd5746cb927bf9214ef613eb5d5e5a'
+readonly PACKAGE_SHA256='97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519'
+readonly SIGNATURE_SHA256='25aa5948f3377752876936debb8a6d2c1bd44a7b393ebe446b78a70be21e1ce7'
 readonly SIGNING_KEY_SHA256='15d6aac44df688165b2ea35fe0b23af239bbc66a6909c10a5c219e8d94b707de'
 # Exact bytes the release PKGBUILD appends to lua/config/options.lua; they
 # exist only in the PKGBUILD and are recorded here and in the manifest.
@@ -113,18 +113,18 @@ verify_nvim_artifact_evidence() {
   done
   grep -Fx "$STABLE_DB_SHA256  omarchy.db" "$evidence/SHA256SUMS" >/dev/null || \
     die 'stable repository database checksum evidence drifted'
-  grep -Fx "$PACKAGE_SHA256  omarchy-nvim-2026.6.17-1-any.pkg.tar.zst" \
+  grep -Fx "$PACKAGE_SHA256  omarchy-nvim-2026.7.17-1-any.pkg.tar.zst" \
     "$evidence/SHA256SUMS" >/dev/null || die 'stable package checksum evidence drifted'
-  grep -Fx "$SIGNATURE_SHA256  omarchy-nvim-2026.6.17-1-any.pkg.tar.zst.sig" \
+  grep -Fx "$SIGNATURE_SHA256  omarchy-nvim-2026.7.17-1-any.pkg.tar.zst.sig" \
     "$evidence/SHA256SUMS" >/dev/null || die 'stable package signature checksum evidence drifted'
   actual_signature_hash="$(base64 -d "$evidence/package.sig.b64" | sha256sum | cut -d' ' -f1)"
   [[ "$actual_signature_hash" == "$SIGNATURE_SHA256" ]] || \
     die 'preserved detached signature bytes drifted'
   [[ "$(sha256_file "$evidence/omarchy-signing-key.asc")" == "$SIGNING_KEY_SHA256" ]] || \
     die 'preserved Omarchy signing key drifted'
-  grep -Fx 'pkgver = 2026.6.17-1' "$evidence/.PKGINFO" >/dev/null || \
+  grep -Fx 'pkgver = 2026.7.17-1' "$evidence/.PKGINFO" >/dev/null || \
     die 'preserved package identity drifted'
-  grep -Fx 'pkgbuild_sha256sum = 92bbc655801be780fddcf04144c60fdcac7ec74572488024dec25257b65ed491' \
+  grep -Fx 'pkgbuild_sha256sum = 290ef38620d729cd2a72c0f20f77daf8271d8a489b1ef0336a1fb3878605b83b' \
     "$evidence/.BUILDINFO" >/dev/null || die 'preserved PKGBUILD identity drifted'
 
   cmp -s "$evidence/config.sha256" <(
@@ -1003,16 +1003,17 @@ preserve_artifacts() {
   fault sync-artifact
 }
 
-# Packages whose payload stage has not landed keep their framework markers so
-# every closure-listed package root continues to exist after replacement.
+# Framework markers are repo-owned, never upstream content: packages whose
+# payload stage has not landed keep their package roots alive through
+# replacement, and populated packages keep their Stow ignore rules.
 preserve_framework_markers() {
   local package_dir name marker
 
   for package_dir in "$REPO_DIR/packages/upstream"/*/; do
     name="$(basename -- "$package_dir")"
-    [[ ! -d "$STAGING/candidate/packages/upstream/$name" ]] || continue
     for marker in .empty-package .stow-local-ignore; do
       [[ -f "$package_dir$marker" && ! -L "$package_dir$marker" ]] || continue
+      [[ ! -e "$STAGING/candidate/packages/upstream/$name/$marker" ]] || continue
       mkdir -p -- "$STAGING/candidate/packages/upstream/$name"
       cp -p -- "$package_dir$marker" "$STAGING/candidate/packages/upstream/$name/$marker"
     done

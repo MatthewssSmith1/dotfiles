@@ -20,7 +20,7 @@ There is no standalone Omarchy Neovim repository. The released configuration is 
 
 Two baseline facts worth knowing while evaluating the stock experience: the Omarchy baseline sets `relativenumber = false` (the personal layer visibly inverts this) and `autoformat = false`.
 
-`omarchy-nvim 2026.7.15-1` was evaluated during Stage 8 because it replaces the remote-clipboard module with an OSC-52 and tmux approach. It was available only on edge, not in authoritative stable metadata, so the latest-stable policy retains `2026.6.17-1`. The newer clipboard behavior is recorded for a future stable refresh but is not incorporated from edge (see [Upstream](../upstream.md)).
+The OSC-52/tmux remote-clipboard module was first evaluated during Stage 8 as edge-only `omarchy-nvim 2026.7.15-1` and correctly refused by the latest-stable policy. It reached stable in `omarchy-nvim 2026.7.17-1` and is part of the accepted baseline since the 2026-07-28 refresh (see [Upstream](../upstream.md)).
 
 ## Native Omarchy
 
