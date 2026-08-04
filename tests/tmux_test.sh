@@ -37,7 +37,7 @@ run_tmux_area() {
       AREA_ORDER=(git bash tmux nvim zsh agents herdr)
       AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready [agents]=framework [herdr]=framework)
       PROVISIONING_MANIFEST="$DOTFILES_DIR/manifests/provisioning.json"
-      tmux_validate_exact_plugin_closure() { :; }
+      validate_tmux_exact_plugin_closure() { :; }
       if [[ "$MODE" == remove ]]; then
         remove_tmux
       elif [[ "$MODE" == check ]]; then
@@ -608,7 +608,7 @@ invoke_plugin() {
       AREA_ORDER=(git bash tmux nvim zsh agents herdr)
       AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready [agents]=framework [herdr]=framework)
       if [[ "$1" == exact ]]; then
-        tmux_validate_exact_plugin_closure
+        validate_tmux_exact_plugin_closure
         exit
       fi
       plan_status=0

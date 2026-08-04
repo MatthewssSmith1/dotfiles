@@ -256,7 +256,7 @@ bash_shell_shadow_absent() {
   fi
 }
 
-bash_validate_shell_shadows() {
+validate_bash_shell_shadows() {
   local name
   for name in mise starship fzf zoxide eza rg bat fd wt; do
     bash_shell_shadow_absent "$name" || return 1
@@ -280,7 +280,7 @@ bash_candidate_is_distro_path() {
     "$candidate" == "${DOTFILES_TEST_BASH_DISTRO_BIN%/}/"* ]]
 }
 
-bash_validate_distro_command() {
+validate_bash_distro_command() {
   local name="$1" package="$2" candidate
   local candidates=()
   bash_shell_shadow_absent "$name" || return 1
@@ -298,7 +298,7 @@ bash_validate_distro_command() {
   done
 }
 
-bash_validate_wrapper() {
+validate_bash_wrapper() {
   local name="$1" package="$2" expected="$3"
   shift 3
   local candidate alternative found=false
@@ -335,7 +335,7 @@ bash_validate_wrapper() {
   [[ "$found" == true ]] || { log "error: managed wrapper '$name' has no approved distro executable"; return 1; }
 }
 
-bash_validate_optional_mise_command() {
+validate_bash_optional_mise_command() {
   local id="$1" name="$2" root executable expected candidate resolved selected
   local candidates=()
   bash_shell_shadow_absent "$name" || return 1
@@ -403,16 +403,16 @@ validate_bash_interactive_ownership() {
   }
   [[ -z "$activation" ]] || eval "$activation"
   provision_tool_status starship || { log 'error: managed Bash requires an approved Starship owner'; return 1; }
-  bash_validate_distro_command fzf fzf || return 1
-  bash_validate_distro_command zoxide zoxide || return 1
-  bash_validate_distro_command eza eza || return 1
-  bash_validate_distro_command rg ripgrep || return 1
+  validate_bash_distro_command fzf fzf || return 1
+  validate_bash_distro_command zoxide zoxide || return 1
+  validate_bash_distro_command eza eza || return 1
+  validate_bash_distro_command rg ripgrep || return 1
   local wrapper_bin="$HOME/.local/share/dotfiles/bin"
   [[ ${DOTFILES_BASH_CONTROLLED_VALIDATION-} != 1 ]] || wrapper_bin="${DOTFILES_BASH_VALIDATION_BIN:?}"
-  bash_validate_wrapper bat bat "$wrapper_bin/bat" bat batcat || return 1
-  bash_validate_wrapper fd fd-find "$wrapper_bin/fd" fd fdfind || return 1
+  validate_bash_wrapper bat bat "$wrapper_bin/bat" bat batcat || return 1
+  validate_bash_wrapper fd fd-find "$wrapper_bin/fd" fd fdfind || return 1
   if command -v wt >/dev/null 2>&1 || declare -F wt >/dev/null || [[ "$(type -t wt 2>/dev/null || true)" == alias ]]; then
-    bash_validate_optional_mise_command worktrunk wt || {
+    validate_bash_optional_mise_command worktrunk wt || {
       log 'error: optional Worktrunk command has an unapproved owner'; return 1;
     }
   fi
@@ -433,12 +433,12 @@ write_bash_validation_script() {
       printf 'SELECTED_PROFILE=%q\n' "$SELECTED_PROFILE"
       declare -f log array_contains sha256_file sha256_string resolve_link \
         bash_shell_shadow_absent bash_distro_owner_matches \
-        bash_candidate_is_distro_path bash_validate_distro_command bash_validate_wrapper bash_validate_optional_mise_command \
+        bash_candidate_is_distro_path validate_bash_distro_command validate_bash_wrapper validate_bash_optional_mise_command \
         bash_mise_which_readonly validate_bash_interactive_ownership
       printf 'validate_bash_interactive_ownership || exit 1\n'
     elif [[ "$validation" == host-shadows ]]; then
-      declare -f log bash_shell_shadow_absent bash_validate_shell_shadows
-      printf 'bash_validate_shell_shadows || exit 1\n'
+      declare -f log bash_shell_shadow_absent validate_bash_shell_shadows
+      printf 'validate_bash_shell_shadows || exit 1\n'
     fi
     printf 'printf "%%s\\n" %q\n' '__DOTFILES_BASH_VALIDATION_OK__'
   } > "$destination"
@@ -603,13 +603,7 @@ install_bash_attachments() {
 }
 
 build_bash_state_json() {
-  local packages='[]' targets='[]' dirs='[]' attachments='[]' i id
-  for i in "${!PACKAGES[@]}"; do packages="$(jq -c --arg value "${PACKAGES[i]}" '. + [$value]' <<< "$packages")"; done
-  for i in "${!TARGET_PATHS[@]}"; do
-    targets="$(jq -c --arg path "${TARGET_PATHS[i]}" --arg source "${TARGET_LEXICAL[i]}" \
-      --arg resolved "${TARGET_SOURCES[i]}" '. + [{path:$path,source:$source,resolved_source:$resolved}]' <<< "$targets")"
-  done
-  for i in "${!MANAGED_DIRS[@]}"; do dirs="$(jq -c --arg value "${MANAGED_DIRS[i]}" '. + [$value]' <<< "$dirs")"; done
+  local attachments id
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     id="bash-native-rc-v1.$BASH_RC_ORIGIN"
     attachments="$(jq -cn --arg id "$id" --arg hash "$(sha256_string "$BASH_NATIVE_BLOCK")" \
@@ -620,17 +614,13 @@ build_bash_state_json() {
       --arg login_hash "$(sha256_string "$BASH_LOGIN_BLOCK")" \
       '[{id:$rc_id,path:".bashrc",content_hash:$rc_hash},{id:$login_id,path:$login,content_hash:$login_hash}]')"
   fi
-  jq -cn --arg profile "$SELECTED_PROFILE" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" \
-    --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" --argjson attachments "$attachments" \
-    '{schema_version:1,profile:$profile,area:"bash",checkout_root:$checkout,target_root:$target,packages:$packages,targets:$targets,managed_directories:$dirs,attachments:$attachments,backups:[]}'
+  build_area_state_json bash "$attachments"
 }
 
 apply_bash() {
   local state_json
   begin_transaction
-  remove_recorded_links_for_apply
-  apply_stow_packages
-  validate_applied_targets
+  apply_area_stow
   fault bash-after-stow
   install_bash_attachments
   fault bash-after-attachments
@@ -645,28 +635,8 @@ apply_bash() {
 }
 
 remove_bash() {
-  local state="$HOME/.local/state/dotfiles/v1/bash.json" count index relative dir
-  local managed_directories=()
   init_bash_area
-  if [[ ! -e "$state" && ! -L "$state" ]]; then
-    log "area 'bash' is not deployed; no changes made"
-    return 0
-  fi
-  validate_state_file "$state"
-  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || die 'existing bash state belongs to a different target root'
-  SELECTED_PROFILE="$(jq -r .profile "$state")"
-  count="$(jq '.targets | length' "$state")"
-  for ((index=0; index<count; index++)); do validate_recorded_target "$state" "$index"; done
-  validate_bash_attachments_from_state "$state"
-  while IFS= read -r dir; do
-    validate_home_directory "$HOME/$dir"
-    managed_directories+=("$dir")
-  done < <(jq -r '.managed_directories[]' "$state")
-
-  AREA_STATE="$state"
-  OLD_STATE=true
-  TARGET_PATHS=()
-  while IFS= read -r relative; do TARGET_PATHS+=("$relative"); done < <(jq -r '.targets[].path' "$state")
+  begin_area_removal bash restore-profile || return 0
   configure_bash_journal
   begin_transaction
   if [[ "$SELECTED_PROFILE" != omarchy ]]; then
@@ -680,12 +650,7 @@ remove_bash() {
       "$BASH_NATIVE_BLOCK" append "$BASH_RC_ORIGIN"
   fi
   fault bash-remove-after-attachments
-  for ((index=0; index<count; index++)); do
-    remove_recorded_target "$state" "$index"
-  done
-  fault bash-remove-after-links
-  remove_current_regular_path "$state" 'Bash area state'
-  prune_managed_directories "${managed_directories[@]}"
-  TRANSACTION_ACTIVE=false
+  remove_recorded_area_targets bash-remove-after-links
+  remove_area_state_and_dirs 'Bash area state'
   log 'removed managed Bash links and startup attachments; retained provisioning and host-local Bash data'
 }

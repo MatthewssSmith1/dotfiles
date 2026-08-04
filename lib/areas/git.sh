@@ -389,19 +389,11 @@ update_migrations_ledger() {
   append_migration_ledger git-legacy-v1 "$fingerprint"
 }
 
-build_state_json() {
-  local packages='[]' targets='[]' dirs='[]' attachments hash i
-  for i in "${!PACKAGES[@]}"; do packages="$(jq -c --arg value "${PACKAGES[i]}" '. + [$value]' <<< "$packages")"; done
-  for i in "${!TARGET_PATHS[@]}"; do
-    targets="$(jq -c --arg path "${TARGET_PATHS[i]}" --arg source "${TARGET_LEXICAL[i]}" \
-      --arg resolved "${TARGET_SOURCES[i]}" '. + [{path:$path,source:$source,resolved_source:$resolved}]' <<< "$targets")"
-  done
-  for i in "${!MANAGED_DIRS[@]}"; do dirs="$(jq -c --arg value "${MANAGED_DIRS[i]}" '. + [$value]' <<< "$dirs")"; done
+build_git_state_json() {
+  local attachments hash
   hash="$(sha256_string "$MANAGED_BLOCK")"
   attachments="$(jq -cn --arg hash "$hash" '[{id:"git-global-includes-v1",path:".gitconfig",content_hash:$hash}]')"
-  jq -cn --arg profile "$SELECTED_PROFILE" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" \
-    --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" --argjson attachments "$attachments" \
-    '{schema_version:1,profile:$profile,area:"git",checkout_root:$checkout,target_root:$target,packages:$packages,targets:$targets,managed_directories:$dirs,attachments:$attachments,backups:[]}'
+  build_area_state_json git "$attachments"
 }
 
 validate_effective_git() {
@@ -440,16 +432,14 @@ apply_git() {
   fault after-local
   apply_identity
   fault after-identity
-  remove_recorded_links_for_apply
-  apply_stow_packages
-  validate_applied_targets
+  apply_area_stow
   fault after-stow
   apply_global
   fault after-global
   update_migrations_ledger
   validate_effective_git
   fault before-state
-  state_json="$(build_state_json)"
+  state_json="$(build_git_state_json)"
   write_transaction_string_atomic "$state_json" "$AREA_STATE" 0600
   TRANSACTION_ACTIVE=false
   fault after-state-commit
@@ -457,38 +447,13 @@ apply_git() {
 }
 
 remove_git() {
-  local state="$HOME/.local/state/dotfiles/v1/git.json"
-  local count index relative dir
-  local managed_directories=()
   init_git_area
-  if [[ ! -e "$state" && ! -L "$state" ]]; then
-    log 'Git area is not deployed; no changes made'
-    return
-  fi
-  validate_state_file "$state"
-  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || die 'existing git state belongs to a different target root'
-  count="$(jq '.targets | length' "$state")"
-  for ((index=0; index<count; index++)); do validate_recorded_target "$state" "$index"; done
-  validate_attachment_from_state "$state"
-  while IFS= read -r dir; do
-    validate_home_directory "$HOME/$dir"
-    managed_directories+=("$dir")
-  done < <(jq -r '.managed_directories[]' "$state")
-
-  AREA_STATE="$state"
-  OLD_STATE=true
-  TARGET_PATHS=()
-  while IFS= read -r relative; do TARGET_PATHS+=("$relative"); done < <(jq -r '.targets[].path' "$state")
+  begin_area_removal git || return 0
   begin_transaction
-  for ((index=0; index<count; index++)); do
-    remove_recorded_target "$state" "$index"
-  done
-  fault remove-after-links
+  remove_recorded_area_targets remove-after-links
   remove_guarded_attachment .gitconfig "$MANAGED_BEGIN" "$MANAGED_END" "$MANAGED_MARKER_TOKEN" \
     "$MANAGED_BLOCK" prepend existing-final-newline true
   fault remove-after-global
-  remove_current_regular_path "$state" 'Git area state'
-  prune_managed_directories "${managed_directories[@]}"
-  TRANSACTION_ACTIVE=false
+  remove_area_state_and_dirs 'Git area state'
   log 'removed managed Git links and global include block; retained identity, local settings, and migration ledger'
 }

@@ -12,6 +12,7 @@ HERDR_CONFIG_IDENTITY=''
 HERDR_CONFIG_HASH=''
 HERDR_BACKUP=''
 HERDR_BACKUP_IDENTITY=''
+HERDR_STAGED_COPY=''
 
 init_herdr_area() {
   AREA=herdr
@@ -152,15 +153,20 @@ preflight_herdr() {
   validate_herdr_syntax
 }
 
+herdr_stage_copy() {
+  local source="$1" dir="$2" template="$3" mode="$4"
+  HERDR_STAGED_COPY="$(mktemp "$dir/$template")"
+  track_temp_path "$HERDR_STAGED_COPY"
+  cp -- "$source" "$HERDR_STAGED_COPY"
+  chmod "$mode" "$HERDR_STAGED_COPY"
+}
+
 herdr_copy_no_clobber() {
-  local source="$1" destination="$2" mode="$3" dir temporary
+  local source="$1" destination="$2" mode="$3" dir
   dir="${destination%/*}"
   ensure_directory "$dir"
-  temporary="$(mktemp "$dir/.${destination##*/}.herdr.XXXXXX")"
-  track_temp_path "$temporary"
-  cp -- "$source" "$temporary"
-  chmod "$mode" "$temporary"
-  install_regular_no_clobber "$temporary" "$destination" 'Herdr predecessor backup'
+  herdr_stage_copy "$source" "$dir" ".${destination##*/}.herdr.XXXXXX" "$mode"
+  install_regular_no_clobber "$HERDR_STAGED_COPY" "$destination" 'Herdr predecessor backup'
 }
 
 install_herdr_config() {
@@ -180,29 +186,17 @@ install_herdr_config() {
 }
 
 build_herdr_state_json() {
-  local packages='[]' targets='[]' dirs='[]' backups='[]' attachment index
-  for index in "${!PACKAGES[@]}"; do packages="$(jq -c --arg v "${PACKAGES[index]}" '. + [$v]' <<< "$packages")"; done
-  for index in "${!TARGET_PATHS[@]}"; do
-    targets="$(jq -c --arg path "${TARGET_PATHS[index]}" --arg source "${TARGET_LEXICAL[index]}" \
-      --arg resolved "${TARGET_SOURCES[index]}" '. + [{path:$path,source:$source,resolved_source:$resolved}]' <<< "$targets")"
-  done
-  for index in "${!MANAGED_DIRS[@]}"; do dirs="$(jq -c --arg v "${MANAGED_DIRS[index]}" '. + [$v]' <<< "$dirs")"; done
+  local backups='[]' attachment
   [[ -z "$HERDR_BACKUP" ]] || backups="$(jq -cn --arg v "$HERDR_BACKUP" '[$v]')"
   attachment="$(jq -cn --arg id "herdr-config-v1.$HERDR_CONFIG_ORIGIN" --arg path "$HERDR_CONFIG_PATH" \
     --arg hash "$HERDR_CONFIG_HASH" '[{id:$id,path:$path,content_hash:$hash}]')"
-  jq -cn --arg profile "$SELECTED_PROFILE" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" \
-    --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" \
-    --argjson attachments "$attachment" --argjson backups "$backups" \
-    '{schema_version:1,profile:$profile,area:"herdr",checkout_root:$checkout,target_root:$target,packages:$packages,
-      targets:$targets,managed_directories:$dirs,attachments:$attachments,backups:$backups}'
+  build_area_state_json herdr "$attachment" "$backups"
 }
 
 apply_herdr() {
   local state_json
   begin_transaction
-  remove_recorded_links_for_apply
-  apply_stow_packages
-  validate_applied_targets
+  apply_area_stow
   install_herdr_config
   state_json="$(build_herdr_state_json)"
   write_transaction_string_atomic "$state_json" "$AREA_STATE" 0600
@@ -212,29 +206,15 @@ apply_herdr() {
 }
 
 restore_herdr_predecessor() {
-  local path="$HOME/$HERDR_CONFIG_PATH" temporary dir="${HOME}/${HERDR_CONFIG_PATH%/*}"
-  temporary="$(mktemp "$dir/.config.toml.herdr-restore.XXXXXX")"
-  track_temp_path "$temporary"
-  cp -- "$HOME/$HERDR_BACKUP" "$temporary"
-  chmod "$HERDR_PREDECESSOR_MODE" "$temporary"
-  replace_with_staged_regular "$temporary" "$path" "$HERDR_CONFIG_IDENTITY" 'managed Herdr config'
+  local path="$HOME/$HERDR_CONFIG_PATH" dir="${HOME}/${HERDR_CONFIG_PATH%/*}"
+  herdr_stage_copy "$HOME/$HERDR_BACKUP" "$dir" '.config.toml.herdr-restore.XXXXXX' "$HERDR_PREDECESSOR_MODE"
+  replace_with_staged_regular "$HERDR_STAGED_COPY" "$path" "$HERDR_CONFIG_IDENTITY" 'managed Herdr config'
   remove_expected_path "$HOME/$HERDR_BACKUP" "$HERDR_BACKUP_IDENTITY" 'Herdr predecessor backup'
 }
 
 remove_herdr() {
-  local state="$HOME/.local/state/dotfiles/v1/herdr.json" count index dir
-  local managed_directories=()
   init_herdr_area
-  if [[ ! -e "$state" && ! -L "$state" ]]; then log "area 'herdr' is not deployed; no changes made"; return 0; fi
-  validate_state_file "$state"
-  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || die 'existing Herdr state belongs to a different target root'
-  SELECTED_PROFILE="$(jq -r .profile "$state")"
-  count="$(jq '.targets | length' "$state")"
-  for ((index=0; index<count; index++)); do validate_recorded_target "$state" "$index"; done
-  validate_herdr_state "$state"
-  while IFS= read -r dir; do validate_home_directory "$HOME/$dir"; managed_directories+=("$dir"); done < <(jq -r '.managed_directories[]' "$state")
-  AREA_STATE="$state"; OLD_STATE=true; TARGET_PATHS=()
-  while IFS= read -r dir; do TARGET_PATHS+=("$dir"); done < <(jq -r '.targets[].path' "$state")
+  begin_area_removal herdr restore-profile || return 0
   [[ -z "$HERDR_BACKUP" ]] || AREA_JOURNAL_PATHS+=("$HOME/$HERDR_BACKUP")
   begin_transaction
   if [[ "$HERDR_CONFIG_ORIGIN" == created ]]; then
@@ -243,9 +223,7 @@ remove_herdr() {
     restore_herdr_predecessor
   fi
   fault herdr-remove-after-config
-  for ((index=0; index<count; index++)); do remove_recorded_target "$state" "$index"; done
-  remove_current_regular_path "$state" 'Herdr area state'
-  prune_managed_directories "${managed_directories[@]}"
-  TRANSACTION_ACTIVE=false
+  remove_recorded_area_targets
+  remove_area_state_and_dirs 'Herdr area state'
   log 'removed managed Herdr config and state; restored the reviewed predecessor when present and retained runtime data'
 }

@@ -20,6 +20,9 @@ AREA_JOURNAL_PATHS=()
 AREA_ATTACHMENT_VALIDATOR=""
 AREA_ORDER=()
 MANAGED_DIRS=()
+REMOVE_STATE=""
+REMOVE_TARGET_COUNT=0
+REMOVE_MANAGED_DIRS=()
 PREFLIGHT_APPROVED_REPLACEMENTS=()
 declare -A AREA_STATUS=()
 declare -A AREA_DEPENDENCY_OK=()
@@ -468,19 +471,10 @@ legacy_manifest_record() {
 
 legacy_link_owned_by() {
   local path="$1" expected="$2" fallback_source="$3"
-  local value lexical resolved
 
   [[ -L "$path" ]] || return 1
   [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || return 1
-  value="$(readlink -- "$path")"
-  if [[ "$value" == /* ]]; then
-    lexical="$(realpath -m -s -- "$value")"
-  else
-    lexical="$(realpath -m -s -- "$(dirname -- "$path")/$value")"
-  fi
-  [[ "$lexical" == "$expected" ]] || return 1
-  resolved="$(resolve_link "$path")"
-  [[ "$resolved" == "$expected" ]] || return 1
+  known_link "$path" "$expected" || return 1
   if [[ -f "$expected" && ! -L "$expected" ]]; then
     [[ "$(stat -c %u -- "$expected")" == "$EUID" ]] || return 1
     OWNED_LEGACY_SOURCE="$expected"
@@ -1624,4 +1618,77 @@ prune_managed_directories() {
       rmdir -- "$HOME/$dir" 2>/dev/null || true
     done
   done
+}
+
+# Shared area lifecycle. Areas with extra apply or removal steps interleave
+# them between these helpers; the fault points stay in the area scripts.
+
+apply_area_stow() {
+  remove_recorded_links_for_apply
+  apply_stow_packages
+  validate_applied_targets
+}
+
+build_area_state_json() {
+  local area="$1" attachments="${2:-[]}" backups="${3:-[]}" targets="${4:-[]}"
+  local packages='[]' dirs='[]' i
+  for i in "${!PACKAGES[@]}"; do packages="$(jq -c --arg value "${PACKAGES[i]}" '. + [$value]' <<< "$packages")"; done
+  for i in "${!TARGET_PATHS[@]}"; do
+    targets="$(jq -c --arg path "${TARGET_PATHS[i]}" --arg source "${TARGET_LEXICAL[i]}" \
+      --arg resolved "${TARGET_SOURCES[i]}" '. + [{path:$path,source:$source,resolved_source:$resolved}]' <<< "$targets")"
+  done
+  for i in "${!MANAGED_DIRS[@]}"; do dirs="$(jq -c --arg value "${MANAGED_DIRS[i]}" '. + [$value]' <<< "$dirs")"; done
+  jq -cn --arg profile "$SELECTED_PROFILE" --arg area "$area" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" \
+    --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" \
+    --argjson attachments "$attachments" --argjson backups "$backups" \
+    '{schema_version:1,profile:$profile,area:$area,checkout_root:$checkout,target_root:$target,packages:$packages,targets:$targets,managed_directories:$dirs,attachments:$attachments,backups:$backups}'
+}
+
+# Removal prologue: refuses undeployed or foreign state, revalidates every
+# recorded target through the area's attachment validator, and loads the
+# recorded globals the teardown helpers consume. Returns 1 after logging when
+# the area is not deployed. Callers needing the recorded profile restored
+# pass restore-profile as the second argument.
+begin_area_removal() {
+  local area="$1" restore_profile="${2:-}" count index dir
+  local state="$HOME/.local/state/dotfiles/v1/$area.json"
+  REMOVE_STATE="$state"
+  REMOVE_TARGET_COUNT=0
+  REMOVE_MANAGED_DIRS=()
+  if [[ ! -e "$state" && ! -L "$state" ]]; then
+    log "area '$area' is not deployed; no changes made"
+    return 1
+  fi
+  validate_state_file "$state"
+  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || \
+    die "existing $area state belongs to a different target root"
+  [[ "$restore_profile" != restore-profile ]] || SELECTED_PROFILE="$(jq -r .profile "$state")"
+  count="$(jq '.targets | length' "$state")"
+  for ((index=0; index<count; index++)); do validate_recorded_target "$state" "$index"; done
+  "$AREA_ATTACHMENT_VALIDATOR" "$state"
+  while IFS= read -r dir; do
+    validate_home_directory "$HOME/$dir"
+    REMOVE_MANAGED_DIRS+=("$dir")
+  done < <(jq -r '.managed_directories[]' "$state")
+  REMOVE_TARGET_COUNT="$count"
+  AREA_STATE="$state"
+  OLD_STATE=true
+  TARGET_PATHS=()
+  while IFS= read -r dir; do TARGET_PATHS+=("$dir"); done < <(jq -r '.targets[].path' "$state")
+}
+
+remove_recorded_area_targets() {
+  local after_links_fault="${1:-}" index
+  for ((index=0; index<REMOVE_TARGET_COUNT; index++)); do
+    remove_recorded_target "$REMOVE_STATE" "$index"
+  done
+  [[ -z "$after_links_fault" ]] || fault "$after_links_fault"
+}
+
+remove_area_state_and_dirs() {
+  local state_description="$1" after_state_fault="${2:-}"
+  remove_current_regular_path "$REMOVE_STATE" "$state_description"
+  [[ -z "$after_state_fault" ]] || fault "$after_state_fault"
+  prune_managed_directories "${REMOVE_MANAGED_DIRS[@]}"
+  TRANSACTION_ACTIVE=false
 }

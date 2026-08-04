@@ -394,17 +394,7 @@ update_zsh_migration_ledger() {
 }
 
 build_zsh_state_json() {
-  local packages='[]' targets='[]' dirs='[]' backups index
-  for index in "${!PACKAGES[@]}"; do packages="$(jq -c --arg value "${PACKAGES[index]}" '. + [$value]' <<< "$packages")"; done
-  for index in "${!TARGET_PATHS[@]}"; do
-    targets="$(jq -c --arg path "${TARGET_PATHS[index]}" --arg source "${TARGET_LEXICAL[index]}" \
-      --arg resolved "${TARGET_SOURCES[index]}" '. + [{path:$path,source:$source,resolved_source:$resolved}]' <<< "$targets")"
-  done
-  for index in "${!MANAGED_DIRS[@]}"; do dirs="$(jq -c --arg value "${MANAGED_DIRS[index]}" '. + [$value]' <<< "$dirs")"; done
-  backups="$(zsh_ledger_backups_json)"
-  jq -cn --arg profile "$SELECTED_PROFILE" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" \
-    --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" --argjson backups "$backups" \
-    '{schema_version:1,profile:$profile,area:"zsh",checkout_root:$checkout,target_root:$target,packages:$packages,targets:$targets,managed_directories:$dirs,attachments:[],backups:$backups}'
+  build_area_state_json zsh '[]' "$(zsh_ledger_backups_json)"
 }
 
 apply_zsh() {
@@ -430,38 +420,17 @@ apply_zsh() {
   log "applied transitional zsh area for profile '$SELECTED_PROFILE'"
 }
 
-remove_zsh() {
-  local state="$HOME/.local/state/dotfiles/v1/zsh.json" count index relative dir
-  local managed_directories=()
-  init_zsh_area
-  if [[ ! -e "$state" && ! -L "$state" ]]; then
-    log "area 'zsh' is not deployed; no changes made"
-    return 0
-  fi
-  validate_state_file "$state"
-  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || die 'existing zsh state belongs to a different target root'
-  SELECTED_PROFILE="$(jq -r .profile "$state")"
-  count="$(jq '.targets | length' "$state")"
-  for ((index=0; index<count; index++)); do validate_recorded_target "$state" "$index"; done
+validate_zsh_removal_state() {
   validate_migrations_ledger
-  validate_zsh_state "$state"
-  while IFS= read -r dir; do
-    validate_home_directory "$HOME/$dir"
-    managed_directories+=("$dir")
-  done < <(jq -r '.managed_directories[]' "$state")
+  validate_zsh_state "$1"
+}
 
-  AREA_STATE="$state"
-  OLD_STATE=true
-  TARGET_PATHS=()
-  while IFS= read -r relative; do TARGET_PATHS+=("$relative"); done < <(jq -r '.targets[].path' "$state")
+remove_zsh() {
+  init_zsh_area
+  AREA_ATTACHMENT_VALIDATOR=validate_zsh_removal_state
+  begin_area_removal zsh restore-profile || return 0
   begin_transaction
-  for ((index=0; index<count; index++)); do
-    remove_recorded_target "$state" "$index"
-  done
-  fault zsh-remove-after-links
-  remove_current_regular_path "$state" 'zsh area state'
-  fault zsh-remove-after-state
-  prune_managed_directories "${managed_directories[@]}"
-  TRANSACTION_ACTIVE=false
+  remove_recorded_area_targets zsh-remove-after-links
+  remove_area_state_and_dirs 'zsh area state' zsh-remove-after-state
   log 'removed managed zsh links and state; retained local aliases, Zinit, history, migration backups, ledger, and Vite+ retirement'
 }

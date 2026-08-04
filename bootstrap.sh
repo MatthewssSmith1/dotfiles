@@ -192,6 +192,16 @@ tmux_plugin_provisioning_requested() {
     ${#AREAS[@]} -eq 1 && "${AREAS[0]}" == tmux ]]
 }
 
+# Dispatch one lifecycle verb (preflight, apply, remove) to the named area's
+# implementation, or to the parameterized generic area for framework areas.
+area_entrypoint() {
+  local verb="$1" area="$2"
+  case "$area" in
+    git|bash|tmux|nvim|zsh|agents|herdr) "${verb}_${area}" ;;
+    *) "${verb}_generic" "$area" ;;
+  esac
+}
+
 run_area() {
   local area="$1"
   # This function runs in a per-area subshell started with errexit paused;
@@ -201,43 +211,16 @@ run_area() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
   if [[ "$MODE" == remove ]]; then
-    case "$area" in
-      git) remove_git ;;
-      bash) remove_bash ;;
-      tmux) remove_tmux ;;
-      nvim) remove_nvim ;;
-      zsh) remove_zsh ;;
-      agents) remove_agents ;;
-      herdr) remove_herdr ;;
-      *) remove_generic "$area" ;;
-    esac
+    area_entrypoint remove "$area"
     return 0
   fi
-  case "$area" in
-    git) preflight_git ;;
-    bash) preflight_bash ;;
-    tmux) preflight_tmux ;;
-    nvim) preflight_nvim ;;
-    zsh) preflight_zsh ;;
-    agents) preflight_agents ;;
-    herdr) preflight_herdr ;;
-    *) preflight_generic "$area" ;;
-  esac
+  area_entrypoint preflight "$area"
   if [[ "$MODE" == check ]]; then
     if [[ "$area" == nvim ]]; then check_nvim_restore_convergence; fi
     log "area '$area' preflight passed for profile '$SELECTED_PROFILE'; no changes made"
     return 0
   fi
-  case "$area" in
-    git) apply_git ;;
-    bash) apply_bash ;;
-    tmux) apply_tmux ;;
-    nvim) apply_nvim ;;
-    zsh) apply_zsh ;;
-    agents) apply_agents ;;
-    herdr) apply_herdr ;;
-    *) apply_generic "$area" ;;
-  esac
+  area_entrypoint apply "$area"
 }
 
 # Collect the selected areas' recorded managed directories before removal so
@@ -314,16 +297,7 @@ preflight_selected_areas() {
     (
       set -Eeuo pipefail
       trap cleanup EXIT
-      case "$area" in
-        git) preflight_git ;;
-        bash) preflight_bash ;;
-        tmux) preflight_tmux ;;
-        nvim) preflight_nvim ;;
-        zsh) preflight_zsh ;;
-        agents) preflight_agents ;;
-        herdr) preflight_herdr ;;
-        *) preflight_generic "$area" ;;
-      esac
+      area_entrypoint preflight "$area"
     )
     status=$?
     set -e

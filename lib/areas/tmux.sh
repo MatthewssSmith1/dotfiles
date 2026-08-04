@@ -343,7 +343,7 @@ tmux_reviewed_legacy_repository() {
   printf 'https://git::@github.com/%s/%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
 }
 
-tmux_validate_managed_hook_scripts() {
+validate_tmux_managed_hook_scripts() {
   local root="$1" directory script path
   while IFS=$'\t' read -r directory script; do
     path="$root/$directory/$script"
@@ -361,7 +361,7 @@ tmux_receipt_tree_for_id() {
   jq -er --arg id "$id" '.plugins[] | select(.id == $id) | .tree' "$TMUX_PLUGIN_RECEIPT" 2>/dev/null
 }
 
-tmux_validate_plugin_root_entries() {
+validate_tmux_plugin_root_entries() {
   local allow_missing="$1" root="$HOME/$(jq -r .plugin_root "$TMUX_PLUGIN_LOCK")" path base
   local expected=() actual=()
   mapfile -t expected < <(jq -r '.plugins[].directory' "$TMUX_PLUGIN_LOCK")
@@ -383,7 +383,7 @@ tmux_validate_plugin_root_entries() {
   fi
 }
 
-tmux_validate_exact_plugin_closure() {
+validate_tmux_exact_plugin_closure() {
   local root path id directory repository commit expected_tree receipt_hash
   validate_tmux_plugin_lock
   validate_tmux_plugin_receipt
@@ -393,7 +393,7 @@ tmux_validate_exact_plugin_closure() {
   }
   root="$HOME/$(jq -r .plugin_root "$TMUX_PLUGIN_LOCK")"
   tmux_plugin_paths_safe "$root" || { log 'error: tmux plugin root has unsafe ownership or topology'; return 1; }
-  tmux_validate_plugin_root_entries false || return 1
+  validate_tmux_plugin_root_entries false || return 1
   while IFS=$'\t' read -r id directory repository commit; do
     path="$root/$directory"
     tmux_inspect_plugin_checkout "$path" "$repository" || {
@@ -409,7 +409,7 @@ tmux_validate_exact_plugin_closure() {
       log "error: tmux plugin tree differs from its receipt: $path"; return 1;
     }
   done < <(jq -r '.plugins[] | [.id,.directory,.repository,.commit] | @tsv' "$TMUX_PLUGIN_LOCK")
-  tmux_validate_managed_hook_scripts "$root" || return 1
+  validate_tmux_managed_hook_scripts "$root" || return 1
   [[ "$(sha256_file "$TMUX_PLUGIN_LOCK")" == "$TMUX_PLUGIN_LOCK_SHA" ]] || {
     log 'error: tmux plugin lock changed during closure validation'; return 1;
   }
@@ -428,7 +428,7 @@ tmux_preflight_plugin_provision_plan() {
     log 'error: tmux plugin root has unsafe ownership or topology'
     root_refusal='plugin root has unsafe ownership or topology'
     root_inspectable=false
-  elif ! tmux_validate_plugin_root_entries true; then
+  elif ! validate_tmux_plugin_root_entries true; then
     root_refusal='plugin root contains an unexpected entry'
     root_inspectable=false
   fi
@@ -633,7 +633,7 @@ tmux_verify_plugin_transaction_closure() {
     [[ "$TMUX_CHECKOUT_HEAD" == "${TMUX_PLUGIN_COMMITS[index]}" &&
       "$TMUX_CHECKOUT_TREE" == "${TMUX_PLUGIN_TREES[index]}" ]] || return 1
   done
-  tmux_validate_managed_hook_scripts "$root" || return 1
+  validate_tmux_managed_hook_scripts "$root" || return 1
   shopt -s dotglob nullglob
   for path in "$root"/*; do entries+=("$path"); done
   shopt -u dotglob nullglob
@@ -1339,7 +1339,7 @@ preflight_tmux() {
   validate_tmux_payload
   validate_tmux_terminfo
   resolve_tmux_client_owner || die 'tmux client ownership validation failed'
-  tmux_validate_exact_plugin_closure || die 'tmux plugin closure is not exact; only --provision --area tmux may repair it'
+  validate_tmux_exact_plugin_closure || die 'tmux plugin closure is not exact; only --provision --area tmux may repair it'
   inspect_active_tmux_servers
   record_managed_parents '.local/state/dotfiles/v1/tmux.json'
   if [[ "$SELECTED_PROFILE" != omarchy ]]; then preflight_tmux_xdg_migration; fi
@@ -1375,29 +1375,19 @@ install_tmux_attachment() {
 }
 
 build_tmux_state_json() {
-  local packages='[]' targets='[]' dirs='[]' attachments='[]' index id
-  for index in "${!PACKAGES[@]}"; do packages="$(jq -c --arg value "${PACKAGES[index]}" '. + [$value]' <<< "$packages")"; done
-  for index in "${!TARGET_PATHS[@]}"; do
-    targets="$(jq -c --arg path "${TARGET_PATHS[index]}" --arg source "${TARGET_LEXICAL[index]}" \
-      --arg resolved "${TARGET_SOURCES[index]}" '. + [{path:$path,source:$source,resolved_source:$resolved}]' <<< "$targets")"
-  done
-  for index in "${!MANAGED_DIRS[@]}"; do dirs="$(jq -c --arg value "${MANAGED_DIRS[index]}" '. + [$value]' <<< "$dirs")"; done
+  local attachments='[]' id
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     id="tmux-native-config-v1.$TMUX_NATIVE_ORIGIN"
     attachments="$(jq -cn --arg id "$id" --arg path "$TMUX_NATIVE_PATH" --arg hash "$(sha256_string "$TMUX_NATIVE_BLOCK")" \
       '[{id:$id,path:$path,content_hash:$hash}]')"
   fi
-  jq -cn --arg profile "$SELECTED_PROFILE" --arg checkout "$CHECKOUT_ROOT" --arg target "$TARGET_ROOT" \
-    --argjson packages "$packages" --argjson targets "$targets" --argjson dirs "$dirs" --argjson attachments "$attachments" \
-    '{schema_version:1,profile:$profile,area:"tmux",checkout_root:$checkout,target_root:$target,packages:$packages,targets:$targets,managed_directories:$dirs,attachments:$attachments,backups:[]}'
+  build_area_state_json tmux "$attachments"
 }
 
 apply_tmux() {
   local state_json
   begin_transaction
-  remove_recorded_links_for_apply
-  apply_stow_packages
-  validate_applied_targets
+  apply_area_stow
   fault tmux-after-stow
   install_tmux_attachment
   fault tmux-after-attachment
@@ -1414,23 +1404,8 @@ apply_tmux() {
 }
 
 remove_tmux() {
-  local state="$HOME/.local/state/dotfiles/v1/tmux.json" count index dir
-  local managed_directories=()
   init_tmux_area
-  if [[ ! -e "$state" && ! -L "$state" ]]; then
-    log "area 'tmux' is not deployed; no changes made"
-    return 0
-  fi
-  validate_state_file "$state"
-  [[ "$(jq -r .target_root "$state")" == "$TARGET_ROOT" ]] || die 'existing tmux state belongs to a different target root'
-  SELECTED_PROFILE="$(jq -r .profile "$state")"
-  count="$(jq '.targets | length' "$state")"
-  for ((index=0; index<count; index++)); do validate_recorded_target "$state" "$index"; done
-  validate_tmux_attachments_from_state "$state"
-  while IFS= read -r dir; do validate_home_directory "$HOME/$dir"; managed_directories+=("$dir"); done \
-    < <(jq -r '.managed_directories[]' "$state")
-  AREA_STATE="$state"; OLD_STATE=true; TARGET_PATHS=()
-  while IFS= read -r dir; do TARGET_PATHS+=("$dir"); done < <(jq -r '.targets[].path' "$state")
+  begin_area_removal tmux restore-profile || return 0
   configure_tmux_journal
   begin_transaction
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
@@ -1438,11 +1413,7 @@ remove_tmux() {
       "$TMUX_NATIVE_BLOCK" append "$TMUX_NATIVE_ORIGIN"
   fi
   fault tmux-remove-after-attachment
-  for ((index=0; index<count; index++)); do remove_recorded_target "$state" "$index"; done
-  fault tmux-remove-after-links
-  remove_current_regular_path "$state" 'tmux area state'
-  fault tmux-remove-after-state
-  prune_managed_directories "${managed_directories[@]}"
-  TRANSACTION_ACTIVE=false
+  remove_recorded_area_targets tmux-remove-after-links
+  remove_area_state_and_dirs 'tmux area state' tmux-remove-after-state
   log 'removed managed tmux configuration and state; retained plugins, Resurrect data, and migration ledger'
 }

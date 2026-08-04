@@ -481,12 +481,12 @@ DOTFILES_TEST_BASH_DISTRO_BIN="$TEST_ROOT/owner-bin"
 DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/dpkg-query"
 PATH="$HOME/.local/share/dotfiles/bin:$TEST_ROOT/owner-bin:/usr/bin:/bin"
 export DOTFILES_TESTING DOTFILES_TEST_BASH_DISTRO_BIN DOTFILES_TEST_DPKG_QUERY PATH
-bash_validate_distro_command fzf fzf || fail 'approved distro ownership was rejected'
-bash_validate_wrapper bat bat "$HOME/.local/share/dotfiles/bin/bat" bat batcat || fail 'approved bat wrapper ownership was rejected'
+validate_bash_distro_command fzf fzf || fail 'approved distro ownership was rejected'
+validate_bash_wrapper bat bat "$HOME/.local/share/dotfiles/bin/bat" bat batcat || fail 'approved bat wrapper ownership was rejected'
 shopt -s expand_aliases
 alias fzf='printf invoked > "$TEST_ROOT/rejected-invoked"'
 set +e
-TEST_OUTPUT="$(bash_validate_distro_command fzf fzf 2>&1)"
+TEST_OUTPUT="$(validate_bash_distro_command fzf fzf 2>&1)"
 status=$?
 set -e
 unalias fzf
@@ -497,7 +497,7 @@ printf '#!/usr/bin/env bash\nprintf invoked > %q\n' "$TEST_ROOT/rejected-invoked
 chmod 0755 "$TEST_ROOT/shadow-bin/fzf"
 PATH="$HOME/.local/share/dotfiles/bin:$TEST_ROOT/owner-bin:$TEST_ROOT/shadow-bin:/usr/bin:/bin"
 set +e
-TEST_OUTPUT="$(bash_validate_distro_command fzf fzf 2>&1)"
+TEST_OUTPUT="$(validate_bash_distro_command fzf fzf 2>&1)"
 status=$?
 set -e
 [[ "$status" != 0 ]] || fail 'additional user candidate was accepted'
@@ -768,7 +768,7 @@ run_owner_check() {
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/bash.sh"
       [[ "${EXPORT_SHADOW:-}" != 1 ]] || { fzf() { printf invoked >> "'$TEST_ROOT'/rejected-executed"; }; export -f fzf; }
-      bash_validate_distro_command fzf fzf
+      validate_bash_distro_command fzf fzf
     '
 }
 run_owner_check "$TEST_ROOT/owner-bin" || fail 'approved sole distro candidate was rejected'
@@ -823,7 +823,7 @@ TEST_OUTPUT="$(HOME="$mise_home" TARGET_ROOT="$mise_home" DOTFILES_DIR="$REPO_DI
     PROVISIONING_MANIFEST="'$TEST_ROOT'/worktrunk-manifest.json"
     MISE_BIN="'$TEST_ROOT'/mise-which"
     provision_tool_status() { :; }
-    bash_validate_optional_mise_command worktrunk wt
+    validate_bash_optional_mise_command worktrunk wt
   ' 2>&1 || true)"
 assert_contains "$TEST_OUTPUT" "optional mise command 'wt' has an unapproved PATH candidate: $project_wt"
 [[ ! -e "$TEST_ROOT/project-wt-invoked" ]] || fail 'project-local mise shadow was executed'
