@@ -66,12 +66,10 @@ Bash with Starship is the primary configured shell, while the existing zsh confi
 
 ## Fuller Windows Terminal Integration
 
-The minimal client-terminal handling consists of the documented manual unbinds and completed key checks (see [Windows Terminal](environments/windows-terminal.md)). The fuller integration remains deferred:
+The managed-settings mechanism shipped for theming: `windows/terminal/managed-settings.json` plus `windows/terminal/apply.ps1` upsert shared defaults and the Omarchy color scheme (see [windows/README.md](../windows/README.md)). Still deferred:
 
-- A tracked settings-fragment JSONC file containing the unbind actions and
-  optional profile settings, with a documented manual merge step. It is never
-  Stowed or symlinked, because `settings.json` lives on the Windows side and
-  Windows Terminal rewrites it.
+- Extending the managed surface to the unbind actions currently documented as
+  manual steps (see [Windows Terminal](environments/windows-terminal.md)).
 - A checked-in WSL-side read-only verification script that asserts terminfo,
   tmux version, and `$WT_SESSION`, then prints the manual checklist.
 

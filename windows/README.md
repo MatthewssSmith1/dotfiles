@@ -6,7 +6,7 @@ Nothing here runs from `bootstrap.sh`; apply scripts run manually from a Windows
 
 ## terminal/
 
-Windows Terminal settings are managed by merge, not by owning the file: the live `settings.json` contains machine-generated profiles (VS Developer prompts, dynamic GUIDs), so `apply.ps1` upserts only the surface defined in `managed-settings.json` — shared `profiles.defaults` and the "Omarchy Tokyo Night" scheme (exact values from Omarchy v3.8.3's Tokyo Night `colors.toml`) — and strips those keys from individual profiles so the defaults stay authoritative.
+Windows Terminal settings are managed by merge, not by owning the file: the live `settings.json` contains machine-generated profiles (VS Developer prompts, dynamic GUIDs), so `apply.ps1` upserts only the surface defined in `managed-settings.json` — shared `profiles.defaults` and the "Omarchy Tokyo Night" scheme (exact values from Omarchy v3.8.4's Tokyo Night `colors.toml`) — and strips those keys from individual profiles so the defaults stay authoritative.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\terminal\apply.ps1

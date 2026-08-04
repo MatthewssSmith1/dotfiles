@@ -28,7 +28,7 @@ The OSC-52/tmux remote-clipboard module was first evaluated as edge-only `omarch
 - Keep native Omarchy theme selection authoritative.
 - Store personal source outside the refresh-managed Neovim directory.
 - Use a small regular loader to attach the personal layer.
-- Reapply that loader after `omarchy-nvim-refresh`.
+- Reapply that loader after `omarchy-nvim-setup`.
 - Do not copy personal changes into package-owned baseline files.
 
 An explicit Omarchy refresh may replace user configuration and clear Neovim data, state, and cache. Recovery must recreate only the managed loader and let the refreshed native baseline initialize normally.
