@@ -77,6 +77,10 @@ Do not assume terminal or tmux upgrades restore extended keys before testing. Cu
 
 The bootstrap must never patch Windows Terminal `settings.json` automatically from WSL. Host-side settings remain an explicit user action.
 
+## Prune Kickstart Retirement Records
+
+`manifests/legacy-links.json` retains the reviewed `retire-kickstart-nvim-links` records, and `lib/areas/nvim.sh` its matching inventory, so unconverged hosts can still retire their old links. Once every known host (Omarchy, WSL, generic) has applied the post-migration Neovim area, delete those records and the inventory together.
+
 ## tmux Baseline Guarding For Old Hosts
 
 The generic tmux owner is a distro package at 3.5 or newer, or the locked mise fallback (see [Deployment](deployment.md#executable-ownership)). Hosts that cannot take either see a documented, harmless startup notice for baseline options their tmux does not know (see [tmux](tools/tmux.md#runtime-and-terminals)). If that notice ever matters, a deferred option is version-guarding those lines in the deployed baseline copy as an explicit, manifest-recorded adapter transform. Not scheduled.

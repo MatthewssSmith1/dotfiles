@@ -177,13 +177,8 @@ validate_selected_areas() {
   local area
   for area in "${AREAS[@]}"; do
     [[ -n "${AREA_STATUS[$area]+x}" ]] || die "unknown area '$area'"
-    if [[ "$MODE" != remove && "${AREA_STATUS[$area]}" == framework ]]; then
-      if [[ "$PROVISION" == true && "$EXPLICIT_AREA_SELECTION" == true &&
-        ${#AREAS[@]} -eq 1 && "${AREAS[0]}" == tmux ]]; then
-        continue
-      fi
+    [[ "$MODE" == remove || "${AREA_STATUS[$area]}" != framework ]] || \
       die "area '$area' is framework-only in this checkout; it has no deployable payload"
-    fi
   done
 }
 

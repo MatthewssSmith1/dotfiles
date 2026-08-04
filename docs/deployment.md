@@ -149,7 +149,7 @@ bootstrap.sh --remove [--area <area> ...]
 
 Every non-remove form also accepts the existing validated `--profile` override in any parser-supported order. `--provision` without `--check` means configuration apply plus approved provisioning. `--check --provision` reports configuration and provisioning convergence but remains offline and non-mutating. `--provision` is invalid with `--remove`.
 
-No-area `--provision` is the only full runtime-tool provisioning operation. It selects the core personal application set (Node, pnpm, Claude Code, and Worktrunk) plus platform foundations for the default areas, including tmux, Neovim, and Starship. An area-scoped provisioning run selects only dependencies assigned to the explicit areas and never the core set. Provisioning does not change area readiness, and framework-only areas remain unselectable except for tmux's explicit plugin lifecycle below. Without `--provision`, a no-area run selects the currently `ready` configuration areas.
+No-area `--provision` is the only full runtime-tool provisioning operation. It selects the core personal application set (Node, pnpm, Claude Code, and Worktrunk) plus platform foundations for the default areas, including tmux, Neovim, and Starship. An area-scoped provisioning run selects only dependencies assigned to the explicit areas and never the core set. Provisioning does not change area readiness, and framework-only areas remain unselectable. Without `--provision`, a no-area run selects the currently `ready` configuration areas.
 
 tmux plugins are a separate lifecycle. No-area provisioning may provision the tmux executable foundation but never plugins. The only plugin provisioning apply interface is exactly `bootstrap.sh --provision --area tmux`; the corresponding check remains offline and non-mutating. See [tmux](tools/tmux.md#plugin-lifecycle).
 
@@ -274,6 +274,8 @@ The native Bash block is additive and sources only the common dispatcher after t
 The native tmux block is also additive, but sources only the guarded common persistence path after the native baseline. It never sources or deploys the private generic baseline, generic adapter, command-empty WSL adapter, or a host-local file. The final command inside common persistence is guarded TPM initialization.
 
 ## Legacy Migration Safety
+
+`manifests/legacy-links.json` is per-host by design: it records the reviewed legacy links of each known deployment under that host's home and checkout roots, and bootstrap acts only on a single exact host record. A new host with legacy links requires its own reviewed record.
 
 The current repository has root-package links and repo-backed local files. Migration must:
 
