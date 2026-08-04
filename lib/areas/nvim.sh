@@ -178,7 +178,7 @@ nvim_lexical_link_target() {
 nvim_reviewed_link() {
   local path="$1" relative="$2" expected lexical resolved expected_resolved
   [[ -L "$path" && "$(stat -c %u -- "$path")" == "$EUID" ]] || return 1
-  legacy_manifest_record "$relative" "$relative" nvim replace-stage-8 || return 1
+  legacy_manifest_record "$relative" "$relative" nvim retire-kickstart-nvim-links || return 1
   expected="$REVIEWED_LEGACY_ROOT/$relative"
   lexical="$(nvim_lexical_link_target "$path")"
   resolved="$(realpath -m -- "$path")"
@@ -191,7 +191,7 @@ nvim_reviewed_container() {
   [[ -d "$path" && ! -L "$path" && "$(stat -c %u -- "$path")" == "$EUID" ]] || return 1
   jq -e --arg home "$TARGET_ROOT" --arg prefix "$relative/" '
     any(.hosts[] | select(.home == $home) | .records[];
-      .[2] == "nvim" and .[4] == "replace-stage-8" and (.[0] | startswith($prefix)))
+      .[2] == "nvim" and .[4] == "retire-kickstart-nvim-links" and (.[0] | startswith($prefix)))
   ' "$DOTFILES_DIR/manifests/legacy-links.json" >/dev/null
 }
 
@@ -214,7 +214,7 @@ preflight_nvim_legacy() {
   [[ ! -e "$state" && ! -L "$state" ]] || return 0
   validate_home_parent_chain "$root"
   if [[ -L "$root" ]]; then
-    legacy_manifest_record '.config/nvim/init.lua' '.config/nvim/init.lua' nvim replace-stage-8 || \
+    legacy_manifest_record '.config/nvim/init.lua' '.config/nvim/init.lua' nvim retire-kickstart-nvim-links || \
       die 'folded Neovim legacy topology is not reviewed for this HOME'
     expected_root="$REVIEWED_LEGACY_ROOT/.config/nvim"
     [[ "$(stat -c %u -- "$root")" == "$EUID" && "$(nvim_lexical_link_target "$root")" == "$expected_root" &&
@@ -240,7 +240,7 @@ preflight_nvim_legacy() {
       AREA_JOURNAL_PATHS+=("$path")
       fingerprint_data+="$relative|$(nvim_lexical_link_target "$path")"$'\n'
     done < <(jq -r --arg home "$TARGET_ROOT" '.hosts[] | select(.home == $home) | .records[] |
-      select(.[2] == "nvim" and .[4] == "replace-stage-8") | .[0]' "$DOTFILES_DIR/manifests/legacy-links.json")
+      select(.[2] == "nvim" and .[4] == "retire-kickstart-nvim-links") | .[0]' "$DOTFILES_DIR/manifests/legacy-links.json")
     shopt -s dotglob globstar nullglob
     for path in "$root"/**/* "$root"/*; do
       if [[ -d "$path" && ! -L "$path" ]]; then

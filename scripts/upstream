@@ -10,7 +10,7 @@ readonly REPO_DIR
 
 source "$REPO_DIR/lib/common.sh"
 
-readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/source-manifest-v1.schema.json'
+readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/source-manifest.schema.json'
 
 # Pinned upstream scope: which repositories sync may consume and which paths of
 # each pinned commit become snapshot content. The reviewed proposal supplies
@@ -132,7 +132,7 @@ verify_nvim_artifact_evidence() {
       relative="${snapshot#packages/upstream/nvim/.config/nvim/}"
       if jq -e --arg snapshot "$snapshot" '
         any(.sources[]; .snapshot == $snapshot and
-          ((.transform | type) == "object" and .transform.type == "stage8-nvim-policy-v1"))
+          ((.transform | type) == "object" and .transform.type == "nvim-offline-bootstrap-policy"))
       ' "$manifest" >/dev/null; then
         grep -E "^[0-9a-f]{64}  ${relative//./\\.}$" "$evidence/config.sha256"
       else
@@ -156,7 +156,7 @@ validate_schema_file() {
     .["$id"] == $schema_id and
     .type == "object" and
     .additionalProperties == false and
-    .properties["$schema"].const == "../schemas/source-manifest-v1.schema.json" and
+    .properties["$schema"].const == "../schemas/source-manifest.schema.json" and
     .properties.schema_version.const == 1 and
     .properties.snapshot_root.const == "packages/upstream"
   ' "$schema" >/dev/null || die 'source manifest schema is unsupported'
@@ -195,7 +195,7 @@ validate_manifest_file() {
           (.blob | hex40) and
           (.mode | git_mode))) or
       (type == "object" and keys_are(["type", "output_blob"]) and
-        .type == "stage8-nvim-policy-v1" and (.output_blob | hex40));
+        .type == "nvim-offline-bootstrap-policy" and (.output_blob | hex40));
     def valid_source:
       type == "object" and
       keys_are(["id", "repository", "release", "commit", "source", "snapshot", "destination", "transform"]) and
@@ -229,7 +229,7 @@ validate_manifest_file() {
         (.record | clean_string));
     type == "object" and
     ((keys - ["artifacts"]) | sort) == (["$schema", "schema_version", "snapshot_root", "sources"] | sort) and
-    .["$schema"] == "../schemas/source-manifest-v1.schema.json" and
+    .["$schema"] == "../schemas/source-manifest.schema.json" and
     .schema_version == 1 and
     .snapshot_root == "packages/upstream" and
     (.sources | type == "array" and length > 0 and all(.[]; valid_source)) and
@@ -247,14 +247,14 @@ validate_manifest_file() {
   jq -e --arg init_blob "$NVIM_INIT_POLICY_BLOB" --arg lazy_blob "$NVIM_LAZY_POLICY_BLOB" '
     ([.sources[] | select(.repository == "https://github.com/LazyVim/starter")] | length) == 0 or
     ([.sources[] | select((.transform | type) == "object" and
-      .transform.type == "stage8-nvim-policy-v1") |
+      .transform.type == "nvim-offline-bootstrap-policy") |
       [.id, .repository, .source.path, .snapshot, .transform.output_blob]] == [
         ["lazyvim-starter-init-lua", "https://github.com/LazyVim/starter", "init.lua",
           "packages/upstream/nvim/.config/nvim/init.lua", $init_blob],
         ["lazyvim-starter-lua-config-lazy-lua", "https://github.com/LazyVim/starter",
           "lua/config/lazy.lua", "packages/upstream/nvim/.config/nvim/lua/config/lazy.lua", $lazy_blob]
       ])
-  ' "$manifest" >/dev/null || die 'Stage 8 Neovim policy transform inventory is invalid'
+  ' "$manifest" >/dev/null || die 'Neovim offline bootstrap policy transform inventory is invalid'
 }
 
 # Verify one checkout-shaped tree (the active checkout or a sync candidate)
@@ -263,7 +263,7 @@ validate_manifest_file() {
 verify_tree() {
   local root="$1"
   local report="${2:-report}"
-  local schema="$root/schemas/source-manifest-v1.schema.json"
+  local schema="$root/schemas/source-manifest.schema.json"
   local manifest="$root/manifests/sources.json"
 
   validate_schema_file "$schema"
@@ -300,7 +300,7 @@ verify_tree() {
       *) die "unsupported destination root for $id" ;;
     esac
     case "$transform_type" in
-      none|append|overwrite|stage8-nvim-policy-v1) ;;
+      none|append|overwrite|nvim-offline-bootstrap-policy) ;;
       *) die "unsupported transform for $id" ;;
     esac
     if [[ "$transform_type" == overwrite ]]; then
@@ -338,7 +338,7 @@ verify_tree() {
     (if (.transform | type) == "object" and .transform.type == "append"
       then (.transform.appended | @base64) else "-" end),
     (if (.transform | type) == "object" and
-      (.transform.type == "append" or .transform.type == "stage8-nvim-policy-v1")
+      (.transform.type == "append" or .transform.type == "nvim-offline-bootstrap-policy")
       then .transform.output_blob else "-" end),
     (if (.transform | type) == "object" and .transform.type == "overwrite"
       then .transform.replaces.path else "-" end)
@@ -448,7 +448,7 @@ verify_tree() {
       die "snapshot mode drift for $snapshot_path: expected $expected_mode, found $actual_mode"
 
     case "${transform_types[$index]}" in
-      append|stage8-nvim-policy-v1) expected_blob="${output_blobs[$index]}" ;;
+      append|nvim-offline-bootstrap-policy) expected_blob="${output_blobs[$index]}" ;;
       *) expected_blob="${blobs[$index]}" ;;
     esac
     actual_blob="$(hash_blob_file "$absolute_path")"
@@ -777,7 +777,7 @@ enumerate_scope() {
 
 declare -A NVIM_RECORD_INDEX=()
 
-apply_stage8_nvim_policy() {
+apply_nvim_offline_bootstrap_policy() {
   local path="$1" output="$2"
   case "$path" in
     init.lua)
@@ -843,7 +843,7 @@ require("lazy").setup({
 })
 EOF
       ;;
-    *) die "unsupported Stage 8 Neovim policy target: $path" ;;
+    *) die "unsupported Neovim offline bootstrap policy target: $path" ;;
   esac
 }
 
@@ -919,8 +919,8 @@ enumerate_nvim_assembly() {
   for relative in init.lua lua/config/lazy.lua; do
     index="${NVIM_RECORD_INDEX[$relative]}"
     [[ "${REC_TRANSFORM[$index]}" == none ]] || \
-      die "Stage 8 Neovim policy target $relative has another transform"
-    REC_TRANSFORM[index]='stage8-nvim-policy-v1'
+      die "Neovim offline bootstrap policy target $relative has another transform"
+    REC_TRANSFORM[index]='nvim-offline-bootstrap-policy'
   done
 }
 
@@ -955,8 +955,8 @@ apply_append_transforms() {
     snapshot_file="$STAGING/candidate/${REC_SNAPSHOT[$index]}"
     case "${REC_TRANSFORM[$index]}" in
       append) printf '%s' "$NVIM_OPTIONS_APPEND" >> "$snapshot_file" ;;
-      stage8-nvim-policy-v1)
-        apply_stage8_nvim_policy "${REC_SOURCE_PATH[$index]}" "$snapshot_file"
+      nvim-offline-bootstrap-policy)
+        apply_nvim_offline_bootstrap_policy "${REC_SOURCE_PATH[$index]}" "$snapshot_file"
         ;;
       *) continue ;;
     esac
@@ -1032,9 +1032,9 @@ emit_transform_json() {
         --arg output_blob "${REC_OUTPUT_BLOB[$index]}" \
         '{type: "append", appended: $appended, output_blob: $output_blob}'
       ;;
-    stage8-nvim-policy-v1)
+    nvim-offline-bootstrap-policy)
       jq -cn --arg output_blob "${REC_OUTPUT_BLOB[$index]}" \
-        '{type: "stage8-nvim-policy-v1", output_blob: $output_blob}'
+        '{type: "nvim-offline-bootstrap-policy", output_blob: $output_blob}'
       ;;
     overwrite)
       jq -cn --arg repository "${REC_REPLACES_REPOSITORY[$index]}" \
@@ -1079,7 +1079,7 @@ generate_candidate_manifest() {
   jq -c '.artifacts[]' "$REPO_DIR/manifests/sources.json" > "$STAGING/artifacts.jsonl"
   mkdir -p -- "$STAGING/candidate/manifests"
   jq -n --slurpfile sources "$entries" --slurpfile artifacts "$STAGING/artifacts.jsonl" \
-    '{"$schema": "../schemas/source-manifest-v1.schema.json",
+    '{"$schema": "../schemas/source-manifest.schema.json",
       schema_version: 1,
       snapshot_root: "packages/upstream",
       sources: $sources,
@@ -1140,7 +1140,7 @@ cleanup_before_temp_paths() {
 
 run_sync() {
   validate_sync_test_overrides
-  validate_schema_file "$REPO_DIR/schemas/source-manifest-v1.schema.json"
+  validate_schema_file "$REPO_DIR/schemas/source-manifest.schema.json"
   validate_manifest_file "$REPO_DIR/manifests/sources.json"
   validate_proposal
 

@@ -176,7 +176,7 @@ preflight_zsh_local_aliases() {
   validate_home_parent_chain "$source"
   if [[ -L "$source" ]]; then
     reviewed_legacy_link "$source" "$ZSH_LEGACY_LOCAL_PATH" "$ZSH_LEGACY_LOCAL_PATH" \
-      zsh migrate-local-stage-6 || die "$source is not the exact reviewed legacy local-alias link"
+      zsh migrate-zsh-local-alias || die "$source is not the exact reviewed legacy local-alias link"
     ZSH_LOCAL_SOURCE="$OWNED_LEGACY_SOURCE"
     capture_path_identity "$source" || die "reviewed zsh local-alias link changed during preflight: $source"
     ZSH_LOCAL_LINK_IDENTITY="$PATH_IDENTITY"
@@ -263,7 +263,7 @@ preflight_zsh_legacy_packages() {
       "$(resolve_link "$path")" == "${TARGET_SOURCES[index]}" ]]; then
       continue
     fi
-    approve_legacy_replacement "$relative" "$relative" zsh replace-stage-6
+    approve_legacy_replacement "$relative" "$relative" zsh retire-zsh-links
   done
 }
 
@@ -339,7 +339,7 @@ remove_zsh_legacy_local() {
     die 'reviewed zsh local-alias link changed before removal'
   quarantine="$QUARANTINE_PATH"
   reviewed_legacy_link "$quarantine" "$ZSH_LEGACY_LOCAL_PATH" "$ZSH_LEGACY_LOCAL_PATH" \
-    zsh migrate-local-stage-6 || {
+    zsh migrate-zsh-local-alias || {
       if restore_quarantine_no_clobber "$quarantine" "$path"; then
         transaction_record_post_state "$path"
       fi

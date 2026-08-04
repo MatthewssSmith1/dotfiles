@@ -245,7 +245,7 @@ validate_state_file() {
   ((schema == 1)) || die "unknown deployment state schema $schema: $file"
   areas_json="$(jq -cn '$ARGS.positional' --args "${AREA_ORDER[@]}")"
   # This jq expression is the authoritative v1 state validator; keep
-  # schemas/deployment-state-v1.schema.json (documentation only) aligned with it.
+  # schemas/deployment-state.schema.json (documentation only) aligned with it.
   jq -e --argjson areas "$areas_json" '
     type == "object" and
     ((keys - ["area","attachments","backups","checkout_root","managed_directories","packages","profile","restored_lock_sha256","schema_version","target_root","targets"]) | length == 0) and
@@ -782,6 +782,29 @@ install_regular_no_clobber() {
   [[ "$actual" == "$expected" ]] || die "$description destination was replaced concurrently: $destination"
   discard_tracked_temp_path "$source" "$description staged file" || \
     die "$description staged file could not be discarded safely: $source"
+}
+
+# Installs only a relative bridge whose canonical link already resolves to the
+# supplied regular package source. The destination must be transaction-journaled.
+install_relative_bridge_no_clobber() {
+  local path="$1" lexical="$2" canonical="$3" source="$4" description="$5"
+  local expected actual
+  [[ "$lexical" != /* && -n "$lexical" ]] || die "$description has an invalid relative target"
+  validate_home_parent_chain "$path"
+  [[ -L "$canonical" && "$(resolve_link "$canonical")" == "$source" ]] || \
+    die "$description canonical target is not package-owned: $canonical"
+  [[ -f "$source" && ! -L "$source" ]] || die "$description package source is not a regular file: $source"
+  ensure_directory "$(dirname -- "$path")"
+  expected="$(transaction_expected_identity "$path")"
+  require_expected_pre_state "$path" "$expected" "$description destination"
+  [[ "$expected" == absent ]] || die "$description destination is not absent: $path"
+  ln -sT -- "$lexical" "$path" 2>/dev/null || \
+    die "$description destination appeared concurrently; refusing to overwrite: $path"
+  [[ "$(readlink -- "$path")" == "$lexical" && "$(resolve_link "$path")" == "$source" ]] || \
+    die "$description did not resolve to its package source: $path"
+  capture_path_identity "$path" || die "$description changed during installation: $path"
+  actual="$PATH_IDENTITY"
+  transaction_record_expected_state "$path" "$actual"
 }
 
 replace_with_staged_regular() {

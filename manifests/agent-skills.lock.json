@@ -1,0 +1,97 @@
+{
+  "$schema": "../schemas/agent-skills-lock.schema.json",
+  "schema_version": 1,
+  "repository": "https://github.com/mattpocock/skills",
+  "commit": "2ab958093e83e0ec752e6c1c5932da465bf23e0c",
+  "package_root": "packages/common/agents",
+  "instructions": {
+    "destination": ".agents/AGENTS.md",
+    "blob": "43a968ff6a588d85af0cc7caae2407d1f3f2228d",
+    "mode": "100644",
+    "size": 83
+  },
+  "skills": [
+    {
+      "name": "grilling",
+      "source_path": "skills/productivity/grilling",
+      "destination": ".agents/skills/grilling",
+      "tree": "10b0db61f9b3869243db8a1a0ee84f862139b94e",
+      "files": [
+        { "source_path": "skills/productivity/grilling/SKILL.md", "destination": ".agents/skills/grilling/SKILL.md", "blob": "52d8eb3cadd2dca62634d5dccfa73ea6b725b117", "mode": "100644", "size": 843 },
+        { "source_path": "skills/productivity/grilling/agents/openai.yaml", "destination": ".agents/skills/grilling/agents/openai.yaml", "blob": "85b12607d0025c24c90b79162efe8685c16ba7da", "mode": "100644", "size": 105 }
+      ]
+    },
+    {
+      "name": "handoff",
+      "source_path": "skills/productivity/handoff",
+      "destination": ".agents/skills/handoff",
+      "tree": "184d485ae68a2132893a94239b2b85d253e6152b",
+      "files": [
+        { "source_path": "skills/productivity/handoff/SKILL.md", "destination": ".agents/skills/handoff/SKILL.md", "blob": "043d9e13dc7eca3002a47d3ab9865c568f647863", "mode": "100644", "size": 879 },
+        { "source_path": "skills/productivity/handoff/agents/openai.yaml", "destination": ".agents/skills/handoff/agents/openai.yaml", "blob": "6e1d8da121beceddc2f9ec7fa8714c1d914dd11a", "mode": "100644", "size": 141 }
+      ]
+    },
+    {
+      "name": "teach",
+      "source_path": "skills/productivity/teach",
+      "destination": ".agents/skills/teach",
+      "tree": "15f8c86d39ef834e643d092733ca899b59049067",
+      "files": [
+        { "source_path": "skills/productivity/teach/GLOSSARY-FORMAT.md", "destination": ".agents/skills/teach/GLOSSARY-FORMAT.md", "blob": "9cae84c44c8eb5d27b8695d4ef29a2893dc4900c", "mode": "100644", "size": 2131 },
+        { "source_path": "skills/productivity/teach/LEARNING-RECORD-FORMAT.md", "destination": ".agents/skills/teach/LEARNING-RECORD-FORMAT.md", "blob": "2faa7c98fabcdff48eb6bd07e4847d48a6b8d4e1", "mode": "100644", "size": 2777 },
+        { "source_path": "skills/productivity/teach/MISSION-FORMAT.md", "destination": ".agents/skills/teach/MISSION-FORMAT.md", "blob": "5dac184a319308e2ec0c18c16d6b8d52b9be2748", "mode": "100644", "size": 1553 },
+        { "source_path": "skills/productivity/teach/RESOURCES-FORMAT.md", "destination": ".agents/skills/teach/RESOURCES-FORMAT.md", "blob": "c94aac6a2634cc229fe0b777fc5cc7da3a28c3d2", "mode": "100644", "size": 1926 },
+        { "source_path": "skills/productivity/teach/SKILL.md", "destination": ".agents/skills/teach/SKILL.md", "blob": "b1603e5ac536d2b5c29496c06df4db0bb9f74e69", "mode": "100644", "size": 9507 },
+        { "source_path": "skills/productivity/teach/agents/openai.yaml", "destination": ".agents/skills/teach/agents/openai.yaml", "blob": "3452a850e3b0c1f0a3d41b2bfd45164d2d38d7f6", "mode": "100644", "size": 139 }
+      ]
+    },
+    {
+      "name": "writing-great-skills",
+      "source_path": "skills/productivity/writing-great-skills",
+      "destination": ".agents/skills/writing-great-skills",
+      "tree": "81d36946d48842f90358d8af54e3cdcc141f8e01",
+      "files": [
+        { "source_path": "skills/productivity/writing-great-skills/GLOSSARY.md", "destination": ".agents/skills/writing-great-skills/GLOSSARY.md", "blob": "0269ca89b9d886075c3d1ae624592f8a08ba3197", "mode": "100644", "size": 18488 },
+        { "source_path": "skills/productivity/writing-great-skills/SKILL.md", "destination": ".agents/skills/writing-great-skills/SKILL.md", "blob": "82abd0dce264eecb3ed461b3eac17bdafb52f84b", "mode": "100644", "size": 9414 },
+        { "source_path": "skills/productivity/writing-great-skills/agents/openai.yaml", "destination": ".agents/skills/writing-great-skills/agents/openai.yaml", "blob": "d677a13f4b6bd80091ceff2e3ebfa3f173e723b7", "mode": "100644", "size": 150 }
+      ]
+    },
+    {
+      "name": "domain-modeling",
+      "source_path": "skills/engineering/domain-modeling",
+      "destination": ".agents/skills/domain-modeling",
+      "tree": "959e63161ff78b4b1cd553b2c0e09e0c68418e5f",
+      "files": [
+        { "source_path": "skills/engineering/domain-modeling/ADR-FORMAT.md", "destination": ".agents/skills/domain-modeling/ADR-FORMAT.md", "blob": "da7e78ec1c220cd0aedf7ad36424c9398034f375", "mode": "100644", "size": 2766 },
+        { "source_path": "skills/engineering/domain-modeling/CONTEXT-FORMAT.md", "destination": ".agents/skills/domain-modeling/CONTEXT-FORMAT.md", "blob": "eaf2a18573f0a2d8c69ed53e29e4d9e21baf81d8", "mode": "100644", "size": 2299 },
+        { "source_path": "skills/engineering/domain-modeling/SKILL.md", "destination": ".agents/skills/domain-modeling/SKILL.md", "blob": "d0f7e1a5ccb06a7184056ff9af02b67bc77f9dda", "mode": "100644", "size": 3427 },
+        { "source_path": "skills/engineering/domain-modeling/agents/openai.yaml", "destination": ".agents/skills/domain-modeling/agents/openai.yaml", "blob": "7f1522d2f11506ee205275ab7c282aa52366ecf6", "mode": "100644", "size": 101 }
+      ]
+    },
+    {
+      "name": "research",
+      "source_path": "skills/engineering/research",
+      "destination": ".agents/skills/research",
+      "tree": "972a34cd8128b7952b7eb279b06715862db906a7",
+      "files": [
+        { "source_path": "skills/engineering/research/SKILL.md", "destination": ".agents/skills/research/SKILL.md", "blob": "0ba594a07f306479baa67104381f48e209ab6aae", "mode": "100644", "size": 799 },
+        { "source_path": "skills/engineering/research/agents/openai.yaml", "destination": ".agents/skills/research/agents/openai.yaml", "blob": "e18b96ca0ccc1003889d5d6991386207c2454bc2", "mode": "100644", "size": 94 }
+      ]
+    },
+    {
+      "name": "setup-matt-pocock-skills",
+      "source_path": "skills/engineering/setup-matt-pocock-skills",
+      "destination": ".agents/skills/setup-matt-pocock-skills",
+      "tree": "634cf9b010bca5701642aca736dce899822f08f7",
+      "files": [
+        { "source_path": "skills/engineering/setup-matt-pocock-skills/SKILL.md", "destination": ".agents/skills/setup-matt-pocock-skills/SKILL.md", "blob": "aecf855317d3202f8c812f9b2e0d1b65d98d7d26", "mode": "100644", "size": 6928 },
+        { "source_path": "skills/engineering/setup-matt-pocock-skills/agents/openai.yaml", "destination": ".agents/skills/setup-matt-pocock-skills/agents/openai.yaml", "blob": "65a0da8128c98051183235e490767a8065310868", "mode": "100644", "size": 152 },
+        { "source_path": "skills/engineering/setup-matt-pocock-skills/domain.md", "destination": ".agents/skills/setup-matt-pocock-skills/domain.md", "blob": "b548c538d606a65bde9bcd4ca3a458ec7c52cd9b", "mode": "100644", "size": 2045 },
+        { "source_path": "skills/engineering/setup-matt-pocock-skills/issue-tracker-github.md", "destination": ".agents/skills/setup-matt-pocock-skills/issue-tracker-github.md", "blob": "82cfbf5b1912b1b614e98d4edf92c8c78009da7f", "mode": "100644", "size": 3745 },
+        { "source_path": "skills/engineering/setup-matt-pocock-skills/issue-tracker-gitlab.md", "destination": ".agents/skills/setup-matt-pocock-skills/issue-tracker-gitlab.md", "blob": "8a54714a16dcd8511bb3a7725129650fd2665924", "mode": "100644", "size": 3826 },
+        { "source_path": "skills/engineering/setup-matt-pocock-skills/issue-tracker-local.md", "destination": ".agents/skills/setup-matt-pocock-skills/issue-tracker-local.md", "blob": "6b124b36719c01a9b1d5bbdfa1c0352286105794", "mode": "100644", "size": 1846 },
+        { "source_path": "skills/engineering/setup-matt-pocock-skills/triage-labels.md", "destination": ".agents/skills/setup-matt-pocock-skills/triage-labels.md", "blob": "b716855d485f3865f9dfde2a82141721f065b2e7", "mode": "100644", "size": 1045 }
+      ]
+    }
+  ]
+}

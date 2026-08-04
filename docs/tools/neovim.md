@@ -2,7 +2,7 @@
 
 ## Accepted Direction
 
-Retire the current Kickstart configuration in one deliberate reset. The new workflow is:
+The retired Kickstart configuration is retained in Git history, not current HEAD. The replacement workflow is:
 
 ```text
 LazyVim starter
@@ -58,9 +58,9 @@ An explicit Omarchy refresh may replace user configuration and clear Neovim data
 
 ## Reset And Migration
 
-Migration must recognize the current individually Stowed Kickstart links and remove only links owned by known old paths in this checkout. It must refuse unrelated regular-file conflicts and avoid carrying old plugin state into the new configuration accidentally.
+Migration must recognize individually Stowed Kickstart links left on previously deployed hosts and remove only links owned by reviewed historical source paths. It must refuse unrelated regular-file conflicts and avoid carrying old plugin state into the new configuration accidentally.
 
-Accepted backup policy: git history is the configuration backup. The live `~/.config/nvim` consists of Stow links into this repository, so the Kickstart tree needs no copy — removal of the links is sufficient, and any revert is a checkout of history. Host-local runtime state is preserved by renaming `~/.local/share/nvim`, `~/.local/state/nvim`, and `~/.cache/nvim` to timestamped `.bak` siblings rather than deleting them.
+Accepted backup policy: git history is the configuration backup. The former live `~/.config/nvim` consisted of Stow links into the retired tree, so it needed no separate copy: removal of the links was sufficient, and any recovery is a checkout of history. Host-local runtime state is preserved by renaming `~/.local/share/nvim`, `~/.local/state/nvim`, and `~/.cache/nvim` to timestamped `.bak` siblings rather than deleting them.
 
 Accepted first-start network policy: on a fresh generic host, network access is permitted on the first explicit `nvim` launch. A small pre-start loader runs a one-time locked restore before normal editor startup, verifies applicable plugin commits, and records the restored lockfile blob identity in Neovim area state only after success. An interrupted restore leaves the marker absent and retries on the next explicit launch without changing `lazy-lock.json`. Later plugin network access occurs only through an explicit restore command after a lock change. Bootstrap itself never fetches Neovim plugins. First start therefore requires connectivity; that is accepted. This guarantee covers plugin restoration. Mason packages, Treesitter parsers, Lua rocks, generated build outputs, and project-local Lazy specs are outside the plugin lockfile. Every automatic downloader is inventoried and assigned one policy — pinned provisioning, explicit user-initiated network access, or disabled automatic installation — so ordinary startup remains offline; see the downloader policy at the end of this document.
 
@@ -108,7 +108,7 @@ Workflow proof: `bootstrap.sh --check --area nvim`, apply, `nvim --headless "+lu
 
 ## Generic/WSL Lifecycle And Restore
 
-The dedicated Neovim area is ready for generic, WSL, and native Omarchy in `manifests/areas.tsv`; the native attachment is the guarded loader above. Generic/WSL apply validates the exact upstream/generic/common package and target closure before mutation. It retires only exact reviewed individual or folded Kickstart links, including reviewed broken links whose lexical non-dereferencing normalization and resolved normalization both match the reviewed source. Only exact reviewed container ancestors are accepted, and links and containers must be user-owned. Unrelated or modified topology refuses before mutation; the tracked legacy source tree is never changed.
+The dedicated Neovim area is ready for generic, WSL, and native Omarchy in `manifests/areas.tsv`; the native attachment is the guarded loader above. Generic/WSL apply validates the exact upstream/generic/common package and target closure before mutation. It retires only exact reviewed individual or folded Kickstart links, including reviewed broken links whose lexical non-dereferencing normalization and resolved normalization both match the reviewed historical source. Only exact reviewed container ancestors are accepted, and links and containers must be user-owned. Unrelated or modified topology refuses before mutation; the legacy source remains only in Git history.
 
 The first apply resolves data, state, and cache roots from XDG variables, requires canonical, non-symlink, user-owned ancestor paths beneath `HOME`, and records completion even when a root is absent. Existing roots are renamed without clobber to timestamped `.bak` siblings. Source fingerprints and backup paths are retained in `migrations.json`; collisions gain a numeric suffix. A directory-move journal restores every rename and reviewed legacy link if deployment, state, or ledger commit fails. Removal retains current runtime roots, backups, preserved plugin checkouts, credentials, and the migration ledger.
 
@@ -118,7 +118,7 @@ The generic adapter invokes `~/.local/share/dotfiles/bin/nvim-restore --first-la
 ${DOTFILES_NVIM_RESTORE_CALLBACK:-~/.local/share/dotfiles/bin/nvim-record-restore} <64-lowercase-hex-lock-sha256>
 ```
 
-The callback opens `HOME` read-only and acquires the deployment advisory lock, fully validates `nvim.json`, requires generic/WSL and exact managed lockfile ownership, compares deployed bytes with the supplied hash, and performs an atomic compare-and-swap state update. There is no sidecar marker. First deploy omits the field. Reapply preserves it only when it identifies the current deployed lock; a changed lock omits the value and requires a successful explicit restore. `--check` fails with a pending message when the field is absent and a stale message when it differs from the deployed lock, and cannot claim full convergence in either case. An interrupted restore leaves the field absent or stale. An exact Phase 2 sidecar is retired transactionally on first apply and is not trusted or imported; malformed or unsafe sidecars cause preflight refusal.
+The callback opens `HOME` read-only and acquires the deployment advisory lock, fully validates `nvim.json`, requires generic/WSL and exact managed lockfile ownership, compares deployed bytes with the supplied hash, and performs an atomic compare-and-swap state update. There is no sidecar marker. First deploy omits the field. Reapply preserves it only when it identifies the current deployed lock; a changed lock omits the value and requires a successful explicit restore. `--check` fails with a pending message when the field is absent and a stale message when it differs from the deployed lock, and cannot claim full convergence in either case. An interrupted restore leaves the field absent or stale. An exact transitional restore sidecar is retired transactionally on first apply and is not trusted or imported; malformed or unsafe sidecars cause preflight refusal.
 
 ### Failed First Launch Recovery
 

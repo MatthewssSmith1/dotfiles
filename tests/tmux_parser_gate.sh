@@ -95,7 +95,7 @@ verify_tmux_37b_identity() {
     receipt_sha="$(jq -er .manifest_sha256 "$receipt" 2>/dev/null || true)"
     if [[ "$receipt_sha" != "$manifest_sha" ]]; then
       jq -e --arg hash "$receipt_sha" '.previous_manifest_sha256s | index($hash) != null' \
-        "$REPO_DIR/manifests/proposals/2026-07-17-stage5-tool-pins.json" >/dev/null || \
+        "$REPO_DIR/manifests/proposals/2026-07-17-runtime-tool-provisioning.json" >/dev/null || \
         fail 'tmux 3.7b receipt is not tied to the active or accepted provisioning manifest'
     fi
     receipt_row="$(jq -er '.tools[] | select(.id == "tmux") |
@@ -115,7 +115,7 @@ run_parser_case() {
   version="$(env -u TMUX HOME=/nonexistent "$executable" -V 2>/dev/null)" || fail "$label version probe failed"
   [[ "$version" == "tmux $expected_version" ]] || fail "$label must be real tmux $expected_version, found: $version"
 
-  output="$(HOME=/nonexistent TARGET_ROOT=/nonexistent DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage7-real-tmux-parser \
+  output="$(HOME=/nonexistent TARGET_ROOT=/nonexistent DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=tmux-parser-gate \
     SELECTED_PROFILE=generic MODE=check TMUX_CASE_BIN="$executable" TMUX_CASE_VERSION="$expected_version" bash -c '
       set -Eeuo pipefail
       source "$DOTFILES_DIR/lib/common.sh"

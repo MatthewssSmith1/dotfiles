@@ -10,6 +10,8 @@
 # the later definition wins. Define test_extra_cleanup() for domain-specific
 # teardown; it runs before TEST_ROOT is removed.
 
+umask 0022
+
 HARNESS_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly TEST_DIR="$(cd -- "$HARNESS_LIB_DIR/.." && pwd -P)"
 readonly REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
@@ -19,6 +21,7 @@ TEST_ROOT="$(mktemp -d)"
 TEST_COUNT=0
 TEST_OUTPUT=""
 TEST_RC=0
+TEST_LAST_PASS_SECONDS=0
 
 cleanup_test() {
   if declare -F test_extra_cleanup >/dev/null; then
@@ -36,6 +39,11 @@ fail() {
 
 pass() {
   ((TEST_COUNT += 1))
+  if [[ "${TEST_GROUP_TIMINGS:-0}" == 1 ]]; then
+    printf 'TIMING: group %d +%ss (%ss total)\n' "$TEST_COUNT" \
+      "$((SECONDS - TEST_LAST_PASS_SECONDS))" "$SECONDS" >&2
+  fi
+  TEST_LAST_PASS_SECONDS=$SECONDS
 }
 
 assert_contains() {
@@ -62,7 +70,7 @@ assert_empty_home() {
 
 wait_for_file() {
   local path="$1" attempt
-  for ((attempt=0; attempt<500; attempt++)); do
+  for ((attempt=0; attempt<1500; attempt++)); do
     [[ ! -e "$path" ]] || return 0
     sleep 0.01
   done
@@ -197,7 +205,7 @@ copy_repo_fixture() {
   local name="$1"
   local fixture="$TEST_ROOT/fixture-$name"
   mkdir "$fixture"
-  cp -a "$REPO_DIR/." "$fixture/"
+  cp -a --reflink=auto "$REPO_DIR/." "$fixture/"
   printf '%s' "$fixture"
 }
 

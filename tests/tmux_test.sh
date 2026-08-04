@@ -10,7 +10,7 @@ readonly REAL_TMUX=/usr/bin/tmux
 readonly FIXTURES="$REPO_DIR/scripts/tmux-parser-fixtures"
 
 # =============================================================================
-# Section 1: tmux area lifecycle (from stage7_tmux_test.sh)
+# Section 1: tmux area lifecycle
 # =============================================================================
 
 # Lifecycle assertions were recorded against the Ubuntu 24.04 tmux 3.4 parser;
@@ -25,7 +25,7 @@ run_tmux_area() {
   [[ "$operation" != remove ]] || mode=remove
   [[ "$operation" != check ]] || mode=check
   HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-    SCRIPT_NAME=stage7-tmux-test SELECTED_PROFILE="$profile" MODE="$mode" \
+    SCRIPT_NAME=tmux-test SELECTED_PROFILE="$profile" MODE="$mode" \
     DOTFILES_TESTING=1 DOTFILES_TEST_TMUX_BIN="$REAL_TMUX" DOTFILES_TEST_TMUX_OWNER=test-owner \
     DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 DOTFILES_TEST_FAIL_AT="$fail_at" DOTFILES_TEST_HOLD_AT="$hold_at" \
     DOTFILES_TEST_HOLD_DIR="$hold_dir" bash -c '
@@ -34,8 +34,8 @@ run_tmux_area() {
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/tmux.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready)
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+      AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready [agents]=framework [herdr]=framework)
       PROVISIONING_MANIFEST="$DOTFILES_DIR/manifests/provisioning.json"
       tmux_validate_exact_plugin_closure() { :; }
       if [[ "$MODE" == remove ]]; then
@@ -285,7 +285,7 @@ exec "$REAL_TMUX" "\$@"
 SCRIPT
 chmod 0755 "$wrapper"
 real_version="$($REAL_TMUX -V)"; real_version="${real_version#tmux }"
-HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage7-tmux-test \
+HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=tmux-test \
   SELECTED_PROFILE=generic MODE=check TMUX_CLIENT_BIN="$wrapper" TMUX_CLIENT_VERSION="$real_version" bash -c '
     set -Eeuo pipefail
     source "$DOTFILES_DIR/lib/common.sh"
@@ -336,7 +336,7 @@ for ((attempt=0; attempt<100; attempt++)); do [[ -S "$current_socket" ]] && brea
 [[ -S "$current_socket" ]] || fail 'could not create the unqueryable socket fixture'
 home="$TEST_ROOT/home-active"
 mkdir "$home"
-TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage7-tmux-test \
+TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=tmux-test \
   SELECTED_PROFILE=generic MODE=check DOTFILES_TESTING=1 DOTFILES_TEST_TMUX_BIN="$selected" \
   DOTFILES_TEST_TMUX_OWNER=test-owner TMUX_TMPDIR="$TEST_ROOT/server-sockets" TMUX="$current_socket,1,0" \
   DOTFILES_TEST_TMUX_PROC_ROOT="$TEST_ROOT/proc" bash -c '
@@ -363,7 +363,7 @@ pass
 
 # Same-owner servers receive one explicit source-file instruction, never the
 # legacy prefix+q advice. Inspection and reporting execute no lifecycle command.
-TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage7-tmux-test bash -c '
+TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=tmux-test bash -c '
   set -Eeuo pipefail
   source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/areas/tmux.sh"
   TMUX_ACTIVE_SERVER_SEEN=true
@@ -381,7 +381,7 @@ pass
 recovery="$TEST_ROOT/retained-validation"
 set +e
 TEST_OUTPUT="$(HOME="$TEST_ROOT/home-isolated" TARGET_ROOT="$TEST_ROOT/home-isolated" DOTFILES_DIR="$REPO_DIR" \
-  SCRIPT_NAME=stage7-tmux-test RECOVERY="$recovery" bash -c '
+  SCRIPT_NAME=tmux-test RECOVERY="$recovery" bash -c '
     set -Eeuo pipefail
     source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/areas/tmux.sh"
     mkdir "$RECOVERY"; track_temp_path "$RECOVERY"
@@ -407,7 +407,7 @@ SCRIPT
 chmod 0755 "$TEST_ROOT/no-unshare-bin/unshare"
 home="$TEST_ROOT/home-no-network"; mkdir "$home"
 set +e
-TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage7-tmux-test \
+TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=tmux-test \
   PATH="$TEST_ROOT/no-unshare-bin:/usr/bin:/bin" SELECTED_PROFILE=generic MODE=check bash -c '
     set -Eeuo pipefail
     source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"
@@ -424,7 +424,7 @@ pass
 # readiness remains unchanged.
 set +e
 TEST_OUTPUT="$(HOME="$TEST_ROOT/home-inventory" TARGET_ROOT="$TEST_ROOT/home-inventory" DOTFILES_DIR="$REPO_DIR" \
-  SCRIPT_NAME=stage7-tmux-test SELECTED_PROFILE=generic bash -c '
+  SCRIPT_NAME=tmux-test SELECTED_PROFILE=generic bash -c '
     set -Eeuo pipefail
     mkdir -p "$HOME"
     source "$DOTFILES_DIR/lib/common.sh"
@@ -442,7 +442,7 @@ status=$?
 set -e
 [[ "$status" != 0 ]] || fail 'tmux target inventory accepted an unexpected target'
 assert_contains "$TEST_OUTPUT" 'tmux package closure contains unexpected target'
-grep -qxF 'area|tmux|ready' "$REPO_DIR/manifests/areas.tsv" || fail 'Stage 7 tmux readiness gate did not close'
+grep -qxF 'area|tmux|ready' "$REPO_DIR/manifests/areas.tsv" || fail 'tmux readiness gate did not close'
 mapfile -t plugin_order < <(jq -r '.plugins[].id' "$REPO_DIR/manifests/tmux-plugins.lock.json")
 [[ "${plugin_order[*]}" == 'tpm tmux-resurrect tmux-assistant-resurrect tmux-continuum' ]] || \
   fail 'tmux plugin lock order is not exact'
@@ -461,7 +461,7 @@ mkdir -p "$bad_wsl_repo/packages/wsl/tmux/.config/dotfiles/tmux"
 printf 'set -g mouse off\n' > "$bad_wsl_repo/packages/wsl/tmux/.config/dotfiles/tmux/wsl.conf"
 set +e
 TEST_OUTPUT="$(HOME="$TEST_ROOT/home-inventory" TARGET_ROOT="$TEST_ROOT/home-inventory" DOTFILES_DIR="$bad_wsl_repo" \
-  SCRIPT_NAME=stage7-tmux-test bash -c '
+  SCRIPT_NAME=tmux-test bash -c '
     set -Eeuo pipefail
     source "'$REPO_DIR'/lib/common.sh"; source "'$REPO_DIR'/lib/engine.sh"; source "'$REPO_DIR'/lib/areas/tmux.sh"
     validate_tmux_wsl_adapter
@@ -475,7 +475,7 @@ fi
 
 # =============================================================================
 # Section 2: TPM/resurrect/continuum plugin provisioning and bootstrap gating
-# (from stage7_tmux_provisioning_test.sh)
+# Tmux plugin provisioning
 # =============================================================================
 
 fixture="$(copy_repo_fixture tmux-plugins)"
@@ -484,8 +484,8 @@ mkdir "$repos"
 set_area_status "$fixture" nvim framework
 
 git_fixture_config() {
-  /usr/bin/git -C "$1" config user.name 'Stage Seven Fixture'
-  /usr/bin/git -C "$1" config user.email stage7@example.invalid
+  /usr/bin/git -C "$1" config user.name 'Tmux Fixture User'
+  /usr/bin/git -C "$1" config user.email tmux-fixture@example.invalid
 }
 
 child="$repos/tpm-test-child"
@@ -595,8 +595,9 @@ install_all_checkouts() {
 
 invoke_plugin() {
   local home="$1" operation="$2" fail_at="${3:-}" hold_at="${4:-}" hold_dir="${5:-}"
-  HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$fixture" SCRIPT_NAME=stage7-plugin-test \
+  HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$fixture" SCRIPT_NAME=tmux-test \
     DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_TMUX_FETCH="$fetch_seam" DOTFILES_TEST_FAIL_AT="$fail_at" \
+    DOTFILES_TEST_TMUX_LOCK_MIGRATION_TARGET_SHA="$(sha256sum "$fixture/manifests/tmux-plugins.lock.json" | cut -d' ' -f1)" \
     DOTFILES_TEST_HOLD_AT="$hold_at" DOTFILES_TEST_HOLD_DIR="$hold_dir" \
     FIXTURE_REPOS="$repos" NETWORK_LOG="$network_log" bash -c '
       set -Eeuo pipefail
@@ -604,8 +605,12 @@ invoke_plugin() {
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/tmux.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready)
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+      AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready [agents]=framework [herdr]=framework)
+      if [[ "$1" == exact ]]; then
+        tmux_validate_exact_plugin_closure
+        exit
+      fi
       plan_status=0
       tmux_preflight_plugin_provision_plan || plan_status=1
       print_tmux_plugin_provisioning_plan
@@ -613,7 +618,6 @@ invoke_plugin() {
       case "$1" in
         apply) tmux_apply_plugin_provisioning ;;
         check) [[ "$TMUX_PLUGIN_PLAN_PENDING" == false ]] ;;
-        exact) tmux_validate_exact_plugin_closure ;;
         plan) : ;;
       esac
     ' _ "$operation"
@@ -771,15 +775,15 @@ TEST_OUTPUT="$(unshare --user --map-root-user --net env -u TMUX HOME="$home" PAT
   ASSISTANT_HOOK_LOG="$assistant_hook_log" STARTUP_CONFIG="$startup_config" \
   SAVE_HOOK="$TEST_ROOT/save-hook" RESTORE_HOOK="$TEST_ROOT/restore-hook" /usr/bin/bash -c '
     set -Eeuo pipefail
-    /usr/bin/tmux -L stage7-offline -f "$STARTUP_CONFIG" new-session -d -s fixture
+    /usr/bin/tmux -L tmux-offline-test -f "$STARTUP_CONFIG" new-session -d -s fixture
     for ((attempt=0; attempt<200; attempt++)); do
       [[ -f "$TMUX_INIT_LOG" && "$(wc -l < "$TMUX_INIT_LOG")" == 3 ]] && break
       sleep 0.01
     done
     [[ -f "$TMUX_INIT_LOG" && "$(wc -l < "$TMUX_INIT_LOG")" == 3 ]]
-    /usr/bin/tmux -L stage7-offline show-options -gv @resurrect-hook-post-save-all > "$SAVE_HOOK"
-    /usr/bin/tmux -L stage7-offline show-options -gv @resurrect-hook-post-restore-all > "$RESTORE_HOOK"
-    /usr/bin/tmux -L stage7-offline kill-server
+    /usr/bin/tmux -L tmux-offline-test show-options -gv @resurrect-hook-post-save-all > "$SAVE_HOOK"
+    /usr/bin/tmux -L tmux-offline-test show-options -gv @resurrect-hook-post-restore-all > "$RESTORE_HOOK"
+    /usr/bin/tmux -L tmux-offline-test kill-server
   ' 2>&1)"
 TEST_RC=$?
 set -e
@@ -905,8 +909,44 @@ capture_plugin "$home" plan
 assert_contains "$TEST_OUTPUT" 'malformed or newer tmux plugin receipt'
 cp "$TEST_ROOT/good-receipt" "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
 
-# Unknown stale lock identities are never downgraded to adoption without a
-# reviewed lock-history catalog.
+# The pointer-only predecessor is still unconverged for ordinary validation,
+# but explicit provisioning adopts exact trees without fetching and rewrites
+# the receipt atomically to the active lock identity.
+jq '.lock_sha256="e57781006aad026ea338c2e2eca0ce642b4c1a92206da0d04c5a634a65ba1f0b"' \
+  "$TEST_ROOT/good-receipt" > "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
+chmod 0600 "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
+predecessor_identity="$(stat -c '%d:%i' -- "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json")"
+capture_plugin "$home" exact
+((TEST_RC != 0)) || fail 'ordinary exact validation accepted the predecessor tmux receipt'
+assert_contains "$TEST_OUTPUT" 'has no receipt for the active lock'
+: > "$network_log"
+capture_plugin "$home" plan
+((TEST_RC == 0)) || fail 'exact predecessor tmux receipt did not produce an adoption plan'
+assert_contains "$TEST_OUTPUT" 'tpm: action=adopt network=none'
+capture_plugin "$home" apply
+((TEST_RC == 0)) || fail 'explicit predecessor tmux receipt migration failed'
+[[ ! -s "$network_log" ]] || fail 'predecessor tmux receipt migration invoked the fetch seam'
+[[ "$predecessor_identity" != "$(stat -c '%d:%i' -- "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json")" ]] || \
+  fail 'predecessor tmux receipt was not atomically replaced'
+jq -e --arg hash "$(sha256sum "$fixture/manifests/tmux-plugins.lock.json" | cut -d' ' -f1)" \
+  '.lock_sha256 == $hash' "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json" >/dev/null || \
+  fail 'predecessor tmux receipt was not rewritten to the active lock identity'
+capture_plugin "$home" exact
+((TEST_RC == 0)) || fail 'migrated predecessor tmux receipt did not converge exactly'
+
+# Even the known predecessor refuses when its plugin metadata does not exactly
+# match the active lock.
+jq '.lock_sha256="e57781006aad026ea338c2e2eca0ce642b4c1a92206da0d04c5a634a65ba1f0b" |
+  .plugins[0].repository="https://github.com/evil/tpm"' "$TEST_ROOT/good-receipt" > \
+  "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
+chmod 0600 "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
+capture_plugin "$home" plan
+((TEST_RC != 0)) || fail 'predecessor tmux receipt with stale metadata was accepted'
+assert_contains "$TEST_OUTPUT" 'receipt metadata is corrupt for the active lock'
+[[ "$TEST_OUTPUT" != *'action=adopt'* ]] || fail 'stale predecessor metadata was downgraded to adoption'
+cp "$TEST_ROOT/good-receipt" "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
+
+# Unknown stale lock identities are never downgraded to adoption.
 jq '.lock_sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
   "$TEST_ROOT/good-receipt" > "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
 chmod 0600 "$home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
@@ -944,9 +984,9 @@ capture_plugin "$home" plan
 cp "$TEST_ROOT/good-plugin-lock" "$fixture/manifests/tmux-plugins.lock.json"
 jq -e '.properties.plugins.items.oneOf == [{"$ref":"#/$defs/tpmPlugin"},{"$ref":"#/$defs/managedHooksPlugin"}] and
   .["$defs"].pluginBase.properties.directory.not.enum == [".",".."]' \
-  "$fixture/schemas/tmux-plugin-lock-v1.schema.json" >/dev/null || fail 'lock schema does not reject dot directories'
+  "$fixture/schemas/tmux-plugin-lock.schema.json" >/dev/null || fail 'lock schema does not reject dot directories'
 jq -e '.["$defs"].plugin.properties.directory.not.enum == [".",".."]' \
-  "$fixture/schemas/tmux-plugin-receipt-v1.schema.json" >/dev/null || fail 'receipt schema does not reject dot directories'
+  "$fixture/schemas/tmux-plugin-receipt.schema.json" >/dev/null || fail 'receipt schema does not reject dot directories'
 
 persistence="$fixture/packages/common/tmux/.config/dotfiles/tmux/persistence.conf"
 cp "$persistence" "$TEST_ROOT/good-persistence"
@@ -1030,6 +1070,7 @@ printf '6.8.0-generic\n' > "$host/proc/sys/kernel/osrelease"
 : > "$network_log"
 set +e
 TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
+  DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE=tmux \
   DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_BIN=/usr/bin/tmux DOTFILES_TEST_TMUX_OWNER=test-owner \
   DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" \
   NETWORK_LOG="$network_log" "$fixture/bootstrap.sh" --check --provision --area tmux 2>&1)"
@@ -1062,6 +1103,7 @@ chmod 0755 "$home/.local/bin/mise" "$TEST_ROOT/runtime-signal-bin/curl"
 : > "$network_log"
 set +e
 TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$TEST_ROOT/runtime-signal-bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
+  DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE=tmux \
   DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_BIN=/usr/bin/tmux \
   DOTFILES_TEST_TMUX_OWNER=test-owner DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 \
   DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" NETWORK_LOG="$network_log" \
@@ -1095,6 +1137,7 @@ mkdir -p "$home/.local/bin"
 cp "$TEST_ROOT/home-runtime-signal/.local/bin/mise" "$home/.local/bin/mise"
 set +e
 TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$TEST_ROOT/runtime-signal-bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
+  DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE=tmux \
   DOTFILES_TEST_HOST_ROOT="$host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_BIN=/usr/bin/tmux \
   DOTFILES_TEST_TMUX_OWNER=test-owner DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 GIT_USER_NAME='Ready Gate' \
   GIT_USER_EMAIL=ready-gate@example.invalid "$ready_fixture/bootstrap.sh" --provision 2>&1)"
@@ -1111,7 +1154,7 @@ pass
 dependency_fixture="$TEST_ROOT/ready-dependency-repo"
 mkdir "$dependency_fixture"
 cp -a "$ready_fixture/." "$dependency_fixture/"
-sed -i 's/|tmux|apply,check|generic,wsl|infocmp|/|tmux|apply,check|generic,wsl|stage7-missing-terminfo|/' \
+sed -i 's/|tmux|apply,check|generic,wsl|infocmp|/|tmux|apply,check|generic,wsl|tmux-missing-terminfo|/' \
   "$dependency_fixture/manifests/dependencies.tsv"
 home="$(new_home ready-dependency)"
 set +e
@@ -1132,7 +1175,7 @@ pass
 # applies the five-target WSL configuration.
 [[ "$(jq -r '.tools[] | select(.id == "tmux") | .native_minimum' "$fixture/manifests/provisioning.json")" == 3.5 ]] || \
   fail 'production WSL integration lost the real tmux native minimum'
-tmux_archive="${TMUX_37B_ARCHIVE:-/tmp/opencode/stage5-artifacts/tmux.tar.gz}"
+tmux_archive="${TMUX_37B_ARCHIVE:-/tmp/opencode/tmux-artifacts/tmux.tar.gz}"
 # The locked 3.7b archive is a host-cached fixture; hosts without it skip the
 # production WSL integration groups instead of failing. A present-but-drifted
 # archive still fails.
@@ -1185,6 +1228,7 @@ chmod 0755 "$home/.local/bin/mise"
 runtime_network_log="$TEST_ROOT/wsl-runtime-network.log"; : > "$runtime_network_log"
 set +e
 TEST_OUTPUT="$(HOME="$home" PATH="$home/.local/bin:$runtime_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
+  DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE=tmux \
   DOTFILES_TEST_HOST_ROOT="$wsl_host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 \
   DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" NETWORK_LOG="$network_log" \
   LOCKED_TMUX_ARCHIVE="$tmux_archive" RUNTIME_NETWORK_LOG="$runtime_network_log" \
@@ -1226,6 +1270,7 @@ rm -rf "$plugin_signal_home/.tmux" "$plugin_signal_home/.config" "$plugin_signal
 rm -f "$plugin_signal_home/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
 set +e
 TEST_OUTPUT="$(HOME="$plugin_signal_home" PATH="$plugin_signal_home/.local/bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
+  DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE=tmux \
   DOTFILES_TEST_HOST_ROOT="$wsl_host" DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_SKIP_ACTIVE=1 \
   DOTFILES_TEST_TMUX_FETCH="$plugin_signal_seam" \
   "$fixture/bootstrap.sh" --provision --area tmux 2>&1)"
@@ -1247,8 +1292,9 @@ home="$(new_home no-area)"
 : > "$network_log"
 set +e
 TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
-  DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" \
-  NETWORK_LOG="$network_log" GIT_USER_NAME='Stage Seven User' GIT_USER_EMAIL=stage7@example.invalid \
+  DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE=tmux \
+  DOTFILES_TEST_TMUX_FETCH="$fetch_seam" FIXTURE_REPOS="$repos" \
+  NETWORK_LOG="$network_log" GIT_USER_NAME='Tmux Fixture User' GIT_USER_EMAIL=tmux-fixture@example.invalid \
   "$fixture/bootstrap.sh" --check --provision 2>&1)"
 TEST_RC=$?
 set -e
@@ -1256,7 +1302,8 @@ set -e
 [[ -z "$(/usr/bin/find "$home" -mindepth 1 -print -quit)" ]] || fail 'no-area provisioning check mutated HOME'
 set +e
 TEST_OUTPUT="$(HOME="$home" PATH=/usr/bin:/bin DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_HOST_ROOT="$host" \
-  GIT_USER_NAME='Stage Seven User' GIT_USER_EMAIL=stage7@example.invalid \
+  DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE=tmux \
+  GIT_USER_NAME='Tmux Fixture User' GIT_USER_EMAIL=tmux-fixture@example.invalid \
   "$fixture/bootstrap.sh" --check --provision --area tmux --area git 2>&1)"
 TEST_RC=$?
 set -e
@@ -1267,7 +1314,7 @@ assert_contains "$TEST_OUTPUT" 'pending locked provisioning: tmux'
 pass
 
 # =============================================================================
-# Section 3: tmux parser fixture tool (from stage7_tmux_parser_fixture_test.sh)
+# Section 3: tmux parser fixture tool
 # =============================================================================
 
 [[ -x "$FIXTURES" ]] || fail 'tmux parser fixture operation is not executable'
@@ -1356,6 +1403,15 @@ if [[ -n "$REAL_CACHE" ]]; then
   "$FIXTURES" verify --root "$REAL_CACHE" >/dev/null || fail 'selected publication-test fixture cache is invalid'
   publication="$TEST_ROOT/publication-cache"; mkdir "$publication"; cp -a "$REAL_CACHE/archives" "$publication/"
   "$FIXTURES" sync --root "$publication" >/dev/null || fail 'publication test could not seed its managed generation'
+  active_generation="$(readlink "$publication/tmux-parser-fixtures-v1")"
+  cp "$publication/$active_generation/lock.sha256" "$TEST_ROOT/parser-lock-sha"
+  printf '%064d\n' 0 > "$publication/$active_generation/lock.sha256"
+  set +e
+  TEST_OUTPUT="$("$FIXTURES" verify --root "$publication" 2>&1)"; status=$?
+  set -e
+  [[ "$status" != 0 && "$TEST_OUTPUT" == *'managed fixture lock identity drift'* ]] || \
+    fail 'stale parser fixture lock identity was accepted'
+  cp "$TEST_ROOT/parser-lock-sha" "$publication/$active_generation/lock.sha256"
   old_target="$(readlink "$publication/tmux-parser-fixtures-v1")"
   set +e
   TEST_OUTPUT="$(DOTFILES_TESTING=1 DOTFILES_TEST_FAIL_AT=fixture-after-publication \

@@ -69,7 +69,7 @@ TPM is first, Resurrect follows it, and Continuum is the final TPM plugin so no 
 
 ## Plugin Lock
 
-[`manifests/tmux-plugins.lock.json`](../../manifests/tmux-plugins.lock.json) is the machine-readable source of truth and conforms to [`schemas/tmux-plugin-lock-v1.schema.json`](../../schemas/tmux-plugin-lock-v1.schema.json). Array order is checkout/persistence order. Filtering it to `loading: "tpm"` is the exact TPM declaration/load order; the `managed-hooks` row is not passed to TPM.
+[`manifests/tmux-plugins.lock.json`](../../manifests/tmux-plugins.lock.json) is the machine-readable source of truth and conforms to [`schemas/tmux-plugin-lock.schema.json`](../../schemas/tmux-plugin-lock.schema.json). Array order is checkout/persistence order. Filtering it to `loading: "tpm"` is the exact TPM declaration/load order; the `managed-hooks` row is not passed to TPM.
 
 | Checkout | Loading | Repository | Commit | Expected directory |
 |----------|---------|------------|--------|--------------------|
@@ -80,7 +80,7 @@ TPM is first, Resurrect follows it, and Continuum is the final TPM plugin so no 
 
 An exact local closure has all and only the declared checkout directories, each at its locked commit with the exact `origin`, a clean worktree and index, and an EUID-owned, non-symlinked checkout path. The plugin root and every path component bootstrap manages must also be EUID-owned real directories rather than symlinks. A missing checkout, unexpected entry, dirty checkout, repository mismatch, non-Git object, linked worktree, unsafe owner, symlinked path, or unreadable metadata is not an exact closure. All read-only Git inspection runs with `GIT_OPTIONAL_LOCKS=0`; exact validation must leave every checkout's `.git/index` identity, bytes, mode, size, and mtime unchanged.
 
-Exactness is also receipted at `~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. The retained, EUID-owned regular mode-`0600` file conforms to [`schemas/tmux-plugin-receipt-v1.schema.json`](../../schemas/tmux-plugin-receipt-v1.schema.json) and records schema version 1, the SHA-256 identity of the complete lock, and the lock-ordered `id`, canonical repository, commit, tree, and directory for every plugin. Ordinary apply and check require both the active receipt and its exact filesystem closure; an unreceipted checkout is not implicitly trusted. Receipt lock hashes are accepted only when they equal the active lock. There is no reviewed historical lock catalog, so every non-active hash refuses rather than treating the checkouts as unreceipted adoption candidates. Plugin directories `.` and `..` are invalid in both lock and receipt contracts.
+Exactness is also receipted at `~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. The retained, EUID-owned regular mode-`0600` file conforms to [`schemas/tmux-plugin-receipt.schema.json`](../../schemas/tmux-plugin-receipt.schema.json) and records schema version 1, the SHA-256 identity of the complete lock, and the lock-ordered `id`, canonical repository, commit, tree, and directory for every plugin. Ordinary apply and check require both the active receipt and its exact filesystem closure; an unreceipted checkout is not implicitly trusted. The active lock identity and its single pointer-only predecessor are recognized only with metadata that exactly matches the active plugin lock. The predecessor remains unconverged and can be adopted without fetching only by explicit tmux provisioning, which atomically rewrites the receipt; every other stale hash refuses. Plugin directories `.` and `..` are invalid in both lock and receipt contracts.
 
 ## Plugin Lifecycle
 
@@ -119,14 +119,14 @@ Ubuntu 24.04's tmux 3.4 shows the `extended-keys-format` notice; Ubuntu 22.04's 
 
 ### Real Parser Fixtures
 
-Parser compatibility uses the real distro executables, not a version-printing wrapper and not an assumed-equivalent static build. The test-only 3.2a input is the official Ubuntu Jammy package locked in [`manifests/tmux-parser-fixtures.lock.json`](../../manifests/tmux-parser-fixtures.lock.json), which conforms to [`schemas/tmux-parser-fixture-lock-v1.schema.json`](../../schemas/tmux-parser-fixture-lock-v1.schema.json). The accepted package is `tmux 3.2a-4ubuntu0.2` for `amd64`, archive size `428388`, SHA-256 `b51865a24b78d68459421ee68e1e35d53112d9c08c4e823b241141342efb21dd`. Its extracted `usr/bin/tmux` is mode `0755`, size `971320`, SHA-256 `6684c9b0bd4af08461f9e476e0abee9c3f08daa5d55ed6fb7c663c000e09f83d`, and reports `tmux 3.2a`.
+Parser compatibility uses the real distro executables, not a version-printing wrapper and not an assumed-equivalent static build. The test-only 3.2a input is the official Ubuntu Jammy package locked in [`manifests/tmux-parser-fixtures.lock.json`](../../manifests/tmux-parser-fixtures.lock.json), which conforms to [`schemas/tmux-parser-fixture-lock.schema.json`](../../schemas/tmux-parser-fixture-lock.schema.json). The accepted package is `tmux 3.2a-4ubuntu0.2` for `amd64`, archive size `428388`, SHA-256 `b51865a24b78d68459421ee68e1e35d53112d9c08c4e823b241141342efb21dd`. Its extracted `usr/bin/tmux` is mode `0755`, size `971320`, SHA-256 `6684c9b0bd4af08461f9e476e0abee9c3f08daa5d55ed6fb7c663c000e09f83d`, and reports `tmux 3.2a`.
 
 Noble's `libtinfo` package relationship prevents safely installing this old Jammy package. It is always extracted with `dpkg-deb --extract` and must never be passed to `dpkg`, `apt`, or `apt-get` for installation. Prepare an external fixture cache explicitly:
 
 ```bash
-mkdir -p /tmp/opencode/stage7-tmux-parser-cache
-scripts/tmux-parser-fixtures sync --root /tmp/opencode/stage7-tmux-parser-cache
-scripts/tmux-parser-fixtures verify --root /tmp/opencode/stage7-tmux-parser-cache
+mkdir -p /tmp/opencode/tmux-parser-cache
+scripts/tmux-parser-fixtures sync --root /tmp/opencode/tmux-parser-cache
+scripts/tmux-parser-fixtures verify --root /tmp/opencode/tmux-parser-cache
 ```
 
 Sync prints the complete HTTPS URL, destination, package identity, extractor, archive identity, executable identity, and managed root before its first download. Downloads stay under the caller-selected cache. Extraction occurs in same-parent staging; only the cache's `tmux-parser-fixtures-v1` managed-root link is atomically switched after all checks pass. The EUID-owned cache root is locked through an already-open directory descriptor: sync takes an exclusive lock and verify takes a shared lock. Managed chains reject nested symlinks and foreign ownership, publication compares the managed-link identity captured at preflight, and interrupted publication never removes the active generation. Old generations are intentionally retained because a concurrent reader may still hold a path through one. `verify` and `validate-lock` are offline. Bootstrap, startup, and normal tests never invoke sync.
@@ -134,9 +134,9 @@ Sync prints the complete HTTPS URL, destination, package identity, extractor, ar
 The opt-in real-version gate uses the extracted 3.2a fixture, distro `/usr/bin/tmux` 3.4, and the retained static 3.7b executable. Fixture and binary locations can be selected by arguments or the `TMUX_PARSER_*` environment overrides: `TMUX_PARSER_FIXTURE_ROOT`, `TMUX_PARSER_TMUX_32A_BIN`, `TMUX_PARSER_TMUX_34_BIN`, `TMUX_PARSER_TMUX_37B_ROOT`, and `TMUX_PARSER_TMUX_37B_BIN`.
 
 ```bash
-tests/stage7_tmux_parser_compatibility_test.sh \
-  --fixture-root /tmp/opencode/stage7-tmux-parser-cache \
-  --tmux-3.7b-root /tmp/opencode/stage7-tmux-parser-cache/static-3.7b
+tests/tmux_parser_gate.sh \
+  --fixture-root /tmp/opencode/tmux-parser-cache \
+  --tmux-3.7b-root /tmp/opencode/tmux-parser-cache/static-3.7b
 ```
 
 This gate requires the direct package-owned `/usr/bin/tmux` for 3.4 and the manifest-identity 3.7b executable, never a version wrapper. It requires a denied-network namespace and creates a unique socket and temporary home for every parser. It explicitly sources the committed dispatcher because tmux suppresses configuration diagnostics while creating a server with `-f`. The source operation must report only `allow-passthrough` and `extended-keys-format` on 3.2a, only `extended-keys-format` on 3.4, and no diagnostics on 3.7b; all three then prove the core effective options and bindings. The aggregate suite validates the lock/schema and offline operation but intentionally does not require an external fixture. Requesting the real gate without one fails with the exact sync command needed to prepare it.
@@ -181,6 +181,6 @@ Protocol analysis predicts that `M-S-Enter` and `M-Escape` remain unavailable on
 
 ## Readiness Gate
 
-Readiness changed only after automated gates covered package closure and duplicate targets; baseline byte identity and offline upstream verification; config parsing on tmux 3.2a, 3.4, and 3.5 or newer; isolated options and key tables; exact plugin lock/order; denied-network apply, check, and startup; every provisioning refusal and rollback path; native attachment refresh/removal; active-server mismatch reporting; and retained plugins and Resurrect data. Manual Windows Terminal and real-session restore checks remained separate rollout gates and are now complete for WSL.
+Readiness changed only after automated gates covered package closure and duplicate targets; baseline byte identity and offline upstream verification; config parsing on tmux 3.2a, 3.4, and 3.5 or newer; isolated options and key tables; exact plugin lock/order; denied-network apply, check, and startup; every provisioning refusal and rollback path; native attachment refresh/removal; active-server mismatch reporting; and retained plugins and Resurrect data. Manual Windows Terminal and real-session restore checks remained separate acceptance gates and are now complete for WSL.
 
 Acceptance requires generic, WSL, and native profiles to expose the baseline behavior and common persistence without startup mutation, duplicate Stow targets, native baseline replacement, WSL behavior, or a host-local layer.

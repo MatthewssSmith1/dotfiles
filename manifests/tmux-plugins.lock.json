@@ -1,5 +1,5 @@
 {
-  "$schema": "../schemas/tmux-plugin-lock-v1.schema.json",
+  "$schema": "../schemas/tmux-plugin-lock.schema.json",
   "schema_version": 1,
   "area": "tmux",
   "plugin_root": ".tmux/plugins",

@@ -23,6 +23,8 @@ readonly BOOTSTRAP_SOURCES=(
   "$REPO_DIR/lib/areas/tmux.sh"
   "$REPO_DIR/lib/areas/nvim.sh"
   "$REPO_DIR/lib/areas/zsh.sh"
+  "$REPO_DIR/lib/areas/agents.sh"
+  "$REPO_DIR/lib/areas/herdr.sh"
   "$REPO_DIR/lib/areas/generic.sh"
 )
 for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
@@ -30,6 +32,7 @@ for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
 done
 bash -n "${BOOTSTRAP_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
+  "$REPO_DIR/scripts/agent-skills" \
   "$REPO_DIR/scripts/tmux-parser-fixtures" || fail 'a bootstrap Bash file has invalid syntax'
 grep -Fq 'set -Eeuo pipefail' "$BOOTSTRAP" || fail 'bootstrap strict mode is missing'
 pass
@@ -40,6 +43,7 @@ jq empty "$REPO_DIR"/schemas/*.schema.json || fail 'a schema file is invalid JSO
 jq empty "$REPO_DIR/manifests/sources.json" \
   "$REPO_DIR/manifests/provisioning.json" \
   "$REPO_DIR/manifests/legacy-links.json" \
+  "$REPO_DIR/manifests/agent-skills.lock.json" \
   "$REPO_DIR/manifests/tmux-plugins.lock.json" \
   "$REPO_DIR/manifests/tmux-parser-fixtures.lock.json" || fail 'a manifest file is invalid JSON'
 if schema_validator_available; then
@@ -54,11 +58,21 @@ PYTHON
 else
   printf 'WARN: python3-jsonschema unavailable; skipped schema self-validation\n' >&2
 fi
-validate_json_schema "$REPO_DIR/schemas/source-manifest-v1.schema.json" "$REPO_DIR/manifests/sources.json"
-validate_json_schema "$REPO_DIR/schemas/provisioning-manifest-v1.schema.json" "$REPO_DIR/manifests/provisioning.json"
-validate_json_schema "$REPO_DIR/schemas/tmux-plugin-lock-v1.schema.json" "$REPO_DIR/manifests/tmux-plugins.lock.json"
-validate_json_schema "$REPO_DIR/schemas/tmux-parser-fixture-lock-v1.schema.json" \
+validate_json_schema "$REPO_DIR/schemas/source-manifest.schema.json" "$REPO_DIR/manifests/sources.json"
+validate_json_schema "$REPO_DIR/schemas/provisioning-manifest.schema.json" "$REPO_DIR/manifests/provisioning.json"
+validate_json_schema "$REPO_DIR/schemas/tmux-plugin-lock.schema.json" "$REPO_DIR/manifests/tmux-plugins.lock.json"
+validate_json_schema "$REPO_DIR/schemas/tmux-parser-fixture-lock.schema.json" \
   "$REPO_DIR/manifests/tmux-parser-fixtures.lock.json"
+validate_json_schema "$REPO_DIR/schemas/agent-skills-lock.schema.json" \
+  "$REPO_DIR/manifests/agent-skills.lock.json"
+shopt -s nullglob
+versioned_schema_names=("$REPO_DIR"/schemas/*-v[0-9]*.schema.json)
+shopt -u nullglob
+((${#versioned_schema_names[@]} == 0)) || fail 'first-party schema filename contains a version suffix'
+tmux_lock_hash="$(sha256sum "$REPO_DIR/manifests/tmux-plugins.lock.json" | cut -d' ' -f1)"
+tmux_migration_hash="$(sed -n "s/^readonly TMUX_PLUGIN_LOCK_POINTER_MIGRATION_SHA='\([^']*\)'$/\1/p" \
+  "$REPO_DIR/lib/areas/tmux.sh")"
+[[ "$tmux_lock_hash" == "$tmux_migration_hash" ]] || fail 'tmux lock migration target does not match the active lock'
 pass
 
 # tmux configuration contract: prefixes, mouse, plugin dependency order,
@@ -114,7 +128,7 @@ if grep -Eq '(^|[[:space:]])stow([[:space:]]+[^-][^[:space:]]*)?[[:space:]]+\.' 
   fail 'bootstrap can invoke the retired root Stow package'
 fi
 if grep -Eq '^[[:space:]]*stow[[:space:]]+(-[DR][[:space:]]+)?\.[[:space:]]*$' \
-  "$REPO_DIR/README.md" "$REPO_DIR/.config/nvim/README.md"; then
+  "$REPO_DIR/README.md"; then
   fail 'durable documentation advertises the retired root Stow package'
 fi
 
@@ -125,6 +139,21 @@ root_stow_output="$(stow --dir="$REPO_DIR" --target="$stow_target" \
 if [[ "$root_stow_output" == *'LINK:'* || "$root_stow_output" == *'UNLINK:'* || \
   "$root_stow_output" == *'MKDIR:'* ]]; then
   fail 'the retired root Stow package still has a deployable payload'
+fi
+[[ ! -e "$REPO_DIR/.config/nvim" && ! -L "$REPO_DIR/.config/nvim" ]] || \
+  fail 'retired repository-root Kickstart tree returned to current HEAD'
+pass
+
+# Numbered rollout terminology belongs only to Git history, not current paths
+# or content. Construct the expression so this contract does not match itself.
+rollout_term='([Ss]tage|[Pp]hase)[-_ ]?[0-9]+'
+while IFS= read -r tracked_path; do
+  [[ -e "$REPO_DIR/$tracked_path" || -L "$REPO_DIR/$tracked_path" ]] || continue
+  [[ ! "$tracked_path" =~ $rollout_term ]] || fail "numbered rollout term remains in tracked path: $tracked_path"
+done < <(git -C "$REPO_DIR" ls-files --cached --others --exclude-standard)
+if git -C "$REPO_DIR" grep --untracked -nEI "$rollout_term" -- . > "$TEST_ROOT/rollout-terms"; then
+  TEST_OUTPUT="$(< "$TEST_ROOT/rollout-terms")"
+  fail 'numbered rollout terminology remains in tracked content'
 fi
 pass
 

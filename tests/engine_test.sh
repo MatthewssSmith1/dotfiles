@@ -36,11 +36,12 @@ make_engine_fixture() {
   fixture="$(copy_repo_fixture "$name")"
   set_area_status "$fixture" tmux framework
   set_area_status "$fixture" nvim framework
+  set_area_status "$fixture" herdr framework
   if [[ "$name" != real-baselines && "$name" != default-ready ]]; then
     for area in starship tmux nvim; do
       rm -rf -- "$fixture/packages/upstream/$area"
       mkdir -p -- "$fixture/packages/upstream/$area"
-      printf 'Placeholder for isolated Stage 3 fixture.\n' > \
+      printf 'Placeholder for isolated engine fixture.\n' > \
         "$fixture/packages/upstream/$area/.empty-package"
       printf '^/\\.empty-package$\n' > "$fixture/packages/upstream/$area/.stow-local-ignore"
     done
@@ -49,7 +50,7 @@ make_engine_fixture() {
     for package in generic/tmux wsl/tmux common/tmux; do
       rm -rf -- "$fixture/packages/$package"
       mkdir -p -- "$fixture/packages/$package"
-      printf 'Placeholder for isolated Stage 3 fixture.\n' > "$fixture/packages/$package/.empty-package"
+      printf 'Placeholder for isolated engine fixture.\n' > "$fixture/packages/$package/.empty-package"
       printf '^/\\.empty-package$\n' > "$fixture/packages/$package/.stow-local-ignore"
     done
   fi
@@ -96,7 +97,7 @@ add_payload() {
   printf '%s\n' "$content" > "$target"
 }
 
-wsl_host="$(make_host stage3-wsl wsl)"
+wsl_host="$(make_host engine-wsl wsl)"
 
 # Committed statics: the area manifest, the canonical profile closure table,
 # populated snapshots and package layers.
@@ -105,7 +106,9 @@ area|git|ready
 area|bash|ready
 area|tmux|ready
 area|nvim|ready
-area|zsh|ready'
+area|zsh|ready
+area|agents|ready
+area|herdr|ready'
 [[ "$(cat "$REPO_DIR/manifests/areas.tsv")" == "$expected_areas" ]] || \
   fail 'manifests/areas.tsv does not record the current readiness table'
 declare -A EXPECTED_CLOSURES=(
@@ -114,16 +117,22 @@ declare -A EXPECTED_CLOSURES=(
   [generic:tmux]='upstream/tmux,generic/tmux,common/tmux'
   [generic:nvim]='upstream/nvim,generic/nvim,common/nvim'
   [generic:zsh]='common/zsh'
+  [generic:agents]='common/agents'
+  [generic:herdr]='common/herdr'
   [wsl:git]='upstream/git,generic/git,common/git'
   [wsl:bash]='upstream/bash,upstream/starship,generic/bash,wsl/bash,common/bash'
   [wsl:tmux]='upstream/tmux,generic/tmux,wsl/tmux,common/tmux'
   [wsl:nvim]='upstream/nvim,generic/nvim,common/nvim'
   [wsl:zsh]='common/zsh'
+  [wsl:agents]='common/agents'
+  [wsl:herdr]='common/herdr'
   [omarchy:git]='common/git'
   [omarchy:bash]='common/bash'
   [omarchy:tmux]='common/tmux'
   [omarchy:nvim]='common/nvim'
   [omarchy:zsh]='common/zsh'
+  [omarchy:agents]='common/agents'
+  [omarchy:herdr]='common/herdr'
 )
 for key in "${!EXPECTED_CLOSURES[@]}"; do
   profile="${key%%:*}"
@@ -132,8 +141,8 @@ for key in "${!EXPECTED_CLOSURES[@]}"; do
     fail "profile $profile does not list the canonical $area closure"
 done
 for profile in omarchy generic wsl; do
-  [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 5 ]] || \
-    fail "profile $profile does not list exactly five area closures"
+  [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 7 ]] || \
+    fail "profile $profile does not list exactly seven area closures"
 done
 for package in generic/git; do
   root="$REPO_DIR/packages/$package"
@@ -153,9 +162,9 @@ zsh_root="$REPO_DIR/packages/common/zsh"
 [[ -d "$zsh_root" && ! -L "$zsh_root" ]] || fail 'missing packages/common/zsh'
 zsh_entries="$(cd "$zsh_root" && find . -mindepth 1 | LC_ALL=C sort | tr '\n' ' ')"
 [[ "$zsh_entries" == './.p10k.zsh ./.zsh_aliases ./.zshrc ' ]] || \
-  fail "packages/common/zsh does not contain the exact Stage 6 payload: $zsh_entries"
+  fail "packages/common/zsh does not contain the exact shell payload: $zsh_entries"
 [[ -f "$REPO_DIR/packages/wsl/bash/.config/dotfiles/bash/wsl.bash" ]] || \
-  fail 'packages/wsl/bash is missing its Stage 6 adapter payload'
+  fail 'packages/wsl/bash is missing its shell adapter payload'
 bash_upstream_root="$REPO_DIR/packages/upstream/bash"
 [[ ! -e "$bash_upstream_root/.empty-package" && \
   ! -e "$bash_upstream_root/.stow-local-ignore" ]] || \
@@ -184,11 +193,11 @@ done
   fail 'packages/upstream/nvim retains its framework placeholder'
 reference_root="$REPO_DIR/packages/upstream/reference"
 [[ -d "$reference_root/omarchy/default/bash" && -d "$reference_root/omarchy/themes/tokyo-night" ]] || \
-  fail 'packages/upstream/reference does not contain the Stage 4 reference snapshot roots'
+  fail 'packages/upstream/reference does not contain the reference snapshot roots'
 pass
 
-# Ready-flipped fixtures deploy the real Stage 4 XDG baselines and retain exact
-# state ownership; readiness remains a production-stage decision.
+# Ready-flipped fixtures deploy the real XDG baselines and retain exact state
+# ownership; readiness remains a production decision.
 fixture="$(make_engine_fixture real-baselines bash tmux)"
 home="$(new_home real-baselines)"
 expect_success "$home" "$wsl_host" "$fixture/bootstrap.sh" --area bash --area tmux
@@ -234,7 +243,7 @@ expect_failure 'first WSL zsh deployment must explicitly select --area zsh witho
 expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --area zsh
 expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh"
 state_names="$(printf '%s\n' "$home/.local/state/dotfiles/v1/"*.json | xargs -n1 basename | sort | tr '\n' ' ')"
-[[ "$state_names" == 'bash.json git.json zsh.json ' ]] || \
+[[ "$state_names" == 'agents.json bash.json git.json zsh.json ' ]] || \
   fail 'bare apply did not record exactly the default-ready areas'
 expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --remove
 expect_success "$home" "$wsl_host" "$default_fixture/bootstrap.sh" --remove --area bash
@@ -401,7 +410,7 @@ pass
 # A moved checkout is reconciled for a generic area from recorded ownership.
 fixture="$(make_engine_fixture moved-one bash)"
 add_payload "$fixture" generic/bash '.config/dotfiles/fixture/bash-payload' 'payload'
-home="$(new_home stage3-moved)"
+home="$(new_home engine-moved)"
 expect_success "$home" "$wsl_host" "$fixture/bootstrap.sh" --area bash
 moved="$TEST_ROOT/fixture-moved-two"
 cp -a "$fixture" "$moved"
@@ -417,7 +426,7 @@ pass
 # Malformed and newer-schema generic-area state refuses even git-only runs.
 fixture="$(make_engine_fixture states bash)"
 add_payload "$fixture" generic/bash '.config/dotfiles/fixture/bash-payload' 'payload'
-home="$(new_home stage3-states)"
+home="$(new_home engine-states)"
 expect_success "$home" "$wsl_host" "$fixture/bootstrap.sh" --area bash
 state="$home/.local/state/dotfiles/v1/bash.json"
 cp "$state" "$TEST_ROOT/bash-state-good.json"
@@ -453,12 +462,12 @@ pass
 
 # Generalized cleanup consumes the reviewed legacy inventory: deferred records
 # are refused rather than migrated, and agent-skill exclusions stay untouched.
-legacy_root="$TEST_ROOT/stage3-legacy-old"
+legacy_root="$TEST_ROOT/engine-legacy-old"
 cp -a "$REPO_DIR" "$legacy_root"
 fixture="$(make_engine_fixture legacy bash tmux)"
 add_payload "$fixture" generic/tmux '.tmux.conf' 'replacement tmux payload'
 add_payload "$fixture" generic/bash '.config/dotfiles/fixture/bash-payload' 'payload'
-home="$(new_home stage3-legacy)"
+home="$(new_home engine-legacy)"
 jq --arg home "$home" --arg root "$legacy_root" \
   '.hosts[0].home = $home | .hosts[0].checkout_root = $root' \
   "$fixture/manifests/legacy-links.json" > "$fixture/manifests/legacy-links.json.tmp"
@@ -484,14 +493,14 @@ expect_success "$home" "$wsl_host" "$fixture/bootstrap.sh" --remove
 [[ -L "$home/.claude/skills" && "$(readlink -- "$home/.claude/skills")" == "$bridge_link" ]] || \
   fail 'excluded broken agent bridge was touched'
 [[ -L "$home/.tmux.conf" ]] || fail 'removal touched the deferred tmux legacy link'
-real_elsewhere="$TEST_ROOT/stage3-real-elsewhere"
+real_elsewhere="$TEST_ROOT/engine-real-elsewhere"
 mkdir "$real_elsewhere"
 printf 'unrelated tmux\n' > "$real_elsewhere/.tmux.conf"
-fake_root="$TEST_ROOT/stage3-fake-root"
+fake_root="$TEST_ROOT/engine-fake-root"
 ln -s "$real_elsewhere" "$fake_root"
 fixture="$(make_engine_fixture legacy-resolved tmux)"
 add_payload "$fixture" generic/tmux '.tmux.conf' 'replacement tmux payload'
-home="$(new_home stage3-legacy-resolved)"
+home="$(new_home engine-legacy-resolved)"
 jq --arg home "$home" --arg root "$fake_root" \
   '.hosts[0].home = $home | .hosts[0].checkout_root = $root' \
   "$fixture/manifests/legacy-links.json" > "$fixture/manifests/legacy-links.json.tmp"
@@ -521,7 +530,7 @@ expect_failure() {
   [[ "$TEST_OUTPUT" == *"$expected"* ]] || fail "expected output to contain: $expected"
 }
 
-SCRIPT_NAME=stage6-engine-test
+SCRIPT_NAME=engine-test
 source "$REPO_DIR/lib/common.sh"
 source "$REPO_DIR/lib/engine.sh"
 trap - EXIT INT TERM
@@ -529,10 +538,10 @@ trap cleanup_test EXIT
 
 DOTFILES_DIR="$REPO_DIR"
 CHECKOUT_ROOT="$REPO_DIR"
-AREA_ORDER=(git bash tmux nvim zsh)
-readonly ATTACHMENT_BEGIN='# >>> dotfiles managed stage6 fixture >>>'
-readonly ATTACHMENT_END='# <<< dotfiles managed stage6 fixture <<<'
-readonly ATTACHMENT_TOKEN='dotfiles managed stage6 fixture'
+AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+readonly ATTACHMENT_BEGIN='# >>> dotfiles managed engine fixture >>>'
+readonly ATTACHMENT_END='# <<< dotfiles managed engine fixture <<<'
+readonly ATTACHMENT_TOKEN='dotfiles managed engine fixture'
 readonly ATTACHMENT_BLOCK="$ATTACHMENT_BEGIN
 source \"\$HOME/.config/dotfiles/bash/rc.bash\"
 $ATTACHMENT_END"
@@ -766,7 +775,7 @@ printf 'new zshrc\n' > "$review_repo/packages/common/zsh/.zshrc"
 printf 'old zshrc\n' > "$old_repo/.zshrc"
 jq -cn --arg home "$TARGET_ROOT" --arg root "$old_repo" \
   '{schema_version:1,hosts:[{id:"fixture",status:"reviewed",home:$home,checkout_root:$root,platform:"fixture",
-    scan_scope:"fixture",records:[[".zshrc",".zshrc","zsh","tracked","replace-stage-6"]],blockers:[]}]}' \
+    scan_scope:"fixture",records:[[".zshrc",".zshrc","zsh","tracked","retire-zsh-links"]],blockers:[]}]}' \
   > "$review_repo/manifests/legacy-links.json"
 ln -s "$old_repo/.zshrc" "$HOME/.zshrc"
 DOTFILES_DIR="$review_repo"
@@ -776,7 +785,7 @@ PACKAGES=(common/zsh)
 scan_packages
 OLD_STATE=false
 expect_failure 'exact reviewed manifest record' approve_legacy_replacement .zshrc .zshrc zsh unreviewed-action
-approve_legacy_replacement .zshrc .zshrc zsh replace-stage-6
+approve_legacy_replacement .zshrc .zshrc zsh retire-zsh-links
 preflight_desired_targets
 run_stow_preflight
 AREA_STATE="$HOME/.local/state/dotfiles/v1/zsh.json"
@@ -792,7 +801,7 @@ rm "$old_repo/.zshrc"
 ln -s "$TEST_ROOT/redirected-zshrc" "$old_repo/.zshrc"
 scan_packages
 OLD_STATE=false
-expect_failure 'exact reviewed manifest record' approve_legacy_replacement .zshrc .zshrc zsh replace-stage-6
+expect_failure 'exact reviewed manifest record' approve_legacy_replacement .zshrc .zshrc zsh retire-zsh-links
 
 rm -f "$HOME/.zshrc"
 printf 'current checkout source\n' > "$review_repo/.zshrc"
@@ -801,14 +810,14 @@ foreign_current_link_owner() {
   stat() {
     if [[ "${*: -1}" == "$HOME/.zshrc" ]]; then printf '%s\n' "$((EUID + 1))"; else command stat "$@"; fi
   }
-  owned_legacy_link "$HOME/.zshrc" .zshrc .zshrc zsh replace-stage-6
+  owned_legacy_link "$HOME/.zshrc" .zshrc .zshrc zsh retire-zsh-links
 }
 if foreign_current_link_owner; then fail 'current-checkout legacy link with a foreign owner was accepted'; fi
 foreign_current_source_owner() {
   stat() {
     if [[ "${*: -1}" == "$review_repo/.zshrc" ]]; then printf '%s\n' "$((EUID + 1))"; else command stat "$@"; fi
   }
-  owned_legacy_link "$HOME/.zshrc" .zshrc .zshrc zsh replace-stage-6
+  owned_legacy_link "$HOME/.zshrc" .zshrc .zshrc zsh retire-zsh-links
 }
 if foreign_current_source_owner; then fail 'foreign-owned current-checkout legacy source was accepted'; fi
 jq --arg root "$review_repo" '.hosts[0].checkout_root = $root' \
@@ -818,7 +827,7 @@ foreign_reviewed_source_owner() {
   stat() {
     if [[ "${*: -1}" == "$review_repo/.zshrc" ]]; then printf '%s\n' "$((EUID + 1))"; else command stat "$@"; fi
   }
-  reviewed_legacy_link "$HOME/.zshrc" .zshrc .zshrc zsh replace-stage-6
+  reviewed_legacy_link "$HOME/.zshrc" .zshrc .zshrc zsh retire-zsh-links
 }
 if foreign_reviewed_source_owner; then fail 'foreign-owned reviewed legacy source was accepted'; fi
 pass
@@ -827,7 +836,7 @@ pass
 reset_home guarded-race
 printf 'preflight original\n' > "$HOME/.bashrc"
 mkdir "$TEST_ROOT/guarded-race-hold"
-HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-engine-test \
+HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=engine-test \
   DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=before-guarded-replacement-quarantine \
   DOTFILES_TEST_HOLD_DIR="$TEST_ROOT/guarded-race-hold" FIX_BEGIN="$ATTACHMENT_BEGIN" \
   FIX_END="$ATTACHMENT_END" FIX_TOKEN="$ATTACHMENT_TOKEN" FIX_BLOCK="$ATTACHMENT_BLOCK" bash -c '
@@ -868,11 +877,11 @@ printf 'old\n' > "$legacy_old/.zshrc"
 printf 'concurrent\n' > "$TEST_ROOT/legacy-race-concurrent"
 jq -cn --arg home "$TARGET_ROOT" --arg root "$legacy_old" \
   '{schema_version:1,hosts:[{id:"fixture",status:"reviewed",home:$home,checkout_root:$root,platform:"fixture",
-    scan_scope:"fixture",records:[[".zshrc",".zshrc","zsh","tracked","replace-stage-6"]],blockers:[]}]}' \
+    scan_scope:"fixture",records:[[".zshrc",".zshrc","zsh","tracked","retire-zsh-links"]],blockers:[]}]}' \
   > "$legacy_repo/manifests/legacy-links.json"
 ln -s "$legacy_old/.zshrc" "$HOME/.zshrc"
 mkdir "$TEST_ROOT/legacy-race-hold"
-HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$legacy_repo" SCRIPT_NAME=stage6-engine-test \
+HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$legacy_repo" SCRIPT_NAME=engine-test \
   DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=before-approved-legacy-quarantine \
   DOTFILES_TEST_HOLD_DIR="$TEST_ROOT/legacy-race-hold" bash -c '
     set -Eeuo pipefail
@@ -884,7 +893,7 @@ HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$legacy_repo" SCRIPT_NAME=
     PACKAGES=(common/zsh)
     scan_packages
     OLD_STATE=false
-    approve_legacy_replacement .zshrc .zshrc zsh replace-stage-6
+    approve_legacy_replacement .zshrc .zshrc zsh retire-zsh-links
     begin_transaction
     remove_approved_legacy_replacements
   ' > "$TEST_ROOT/legacy-race.log" 2>&1 &
@@ -906,7 +915,7 @@ pass
 reset_home rollback-race
 printf 'rollback original\n' > "$HOME/state"
 mkdir "$TEST_ROOT/rollback-race-hold"
-HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-engine-test \
+HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=engine-test \
   DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=before-rollback-path \
   DOTFILES_TEST_HOLD_DIR="$TEST_ROOT/rollback-race-hold" bash -c '
     set -Eeuo pipefail
@@ -948,7 +957,7 @@ pass
 reset_home state-cas
 printf 'transaction-start state\n' > "$HOME/state"
 mkdir "$TEST_ROOT/state-cas-hold"
-HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-engine-test \
+HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=engine-test \
   DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=before-atomic-rename \
   DOTFILES_TEST_HOLD_DIR="$TEST_ROOT/state-cas-hold" bash -c '
     set -Eeuo pipefail
@@ -985,7 +994,7 @@ reset_home ledger-cas
 ledger="$HOME/.local/state/dotfiles/v1/migrations.json"
 mkdir -p "$(dirname -- "$ledger")" "$TEST_ROOT/ledger-cas-hold"
 printf '%s\n' '{"schema_version":1,"migrations":[]}' > "$ledger"
-HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-engine-test \
+HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=engine-test \
   DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=after-migration-ledger-read \
   DOTFILES_TEST_HOLD_DIR="$TEST_ROOT/ledger-cas-hold" bash -c '
     set -Eeuo pipefail
@@ -1034,7 +1043,7 @@ fi
 
 printf 'quarantine original\n' > "$HOME/quarantine-source"
 mkdir "$TEST_ROOT/quarantine-identity-hold"
-HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-engine-test \
+HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=engine-test \
   DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=before-quarantine-discard \
   DOTFILES_TEST_HOLD_DIR="$TEST_ROOT/quarantine-identity-hold" bash -c '
     set -Eeuo pipefail

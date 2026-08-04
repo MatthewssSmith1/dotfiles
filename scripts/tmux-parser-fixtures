@@ -8,8 +8,8 @@ readonly SCRIPT_DIR
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 readonly REPO_DIR
 readonly LOCK="$REPO_DIR/manifests/tmux-parser-fixtures.lock.json"
-readonly SCHEMA="$REPO_DIR/schemas/tmux-parser-fixture-lock-v1.schema.json"
-readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/tmux-parser-fixture-lock-v1.schema.json'
+readonly SCHEMA="$REPO_DIR/schemas/tmux-parser-fixture-lock.schema.json"
+readonly SCHEMA_ID='https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/tmux-parser-fixture-lock.schema.json'
 
 CACHE_ROOT=""
 STAGING=""
@@ -70,7 +70,7 @@ validate_lock() {
   jq -e --arg id "$SCHEMA_ID" '
     .["$schema"] == "https://json-schema.org/draft/2020-12/schema" and
     .["$id"] == $id and .type == "object" and .additionalProperties == false and
-    .properties["$schema"].const == "../schemas/tmux-parser-fixture-lock-v1.schema.json" and
+    .properties["$schema"].const == "../schemas/tmux-parser-fixture-lock.schema.json" and
     .properties.schema_version.const == 1 and
     .properties.managed_root.const == "tmux-parser-fixtures-v1" and
     .properties.extractor.const == ["dpkg-deb", "--extract"]
@@ -79,7 +79,7 @@ validate_lock() {
     def keys_are($allowed): (keys | sort) == ($allowed | sort);
     def hex64: type == "string" and test("^[0-9a-f]{64}$");
     type == "object" and keys_are(["$schema", "schema_version", "managed_root", "extractor", "fixtures"]) and
-    .["$schema"] == "../schemas/tmux-parser-fixture-lock-v1.schema.json" and
+    .["$schema"] == "../schemas/tmux-parser-fixture-lock.schema.json" and
     .schema_version == 1 and .managed_root == "tmux-parser-fixtures-v1" and
     .extractor == ["dpkg-deb", "--extract"] and
     (.fixtures | type == "array" and length == 1) and

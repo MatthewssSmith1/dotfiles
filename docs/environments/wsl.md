@@ -8,7 +8,7 @@ Notes for Ubuntu under WSL2 on Windows. The WSL profile inherits the generic pro
 
 The WSL shell contract inherits the complete generic Bash path and adds an explicit adapter after generic portable initialization and before common personal integrations. The initial adapter intentionally has no runtime settings. Existing regular `.bashrc` and the selected login file are preserved through reversible managed blocks; bootstrap never changes the login shell. See [Shell](../tools/shell.md).
 
-The ready tmux contract likewise inherits the complete generic path. Its WSL adapter is a tracked, command-empty fragment, so WSL adds no host behavior and there is no host-local tmux layer. Windows-specific keys are a client concern: apply all eight manual unbinds in [Windows Terminal](windows-terminal.md).
+The ready tmux contract likewise inherits the complete generic path. Its WSL adapter is a tracked, command-empty fragment, so WSL adds no host behavior and there is no host-local tmux layer. [Herdr](../tools/herdr.md) is Linux-side only; native Windows remains deferred. Windows-specific keys are a client concern: apply all eight manual unbinds in [Windows Terminal](windows-terminal.md).
 
 ## Current State And Target
 
@@ -16,7 +16,7 @@ The current WSL host was upgraded to Ubuntu 24.04 LTS and is the primary impleme
 
 ## Completed Upgrade
 
-The prior side-by-side rollout was superseded by a separately managed in-place upgrade. The migration now assumes the validated Ubuntu 24.04 host. Export, rollback, and distro lifecycle remain operator responsibilities outside bootstrap.
+The prior side-by-side upgrade plan was superseded by a separately managed in-place upgrade. This document assumes the validated Ubuntu 24.04 host. Export, rollback, and distro lifecycle remain operator responsibilities outside bootstrap.
 
 The original preparation commands are retained below as general WSL recovery reference.
 

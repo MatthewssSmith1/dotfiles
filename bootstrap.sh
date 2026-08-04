@@ -14,6 +14,8 @@ source "$SCRIPT_DIR/lib/areas/bash.sh"
 source "$SCRIPT_DIR/lib/areas/tmux.sh"
 source "$SCRIPT_DIR/lib/areas/nvim.sh"
 source "$SCRIPT_DIR/lib/areas/zsh.sh"
+source "$SCRIPT_DIR/lib/areas/agents.sh"
+source "$SCRIPT_DIR/lib/areas/herdr.sh"
 source "$SCRIPT_DIR/lib/areas/generic.sh"
 
 MODE=apply
@@ -180,7 +182,7 @@ validate_selected_areas() {
         ${#AREAS[@]} -eq 1 && "${AREAS[0]}" == tmux ]]; then
         continue
       fi
-      die "area '$area' is framework-only in this checkout; its payload deploys in a later stage"
+      die "area '$area' is framework-only in this checkout; it has no deployable payload"
     fi
   done
 }
@@ -205,6 +207,8 @@ run_area() {
       tmux) remove_tmux ;;
       nvim) remove_nvim ;;
       zsh) remove_zsh ;;
+      agents) remove_agents ;;
+      herdr) remove_herdr ;;
       *) remove_generic "$area" ;;
     esac
     return 0
@@ -215,6 +219,8 @@ run_area() {
     tmux) preflight_tmux ;;
     nvim) preflight_nvim ;;
     zsh) preflight_zsh ;;
+    agents) preflight_agents ;;
+    herdr) preflight_herdr ;;
     *) preflight_generic "$area" ;;
   esac
   if [[ "$MODE" == check ]]; then
@@ -228,6 +234,8 @@ run_area() {
     tmux) apply_tmux ;;
     nvim) apply_nvim ;;
     zsh) apply_zsh ;;
+    agents) apply_agents ;;
+    herdr) apply_herdr ;;
     *) apply_generic "$area" ;;
   esac
 }
@@ -312,6 +320,8 @@ preflight_selected_areas() {
         tmux) preflight_tmux ;;
         nvim) preflight_nvim ;;
         zsh) preflight_zsh ;;
+        agents) preflight_agents ;;
+        herdr) preflight_herdr ;;
         *) preflight_generic "$area" ;;
       esac
     )

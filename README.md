@@ -1,6 +1,6 @@
 # Dotfiles
 
-Opinionated Bash, zsh, Git, Neovim, and tmux configuration. [GNU Stow](https://www.gnu.org/software/stow/) is the deployment mechanism for every area on every profile and is a required dependency of `bootstrap.sh`. On generic and WSL hosts it links pinned baselines, adapters, and shared personal layers; on native Omarchy the installed baselines stay untouched, but the shared personal fragments under `~/.config/dotfiles/` are still Stow links that guarded attachments source.
+Opinionated Bash, zsh, Git, Neovim, tmux, and agent configuration. [GNU Stow](https://www.gnu.org/software/stow/) is the deployment mechanism for every area on every profile and is a required dependency of `bootstrap.sh`. On generic and WSL hosts it links pinned baselines, adapters, and shared personal layers; on native Omarchy the installed baselines stay untouched, but the shared personal fragments under `~/.config/dotfiles/` are still Stow links that guarded attachments source.
 
 ## Includes
 
@@ -11,6 +11,7 @@ Opinionated Bash, zsh, Git, Neovim, and tmux configuration. [GNU Stow](https://w
 - Git defaults with private identity stored outside the repository
 - Neovim based on pinned LazyVim and Omarchy release inputs
 - tmux with persistent layouts and AI assistant session restoration
+- Pinned personal agent skills and shared OpenCode/Claude instructions
 - Windows Terminal theming applied from the Windows host
 
 ## Profiles
@@ -35,7 +36,7 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
   ~/dotfiles/bootstrap.sh --check --area git
 ```
 
-Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline. Git, Bash, tmux, Neovim, and transitional zsh are ready and selected by default; native Omarchy attaches Git, Bash, tmux, and the Neovim personal loader to installed baselines. Default selection skips the transitional zsh area on hosts where zsh is not installed and has never been deployed; explicit `--area zsh` still requires it. Bootstrap preserves unrelated shell, agent, application, and authentication state.
+Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline. Git, Bash, tmux, Neovim, transitional zsh, agents, and Herdr are ready and selected by default; native Omarchy attaches Git, Bash, tmux, and the Neovim personal loader to installed baselines. Default selection skips the transitional zsh area on hosts where zsh is not installed and has never been deployed; explicit `--area zsh` still requires it. Bootstrap preserves unrelated shell, agent, application, and authentication state.
 
 Bash with Starship is the primary configured workflow; the account's zsh login shell is never changed. Generic and WSL Bash use byte-reversible startup-file blocks; native Omarchy uses a separate additive attachment. On a first WSL deployment, bootstrap enforces the operational order: apply `--area bash`, smoke-test it from a separate process, then apply `--area zsh`. A default or combined apply cannot perform both first-time shell deployments; later default applies converge normally. See the [shell contract](docs/tools/shell.md).
 
@@ -50,7 +51,7 @@ Runtime tools install only through explicit, ownership-aware, checksum-locked pr
 
 Only the second command may fetch the complete printed, checksum-locked plan. Ordinary apply remains configuration-only and both check forms remain offline. Area-scoped `--provision --area <area>` never selects the core personal tool set. See the [deployment contract](docs/deployment.md#bootstrap-contract) and its canonical [operation and network policy](docs/deployment.md#operation-and-network-policy).
 
-Neovim requires version 0.11 or newer and works best with a Nerd Font and a clipboard provider. See [the Neovim README](.config/nvim/README.md) for details.
+Neovim requires version 0.11 or newer and works best with a Nerd Font and a clipboard provider. See [the Neovim contract](docs/tools/neovim.md) for details.
 
 ## tmux
 
@@ -89,11 +90,14 @@ The Omarchy core, LazyVim starter, and Omarchy Neovim overlay are pinned as immu
 | `bootstrap.sh --area git,bash,tmux` | Apply several areas with one flag |
 | `bootstrap.sh --tool git` | `--tool` is an alias for `--area` |
 | `bootstrap.sh --remove --area git` | Remove managed Git links and includes |
+| `bootstrap.sh --area agents` | Deploy pinned skills and global instruction bridges |
+| `bootstrap.sh --area herdr` | Deploy regular Herdr configuration |
+| `scripts/agent-skills verify` | Verify the vendored skill closure offline |
 | `scripts/upstream verify` | Verify all pinned upstream snapshots offline |
 | `scripts/tmux-parser-fixtures validate-lock` | Validate the test-only tmux parser fixture pin offline |
-| `scripts/tmux-parser-fixtures sync --root <cache-root>` | Explicitly prepare the locked real tmux 3.2a parser fixture without package installation |
-| `tests/stage7_tmux_parser_compatibility_test.sh --fixture-root <cache-root>` | Run the opt-in real 3.2a/3.4/3.7b parser gate |
-| `tests/bootstrap_test.sh` | Run repository checks |
+| `scripts/tmux-parser-fixtures sync --root /tmp/opencode/tmux-parser-cache` | Explicitly prepare the locked real tmux 3.2a parser fixture without package installation |
+| `tests/tmux_parser_gate.sh --fixture-root /tmp/opencode/tmux-parser-cache` | Run the opt-in real 3.2a/3.4/3.7b parser gate |
+| `tests/run.sh` | Run exhaustive repository checks ([test routing](tests/README.md)) |
 
 ## Documentation
 
@@ -102,7 +106,8 @@ The Omarchy core, LazyVim starter, and Omarchy Neovim overlay are pinned as immu
   policy, state, native attachments
 - [Upstream](docs/upstream.md) — source pins, snapshots, synchronization
 - Tool contracts: [Git](docs/tools/git.md), [Shell](docs/tools/shell.md),
-  [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md)
+  [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md),
+  [Agents](docs/tools/agents.md)
 - Environments: [Omarchy](docs/environments/omarchy.md),
   [generic Linux](docs/environments/generic.md),
   [WSL](docs/environments/wsl.md),

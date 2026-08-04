@@ -41,15 +41,15 @@ run_bash_area() {
   local home="$1" profile="$2" operation="$3" fail_at="${4:-}" mode=apply
   [[ "$operation" != remove ]] || mode=remove
   HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-    SCRIPT_NAME=stage6-matrix-test SELECTED_PROFILE="$profile" MODE="$mode" \
+    SCRIPT_NAME=shell-test SELECTED_PROFILE="$profile" MODE="$mode" \
     DOTFILES_TESTING=1 DOTFILES_TEST_FAIL_AT="$fail_at" bash -c '
       set -Eeuo pipefail
       source "$DOTFILES_DIR/lib/common.sh"
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/bash.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [agents]=framework [herdr]=framework)
       run_controlled_bash() { :; }
       if [[ "$MODE" == remove ]]; then remove_bash; else preflight_bash; apply_bash; fi
     '
@@ -64,7 +64,7 @@ run_interactive() {
 }
 
 # ---------------------------------------------------------------------------
-# Bash payload and startup sections (from stage6_shell_test.sh)
+# Bash payload and startup sections
 # ---------------------------------------------------------------------------
 
 # Package inventory and executable modes are explicit and contain no host-local payload.
@@ -296,7 +296,7 @@ SCRIPT
 chmod 0755 "$TEST_ROOT/controlled-dpkg-query"
 run_production_controlled() {
   HOME="$controlled_home" TARGET_ROOT="$controlled_home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-    SCRIPT_NAME=stage6-shell-test SELECTED_PROFILE=generic MODE=check DOTFILES_TESTING=1 \
+    SCRIPT_NAME=shell-test SELECTED_PROFILE=generic MODE=check DOTFILES_TESTING=1 \
     DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
     DOTFILES_TEST_BASH_DISTRO_BIN="$controlled_bin" DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/controlled-dpkg-query" \
     PATH="$controlled_home/.local/bin:$controlled_bin:/usr/bin:/bin" bash -c '
@@ -367,15 +367,15 @@ pass
 run_area_fixture() {
   local home="$1" profile="$2" operation="$3"
   HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-    SCRIPT_NAME=stage6-shell-test SELECTED_PROFILE="$profile" MODE="$([[ "$operation" == remove ]] && printf remove || printf apply)" \
+    SCRIPT_NAME=shell-test SELECTED_PROFILE="$profile" MODE="$([[ "$operation" == remove ]] && printf remove || printf apply)" \
     bash -c '
       set -Eeuo pipefail
       source "$DOTFILES_DIR/lib/common.sh"
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/bash.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [agents]=framework [herdr]=framework)
       run_controlled_bash() { :; }
       if [[ "$MODE" == remove ]]; then remove_bash; else preflight_bash; apply_bash; fi
     '
@@ -404,15 +404,15 @@ rc_hash="$(sha256sum "$home/.bashrc")"
 profile_hash="$(sha256sum "$home/.profile")"
 set +e
 TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-  SCRIPT_NAME=stage6-shell-test MODE=remove DOTFILES_TESTING=1 DOTFILES_TEST_FAIL_AT=bash-remove-after-attachments \
+  SCRIPT_NAME=shell-test MODE=remove DOTFILES_TESTING=1 DOTFILES_TEST_FAIL_AT=bash-remove-after-attachments \
   bash -c '
     set -Eeuo pipefail
     source "$DOTFILES_DIR/lib/common.sh"
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [agents]=framework [herdr]=framework)
     remove_bash
   ' 2>&1)"
 status=$?
@@ -451,10 +451,10 @@ pass
 # Bash-specific ownership checks reject aliases and extra user candidates without executing them.
 # This section sources the production libraries into the current shell and mutates HOME, PATH,
 # and exported test knobs; snapshot them so the sections that follow run under the harness
-# environment again (the original stage file let this leak because nothing else followed).
+# environment again (the original split suite let this leak because nothing else followed).
 shell_saved_home="$HOME"
 shell_saved_path="$PATH"
-SCRIPT_NAME=stage6-shell-test
+SCRIPT_NAME=shell-test
 DOTFILES_DIR="$REPO_DIR"
 HOME="$TEST_ROOT/home-owner"
 TARGET_ROOT="$HOME"
@@ -518,15 +518,15 @@ chmod 0640 "$home/.bashrc"
 cp -a "$home/.bashrc" "$TEST_ROOT/fault.original"
 set +e
 TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-  SCRIPT_NAME=stage6-shell-test SELECTED_PROFILE=generic MODE=apply DOTFILES_TESTING=1 \
+  SCRIPT_NAME=shell-test SELECTED_PROFILE=generic MODE=apply DOTFILES_TESTING=1 \
   DOTFILES_TEST_FAIL_AT=bash-after-attachments bash -c '
     set -Eeuo pipefail
     source "$DOTFILES_DIR/lib/common.sh"
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [agents]=framework [herdr]=framework)
     run_controlled_bash() { :; }
     preflight_bash
     apply_bash
@@ -541,7 +541,7 @@ assert_same "$home/.bashrc" "$TEST_ROOT/fault.original"
 pass
 
 # ---------------------------------------------------------------------------
-# Bash startup matrix and ownership sections (from stage6_matrix_test.sh)
+# Bash startup matrix and ownership sections
 # ---------------------------------------------------------------------------
 
 # Bash startup 3: explicit generic selection on WSL warns and omits the adapter.
@@ -552,7 +552,7 @@ mkdir -p "$host/etc" "$host/proc/sys/kernel"
 printf 'ID=ubuntu\nVERSION_ID=24.04\n' > "$host/etc/os-release"
 printf '6.6.0-microsoft-standard-WSL2\n' > "$host/proc/sys/kernel/osrelease"
 TEST_OUTPUT="$(HOME="$home" HOST_ROOT="$host" DOTFILES_TESTING=1 DOTFILES_TEST_UNAME=Linux \
-  PROFILE_OVERRIDE=generic MODE=check SCRIPT_NAME=stage6-matrix-test bash -c '
+  PROFILE_OVERRIDE=generic MODE=check SCRIPT_NAME=shell-test bash -c '
     source "'$REPO_DIR'/lib/common.sh"
     source "'$REPO_DIR'/lib/host.sh"
     detect_host
@@ -759,7 +759,7 @@ printf 'fzf: %s\n' "$2"
 SCRIPT
 chmod 0755 "$TEST_ROOT/dpkg-query"
 run_owner_check() {
-  HOME="$owner_home" TARGET_ROOT="$owner_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-matrix-test \
+  HOME="$owner_home" TARGET_ROOT="$owner_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=shell-test \
     DOTFILES_TESTING=1 DOTFILES_TEST_BASH_DISTRO_BIN="$TEST_ROOT/owner-bin" \
     DOTFILES_TEST_DPKG_QUERY="$TEST_ROOT/dpkg-query" PATH="$1:/usr/bin:/bin" bash -c '
       set -Eeuo pipefail
@@ -812,7 +812,7 @@ chmod 0755 "$TEST_ROOT/mise-which"
 cat > "$TEST_ROOT/worktrunk-manifest.json" <<JSON
 {"tools":[{"id":"worktrunk","install_root":".local/share/dotfiles/provisioning/tools/worktrunk/0.1.0","artifact":{"executable":"wt"}}]}
 JSON
-TEST_OUTPUT="$(HOME="$mise_home" TARGET_ROOT="$mise_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-matrix-test \
+TEST_OUTPUT="$(HOME="$mise_home" TARGET_ROOT="$mise_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=shell-test \
   PATH="$TEST_ROOT/project-wt:$mise_home/.local/share/mise/shims:/usr/bin:/bin" \
   MISE_BIN="$TEST_ROOT/mise-which" PROVISIONING_MANIFEST="$TEST_ROOT/worktrunk-manifest.json" bash -c '
     set -Eeuo pipefail
@@ -834,15 +834,15 @@ home="$TEST_ROOT/network-check"
 mkdir "$home"
 prepare_bash_tools "$home"
 run_network_isolated env HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-  SCRIPT_NAME=stage6-matrix-test SELECTED_PROFILE=generic MODE=check DOTFILES_TESTING=1 \
+  SCRIPT_NAME=shell-test SELECTED_PROFILE=generic MODE=check DOTFILES_TESTING=1 \
   PATH="$home/fake-bin:/usr/bin:/bin" bash -c '
     set -Eeuo pipefail
     source "$DOTFILES_DIR/lib/common.sh"
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [agents]=framework [herdr]=framework)
     run_controlled_bash() {
       HOME="$HOME" PATH="$HOME/fake-bin:/usr/bin:/bin" DOTFILES_BASH_CONTROLLED_VALIDATION=1 \
         DOTFILES_BASH_VALIDATE_OWNERSHIP=0 DOTFILES_BASH_VALIDATION_ROOT="'$COMMON_ROOT'" \
@@ -863,21 +863,21 @@ mkdir "$home"
 install_network_sentinels "$home"
 run_bash_area "$home" generic apply
 PATH="$home/fake-bin:/usr/bin:/bin" run_network_isolated env HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" \
-  DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-matrix-test SELECTED_PROFILE=generic MODE=remove bash -c '
+  DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=shell-test SELECTED_PROFILE=generic MODE=remove bash -c '
     set -Eeuo pipefail
     source "$DOTFILES_DIR/lib/common.sh"
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [agents]=framework [herdr]=framework)
     remove_bash
   '
 [[ ! -e "$home/network-attempted" ]] || fail 'Bash removal invoked a network sentinel'
 pass
 
 # ---------------------------------------------------------------------------
-# zsh sections (from stage6_shell_test.sh)
+# zsh sections
 # ---------------------------------------------------------------------------
 
 make_zsh_area_fixture() {
@@ -898,10 +898,10 @@ make_zsh_area_fixture() {
   jq -cn --arg home "$home" --arg root "$old" '
     {schema_version:1,hosts:[{id:"zsh-fixture",status:"reviewed",home:$home,checkout_root:$root,
       platform:"fixture",scan_scope:"fixture",records:[
-        [".p10k.zsh",".p10k.zsh","zsh","tracked","replace-stage-6"],
-        [".zsh_aliases",".zsh_aliases","zsh","tracked","replace-stage-6"],
-        [".zsh_aliases.local",".zsh_aliases.local","zsh","ignored","migrate-local-stage-6"],
-        [".zshrc",".zshrc","zsh","tracked","replace-stage-6"]],blockers:[]}]}' \
+        [".p10k.zsh",".p10k.zsh","zsh","tracked","retire-zsh-links"],
+        [".zsh_aliases",".zsh_aliases","zsh","tracked","retire-zsh-links"],
+        [".zsh_aliases.local",".zsh_aliases.local","zsh","ignored","migrate-zsh-local-alias"],
+        [".zshrc",".zshrc","zsh","tracked","retire-zsh-links"]],blockers:[]}]}' \
     > "$checkout/manifests/legacy-links.json"
   ln -s "$old/.zshrc" "$home/.zshrc"
   relative="$(realpath -m --relative-to="$home" -- "$old/.zsh_aliases")"
@@ -933,7 +933,7 @@ run_zsh_area_fixture() {
   [[ "$operation" != remove ]] || mode=remove
   [[ "$operation" != check ]] || mode=check
   HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$checkout" DOTFILES_DIR="$checkout" \
-    SCRIPT_NAME=stage6-shell-test SELECTED_PROFILE=generic MODE="$mode" SHELL=/usr/bin/zsh \
+    SCRIPT_NAME=shell-test SELECTED_PROFILE=generic MODE="$mode" SHELL=/usr/bin/zsh \
     DOTFILES_TESTING=1 DOTFILES_TEST_FAIL_AT="$fail_at" DOTFILES_TEST_HOLD_AT="$hold_at" \
     DOTFILES_TEST_HOLD_DIR="$hold_dir" PATH="$home/fake-bin:/usr/bin:/bin" \
     bash -c '
@@ -941,8 +941,8 @@ run_zsh_area_fixture() {
       source "'$REPO_DIR'/lib/common.sh"
       source "'$REPO_DIR'/lib/engine.sh"
       source "'$REPO_DIR'/lib/areas/zsh.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [agents]=framework [herdr]=framework)
       if [[ "$MODE" == remove ]]; then
         remove_zsh
       elif [[ "$MODE" == check ]]; then
@@ -1236,7 +1236,7 @@ race_home="$TEST_ROOT/backup-race-home"
 race_hold="$TEST_ROOT/backup-race-hold"
 mkdir -p "$race_home/backups" "$race_hold"
 printf 'source bytes\n' > "$race_home/source"
-HOME="$race_home" TARGET_ROOT="$race_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage6-shell-test \
+HOME="$race_home" TARGET_ROOT="$race_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=shell-test \
   DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=before-atomic-rename DOTFILES_TEST_HOLD_DIR="$race_hold" \
   bash -c '
     set -Eeuo pipefail
@@ -1519,15 +1519,16 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Ready-area gating sections (from stage6_ready_test.sh)
+# Ready-area gating sections
 # ---------------------------------------------------------------------------
 
-# Production areas.tsv now marks all five areas ready; this fixture deliberately
-# reconstructs a mixed-readiness world (tmux and nvim back to framework) so the
+# Production areas.tsv marks all areas ready; this fixture deliberately
+# reconstructs a mixed-readiness world (tmux, nvim, and Herdr back to framework) so the
 # ready-area gating mechanism itself stays covered.
 READY_REPO="$(copy_repo_fixture ready)"
 set_area_status "$READY_REPO" tmux framework
 set_area_status "$READY_REPO" nvim framework
+set_area_status "$READY_REPO" herdr framework
 
 home="$TEST_ROOT/home"
 host="$TEST_ROOT/host"

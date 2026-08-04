@@ -9,8 +9,16 @@ Code and manifests are the source of truth; docs explain intent and stay terse. 
   packages, and never changes the login shell.
 - Ordinary apply and check stay offline; only an explicit `--provision` may
   fetch, and only from its checksum-locked plan.
-- Run `tests/bootstrap_test.sh` before committing changes to `bootstrap.sh`,
-  `lib/`, or `packages/`.
+
+## Testing
+
+- Prefer the smallest relevant suites during development and for isolated area
+  changes; use the routing table in `tests/README.md`.
+- Run `tests/run.sh` before committing cross-cutting changes: `bootstrap.sh`,
+  shared deployment/provisioning code, test infrastructure, shared schemas or
+  topology, upstream refreshes, or changes spanning several areas.
+- An isolated area change needs `tests/contract_test.sh` and its area suite;
+  the full suite is not required unless the change widens beyond that area.
 
 ## Layout
 

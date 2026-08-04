@@ -40,7 +40,7 @@ Sync does not take the artifact from the proposal — `preserve_artifacts` copie
 1. Update the constants block near the top of `scripts/upstream`: `LAZY_LOCK_RELEASE`, `LAZY_LOCK_SHA256`, `NVIM_EVIDENCE_DIR`, `STABLE_DB_SHA256`, `PACKAGE_SHA256`, `SIGNATURE_SHA256` (`SIGNING_KEY_SHA256` only if the key rotated), plus the version-bearing literals inside `verify_nvim_artifact_evidence` (package filename greps, `pkgver = …`, `pkgbuild_sha256sum = …`). A global sed of old→new hash/version pairs covers all of it.
 2. Copy the newly extracted `lazy-lock.json` over `packages/upstream/nvim/.config/nvim/lazy-lock.json` (mode 0644).
 3. Hand-edit the `artifacts[0]` record in `manifests/sources.json` (release, sha256, provenance artifact/artifact_sha256/build_date/extracted/record).
-4. If the starter pin moved, also recompute the two `stage8-nvim-policy-v1` transform output blobs (`NVIM_INIT_POLICY_BLOB`, `NVIM_LAZY_POLICY_BLOB`).
+4. If the starter pin moved, also recompute the two `nvim-offline-bootstrap-policy` transform output blobs (`NVIM_INIT_POLICY_BLOB`, `NVIM_LAZY_POLICY_BLOB`).
 
 ## 5. Propose and sync
 
@@ -50,11 +50,11 @@ Sync does not take the artifact from the proposal — `preserve_artifacts` copie
 
 ## 6. Propagate and validate
 
-- Grep the repo for the old identities (release tags, package versions, commits, artifact hashes). Expect hits in: `tests/upstream_test.sh`, `tests/upstream_all_test.sh`, `tests/upstream_sync_test.sh` (baseline-drift assertions mirror the script constants and expected pin/artifact records — the same sed mapping applies, plus the proposal path in the proposal-drift assertion), `docs/upstream.md` (Active Pins, narrative, references), `artifacts/README.md`, and stage-history docs. `check_omarchy_core_drift` and `check_omarchy_neovim_drift` read `manifests/sources.json`, so they self-update.
+- Grep the repo for the old identities (release tags, package versions, commits, artifact hashes). Expect hits in `tests/upstream_test.sh` (baseline-drift assertions mirror the script constants and expected pin/artifact records — the same sed mapping applies, plus the proposal path in the proposal-drift assertion), `docs/upstream.md` (Active Pins, narrative, references), `artifacts/README.md`, and prior proposal records. `check_omarchy_core_drift` and `check_omarchy_neovim_drift` read `manifests/sources.json`, so they self-update.
 - Leave superseded proposal files untouched; they are the decision record.
-- Run `tests/bootstrap_test.sh` (required before committing changes under `lib/`, `packages/`, or `bootstrap.sh`). `tests/upstream_all_test.sh` is the opt-in deeper gate.
+- Run `tests/upstream_test.sh` while iterating, then `tests/run.sh`; a baseline refresh is cross-cutting under `tests/README.md`.
 - Live-validate affected areas separately from sync: per-area `--check`, apply where drift is expected (a changed deployed baseline needs reapply on generic/WSL hosts; native Omarchy areas only attach to native files, so usually just the drift warnings clear). On generic/WSL a changed `lazy-lock.json` makes Neovim `--check` report a stale restore marker until an explicit `nvim-restore` run with connectivity.
 
 ## Update log
 
-- 2026-07-28: v3.8.3 → v3.8.4 and omarchy-nvim 2026.6.17-1 → 2026.7.17-1. Core diff was empty for all tracked paths (pin-metadata-only). Overlay changed `remote_clipboard.lua` (OSC-52/tmux rewrite) and `omarchy-theme-hotreload.lua` (reload fix); PKGBUILD appended lines and starter checksum unchanged, so the starter commit pin carried over. Found and fixed a sync bug: `preserve_framework_markers` dropped `packages/upstream/nvim/.stow-local-ignore` because it only preserved markers for package roots absent from the candidate. Also retargeted `check_omarchy_neovim_drift` from the superseded Stage 8 proposal file to the manifest artifact release.
+- 2026-07-28: v3.8.3 → v3.8.4 and omarchy-nvim 2026.6.17-1 → 2026.7.17-1. Core diff was empty for all tracked paths (pin-metadata-only). Overlay changed `remote_clipboard.lua` (OSC-52/tmux rewrite) and `omarchy-theme-hotreload.lua` (reload fix); PKGBUILD appended lines and starter checksum unchanged, so the starter commit pin carried over. Found and fixed a sync bug: `preserve_framework_markers` dropped `packages/upstream/nvim/.stow-local-ignore` because it only preserved markers for package roots absent from the candidate. Also retargeted `check_omarchy_neovim_drift` from the superseded `manifests/proposals/2026-07-20-neovim-stability.json` proposal to the manifest artifact release.

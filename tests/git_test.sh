@@ -10,8 +10,8 @@ unset XDG_CONFIG_HOME GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
 # Some groups assert these identity strings verbatim in deployed files.
-TEST_GIT_USER_NAME='Stage Two User'
-TEST_GIT_USER_EMAIL='stage2@example.com'
+TEST_GIT_USER_NAME='Git Fixture User'
+TEST_GIT_USER_EMAIL='git-fixture@example.com'
 # These tests target Git behavior; later default-ready areas must not widen a
 # run, so capture appends --area git unless a test selects areas explicitly.
 CAPTURE_DEFAULT_AREA=git
@@ -73,7 +73,7 @@ fi
 assert_contains "$TEST_OUTPUT" 'unsupported host'
 pass
 
-# Stage 2 CLI and deduplication.
+# Git CLI and deduplication.
 home="$(new_home cli)"
 expect_success "$home" "$wsl_host" "$BOOTSTRAP" --check --area git --area git
 expect_failure 'invalid profile' "$home" "$wsl_host" "$BOOTSTRAP" --check --profile Generic
@@ -85,13 +85,22 @@ pass
 home="$(new_home check-clean)"
 expect_success "$home" "$wsl_host" "$BOOTSTRAP" --check
 assert_empty_home "$home"
+shared_hold="$TEST_ROOT/shared-lock-hold"
+mkdir "$shared_hold"
 (
   exec {fd}<"$home"
   flock --shared "$fd"
-  sleep 2
+  : > "$shared_hold/ready"
+  for ((attempt=0; attempt<1500; attempt++)); do
+    [[ ! -e "$shared_hold/release" ]] || exit 0
+    sleep 0.01
+  done
+  exit 1
 ) &
 lock_pid=$!
+wait_for_file "$shared_hold/ready"
 expect_success "$home" "$wsl_host" "$BOOTSTRAP" --check
+: > "$shared_hold/release"
 wait "$lock_pid"
 assert_empty_home "$home"
 pass
@@ -226,7 +235,7 @@ pass
 # Package traversal, missing roots, and duplicate targets are rejected before Stow.
 fixture="$TEST_ROOT/package-fixture"
 mkdir "$fixture"
-cp -a "$REPO_DIR/." "$fixture/"
+cp -a --reflink=auto "$REPO_DIR/." "$fixture/"
 home="$(new_home package-errors)"
 printf '# area closure\ngit ../git\n' > "$fixture/profiles/wsl.conf"
 expect_failure 'invalid qualified package ID' "$home" "$wsl_host" "$fixture/bootstrap.sh" --check
@@ -242,7 +251,7 @@ pass
 # Legacy absolute links migrate safely, preserving credential resets and dropping autostash.
 fixture="$TEST_ROOT/legacy-fixture"
 mkdir "$fixture"
-cp -a "$REPO_DIR/." "$fixture/"
+cp -a --reflink=auto "$REPO_DIR/." "$fixture/"
 printf '[user]\n\tname = Legacy User\n\temail = legacy@example.com\n' > "$fixture/.gitconfig.local"
 helper="$TEST_ROOT/fake-credential-helper"
 cat > "$helper" <<'EOF'
@@ -301,7 +310,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.headers.get("Authorization") != expected:
             self.send_response(401)
-            self.send_header("WWW-Authenticate", 'Basic realm="stage2"')
+            self.send_header("WWW-Authenticate", 'Basic realm="git-fixture"')
             self.end_headers()
             return
         super().do_GET()
@@ -335,7 +344,7 @@ pass
 # Known relative legacy links are accepted with the same exact ownership checks.
 fixture="$TEST_ROOT/relative-legacy-fixture"
 mkdir "$fixture"
-cp -a "$REPO_DIR/." "$fixture/"
+cp -a --reflink=auto "$REPO_DIR/." "$fixture/"
 printf '[user]\n\tname = Relative User\n\temail = relative@example.com\n' > "$fixture/.gitconfig.local"
 home="$fixture/test-home"
 mkdir "$home"
@@ -369,7 +378,7 @@ home="$(new_home identity-placeholder)"
 cp "$REPO_DIR/.gitconfig.local.example" "$home/.gitconfig.local"
 expect_success "$home" "$wsl_host" "$BOOTSTRAP"
 [[ "$(git config --file "$home/.gitconfig.local" --get-all user.name | wc -l)" == 1 ]] || fail 'placeholder name was duplicated'
-[[ "$(git config --file "$home/.gitconfig.local" --get user.name)" == 'Stage Two User' ]] || fail 'placeholder name was not replaced'
+[[ "$(git config --file "$home/.gitconfig.local" --get user.name)" == 'Git Fixture User' ]] || fail 'placeholder name was not replaced'
 pass
 
 # Guarded regular-file preservation, malformed markers, and exact block removal.
@@ -428,7 +437,7 @@ pass
 # Existing central local files are not modified and must contain migration values.
 fixture="$TEST_ROOT/local-fixture"
 mkdir "$fixture"
-cp -a "$REPO_DIR/." "$fixture/"
+cp -a --reflink=auto "$REPO_DIR/." "$fixture/"
 printf '[user]\n\tname = Legacy\n\temail = legacy@example.com\n' > "$fixture/.gitconfig.local"
 home="$(new_home local-conflict)"
 mkdir -p "$home/.config/dotfiles/local"
@@ -442,14 +451,22 @@ pass
 
 # Lock contention is nonblocking and exclusive for mutation.
 home="$(new_home lock)"
+exclusive_hold="$TEST_ROOT/exclusive-lock-hold"
+mkdir "$exclusive_hold"
 (
   exec {fd}<"$home"
   flock --exclusive "$fd"
-  sleep 2
+  : > "$exclusive_hold/ready"
+  for ((attempt=0; attempt<1500; attempt++)); do
+    [[ ! -e "$exclusive_hold/release" ]] || exit 0
+    sleep 0.01
+  done
+  exit 1
 ) &
 lock_pid=$!
-sleep 0.2
+wait_for_file "$exclusive_hold/ready"
 expect_failure 'HOME lock' "$home" "$wsl_host" "$BOOTSTRAP"
+: > "$exclusive_hold/release"
 wait "$lock_pid"
 assert_empty_home "$home"
 pass
@@ -472,7 +489,7 @@ pass
 # Guarded global replacement remains old or new, never partially written.
 fixture="$TEST_ROOT/atomic-fixture"
 mkdir "$fixture"
-cp -a "$REPO_DIR/." "$fixture/"
+cp -a --reflink=auto "$REPO_DIR/." "$fixture/"
 printf '[user]\n\tname = Atomic User\n\temail = atomic@example.com\n' > "$fixture/.gitconfig.local"
 home="$(new_home atomic-replacement)"
 ln -s "$fixture/.gitconfig" "$home/.gitconfig"
@@ -515,7 +532,7 @@ pass
 # A moved checkout is reconciled from recorded lexical and resolved ownership.
 move_root="$TEST_ROOT/move"
 mkdir "$move_root"
-cp -a "$REPO_DIR/." "$move_root/repo-one"
+cp -a --reflink=auto "$REPO_DIR/." "$move_root/repo-one"
 home="$(new_home moved-checkout)"
 expect_success "$home" "$wsl_host" "$move_root/repo-one/bootstrap.sh"
 cp -a "$move_root/repo-one" "$move_root/repo-two"
@@ -526,7 +543,7 @@ chmod 0555 "$readonly_tmp"
 state_hash="$(sha256sum "$home/.local/state/dotfiles/v1/git.json")"
 old_link="$(readlink -- "$home/.config/git/config")"
 if ! TEST_OUTPUT="$(TMPDIR="$readonly_tmp" HOME="$home" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$wsl_host" \
-  GIT_USER_NAME='Stage Two User' GIT_USER_EMAIL=stage2@example.com "$move_root/repo-two/bootstrap.sh" --check --area git 2>&1)"; then
+  GIT_USER_NAME='Git Fixture User' GIT_USER_EMAIL=git-fixture@example.com "$move_root/repo-two/bootstrap.sh" --check --area git 2>&1)"; then
   fail 'moved-checkout check failed without a writable temporary directory'
 fi
 [[ -z "$(find "$readonly_tmp" -mindepth 1 -print -quit)" ]] || fail 'moved-checkout check mutated TMPDIR'

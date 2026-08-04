@@ -17,7 +17,8 @@
 This configuration deliberately does not:
 
 - Reproduce Hyprland, Waybar, wallpaper, hardware, or other desktop setup.
-- Preserve the current Kickstart Neovim configuration.
+- Restore the retired Kickstart Neovim configuration to current HEAD; it is
+  retained in Git history.
 - Import existing zsh aliases, keybindings, or functions into Bash.
 - Keep every current tmux binding.
 - Make package installations byte-identical across platforms.
@@ -64,6 +65,7 @@ tmux is a deliberate three-layer physical design with no host-local layer. Gener
 ~/dotfiles/                    Git checkout by convention
 ~/.config/dotfiles/            Active configuration fragments
 ~/.config/dotfiles/local/      Untracked host-local fragments
+~/.agents/                     Shared instructions and agent skills
 ~/.local/state/dotfiles/       Applied profile and package state
 ```
 
@@ -130,10 +132,12 @@ The default areas are:
 - tmux
 - Neovim
 - Transitional zsh configuration
+- Shared agent instructions and pinned skills
+- Herdr terminal workspace configuration
 
 No `--area` selection means all default areas, except that default selection skips the transitional zsh area when zsh is not installed and has never been deployed on the host; explicit `--area zsh` still requires it. Repeated `--area` options select only those areas. Omitting a previously deployed area does not remove it. A conflict in one selected area must not prevent an unrelated area from being deployed independently.
 
-The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected. Neovim readiness covers generic, WSL, and native Omarchy; the native personal loader is implemented as a guarded attachment.
+The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, transitional zsh, agents, and Herdr are ready and default-selected. Neovim readiness covers generic, WSL, and native Omarchy; the native personal loader is implemented as a guarded attachment.
 
 ## Ownership Boundaries
 
@@ -152,8 +156,9 @@ The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neo
   tools, rather than inventing bespoke installers.
 - Projects retain higher precedence through their own mise and tool files.
   Vite+ is project-owned through those files and has no global bootstrap owner.
-- OpenCode and `opencode-openai-codex-auth` remain host-owned and untouched,
-  pending a separately reviewed later lifecycle and preservation proof.
+- OpenCode and `opencode-openai-codex-auth` remain host-owned except for the
+  agents area's global instruction link; configuration, plugins, credentials,
+  sessions, executable ownership, and authentication remain untouched.
 
 Executable ownership checks cover inherited exported functions, candidates on bootstrap's effective `PATH`, mise resolution from neutral and controlled project directories, and a controlled managed interactive Bash that can observe aliases and non-exported functions without executing rejected objects. Unexported aliases and functions in an arbitrary parent shell are not inherited; bootstrap does not parse unrelated startup files in an attempt to infer them.
 

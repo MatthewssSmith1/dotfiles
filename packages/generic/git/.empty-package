@@ -1,1 +1,1 @@
-Placeholder keeping this framework package root non-empty until its payload stage.
+Keeps the generic Git package root present; profile-specific Git behavior requires no files.

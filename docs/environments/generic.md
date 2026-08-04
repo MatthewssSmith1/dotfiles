@@ -2,11 +2,11 @@
 
 ## Status
 
-This document describes the current shell and Git behavior plus later migration stages. The repository README remains authoritative for area readiness.
+This document describes current generic-profile behavior and validated environments. The repository README remains authoritative for area readiness.
 
 Notes for generic Linux hosts — Ubuntu 24.04 and newer is the primary target platform — including remote VPSs. These hosts will use the generic profile: pinned Omarchy baseline snapshots plus portability adapters. See [Architecture](../architecture.md).
 
-Bootstrap preserves existing regular Bash startup files rather than replacing them: a prepended managed `.bashrc` block runs the dispatcher and bypasses the preserved legacy remainder, while a state-stable login block uses the first existing `.bash_profile`, `.bash_login`, or `.profile`. Removal restores pre-existing bytes and modes exactly. The detailed attachment and load-order contract is in [Shell](../tools/shell.md). Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected.
+Bootstrap preserves existing regular Bash startup files rather than replacing them: a prepended managed `.bashrc` block runs the dispatcher and bypasses the preserved legacy remainder, while a state-stable login block uses the first existing `.bash_profile`, `.bash_login`, or `.profile`. Removal restores pre-existing bytes and modes exactly. The detailed attachment and load-order contract is in [Shell](../tools/shell.md). Git, Bash, tmux, Neovim, transitional zsh, agents, and [Herdr](../tools/herdr.md) are ready and default-selected.
 
 The tmux area uses `~/.config/tmux/tmux.conf` as an XDG dispatcher and keeps the byte-identical Omarchy baseline private at `~/.config/dotfiles/upstream/tmux/tmux.conf`. It then loads the generic adapter and common persistence, with no host-local layer. A fresh host provisions the locked runtime and plugin closure explicitly before configuration apply.
 
@@ -32,7 +32,7 @@ Ubuntu 24.04's tmux is older than the baseline target, so bootstrap uses the loc
 
 ## Network Expectations
 
-Network behavior is defined by the canonical [operation matrix](../deployment.md#operation-and-network-policy). In particular, `--check`, removal, Bash startup, and tmux startup are offline; `--check --provision` is also offline and non-mutating, and ordinary apply is configuration-only. Only explicit `--provision` apply may fetch its printed, locked runtime-tool plan. No-area provisioning selects Node, pnpm, Claude Code, Worktrunk, and platform foundations; area-scoped provisioning selects only dependencies for selected areas. Only `bootstrap.sh --provision --area tmux` may provision the exact locked tmux plugin closure; no-area provisioning selects the executable foundation but not plugins. The first explicit `nvim` launch may restore locked plugins under its separate lifecycle.
+Network behavior is defined by the canonical [operation matrix](../deployment.md#operation-and-network-policy). In particular, `--check`, removal, Bash startup, and tmux startup are offline; `--check --provision` is also offline and non-mutating, and ordinary apply is configuration-only. Only explicit `--provision` apply may fetch its printed, locked runtime-tool plan. No-area provisioning includes locked Herdr; `--provision --area herdr` selects it alone. Only `bootstrap.sh --provision --area tmux` may provision the exact locked tmux plugin closure. The first explicit `nvim` launch may restore locked plugins under its separate lifecycle.
 
 Managed Bash startup is always offline. The only shell-startup network exception is transitional zsh's first start when its Zinit entrypoint is absent; an initialized zsh startup is offline. Bootstrap never changes the login shell.
 
@@ -57,4 +57,4 @@ Acceptance covered:
 
 Ubuntu's AppArmor 4 policy had `kernel.apparmor_restrict_unprivileged_userns=1`, so the denied-network validation sandboxes required a persistent executable-scoped profile for `/usr/bin/unshare` with `flags=(unconfined) { userns, }`. This is narrower than disabling the kernel restriction globally, but applies to every caller of that executable rather than only this repository or account.
 
-This native VPS acceptance is distinct from the Ubuntu 24 WSL validation. It does not cover graphical applications, Wayland clipboard integration, local font rendering, terminal-client key translation, or native Omarchy package and refresh behavior. Native Omarchy acceptance remains deferred.
+This native VPS acceptance is distinct from the Ubuntu 24 WSL and native Omarchy validations. It does not cover graphical applications, Wayland clipboard integration, local font rendering, terminal-client key translation, or native Omarchy package and refresh behavior. Native Omarchy acceptance is recorded separately in [Omarchy](omarchy.md).

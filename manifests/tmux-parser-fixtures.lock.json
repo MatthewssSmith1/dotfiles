@@ -1,5 +1,5 @@
 {
-  "$schema": "../schemas/tmux-parser-fixture-lock-v1.schema.json",
+  "$schema": "../schemas/tmux-parser-fixture-lock.schema.json",
   "schema_version": 1,
   "managed_root": "tmux-parser-fixtures-v1",
   "extractor": ["dpkg-deb", "--extract"],

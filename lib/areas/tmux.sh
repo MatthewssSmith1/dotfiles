@@ -6,6 +6,8 @@ readonly TMUX_NATIVE_PATH='.config/tmux/tmux.conf'
 readonly TMUX_NATIVE_BEGIN='# >>> dotfiles tmux >>>'
 readonly TMUX_NATIVE_END='# <<< dotfiles tmux <<<'
 readonly TMUX_NATIVE_TOKEN='dotfiles tmux'
+readonly TMUX_PLUGIN_LOCK_PREDECESSOR_SHA='e57781006aad026ea338c2e2eca0ce642b4c1a92206da0d04c5a634a65ba1f0b'
+readonly TMUX_PLUGIN_LOCK_POINTER_MIGRATION_SHA='48e107c544482b735594b2490c479fbcb067df4904a59675ea18be6ed96b010b'
 readonly TMUX_NATIVE_BLOCK="$TMUX_NATIVE_BEGIN
 if-shell 'test -r \"\$HOME/.config/dotfiles/tmux/persistence.conf\"' \\
   'source-file \"\$HOME/.config/dotfiles/tmux/persistence.conf\"'
@@ -26,6 +28,7 @@ TMUX_ISOLATED_PROC_IDENTITY=""
 TMUX_PLUGIN_LOCK=""
 TMUX_PLUGIN_RECEIPT=""
 TMUX_PLUGIN_LOCK_SHA=""
+TMUX_PLUGIN_LOCK_MIGRATION_TARGET_SHA=""
 TMUX_PLUGIN_RECEIPT_IDENTITY=""
 TMUX_PLUGIN_PLAN_PENDING=false
 TMUX_PLUGIN_PLAN_REFUSED=false
@@ -115,7 +118,7 @@ validate_tmux_target_inventory() {
 
 validate_tmux_plugin_lock() {
   local lock="$DOTFILES_DIR/manifests/tmux-plugins.lock.json"
-  local schema="$DOTFILES_DIR/schemas/tmux-plugin-lock-v1.schema.json"
+  local schema="$DOTFILES_DIR/schemas/tmux-plugin-lock.schema.json"
   local persistence="$DOTFILES_DIR/packages/common/tmux/.config/dotfiles/tmux/persistence.conf"
   local line declaration
   local persistence_declarations=() lock_declarations=() persistence_hooks=() lock_hooks=()
@@ -124,7 +127,7 @@ validate_tmux_plugin_lock() {
   jq -e '
     type == "object" and
     keys == ["$schema","area","plugin_root","plugins","provision_command","resurrect_root","retained_paths","schema_version"] and
-    .["$schema"] == "../schemas/tmux-plugin-lock-v1.schema.json" and .schema_version == 1 and .area == "tmux" and
+    .["$schema"] == "../schemas/tmux-plugin-lock.schema.json" and .schema_version == 1 and .area == "tmux" and
     .plugin_root == ".tmux/plugins" and .resurrect_root == ".tmux/resurrect" and
     .provision_command == ["bootstrap.sh","--provision","--area","tmux"] and
     .retained_paths == [".tmux/plugins",".tmux/resurrect"] and
@@ -197,6 +200,12 @@ tmux_init_plugin_contract() {
   TMUX_PLUGIN_LOCK="$DOTFILES_DIR/manifests/tmux-plugins.lock.json"
   TMUX_PLUGIN_RECEIPT="$HOME/.local/state/dotfiles/provisioning/v1/tmux-plugins.json"
   TMUX_PLUGIN_LOCK_SHA="$(sha256_file "$TMUX_PLUGIN_LOCK")"
+  TMUX_PLUGIN_LOCK_MIGRATION_TARGET_SHA="$TMUX_PLUGIN_LOCK_POINTER_MIGRATION_SHA"
+  if [[ "${DOTFILES_TESTING:-}" == 1 && -n "${DOTFILES_TEST_TMUX_LOCK_MIGRATION_TARGET_SHA:-}" ]]; then
+    [[ "$DOTFILES_TEST_TMUX_LOCK_MIGRATION_TARGET_SHA" =~ ^[0-9a-f]{64}$ ]] || \
+      die 'DOTFILES_TEST_TMUX_LOCK_MIGRATION_TARGET_SHA must be a lowercase SHA-256'
+    TMUX_PLUGIN_LOCK_MIGRATION_TARGET_SHA="$DOTFILES_TEST_TMUX_LOCK_MIGRATION_TARGET_SHA"
+  fi
 }
 
 tmux_existing_home_chain_owned() {
@@ -214,7 +223,7 @@ tmux_existing_home_chain_owned() {
 }
 
 validate_tmux_plugin_receipt() {
-  local before after receipt_hash schema="$DOTFILES_DIR/schemas/tmux-plugin-receipt-v1.schema.json"
+  local before after receipt_hash schema="$DOTFILES_DIR/schemas/tmux-plugin-receipt.schema.json"
   tmux_init_plugin_contract
   [[ -f "$schema" && ! -L "$schema" ]] || die 'missing tmux plugin receipt schema'
   jq -e '.properties.schema_version.const == 1' "$schema" >/dev/null 2>&1 || \
@@ -246,7 +255,9 @@ validate_tmux_plugin_receipt() {
       ([.[].id] | unique | length) == length and ([.[].directory] | unique | length) == length)
   ' "$TMUX_PLUGIN_RECEIPT" >/dev/null || die 'malformed or newer tmux plugin receipt'
   receipt_hash="$(jq -r .lock_sha256 "$TMUX_PLUGIN_RECEIPT")"
-  if [[ "$receipt_hash" == "$TMUX_PLUGIN_LOCK_SHA" ]]; then
+  if [[ "$receipt_hash" == "$TMUX_PLUGIN_LOCK_SHA" ||
+    ( "$receipt_hash" == "$TMUX_PLUGIN_LOCK_PREDECESSOR_SHA" &&
+      "$TMUX_PLUGIN_LOCK_SHA" == "$TMUX_PLUGIN_LOCK_MIGRATION_TARGET_SHA" ) ]]; then
     jq -e --slurpfile lock "$TMUX_PLUGIN_LOCK" '
       (.plugins | map({id,repository,commit,directory})) ==
       ($lock[0].plugins | map({id,repository,commit,directory}))
@@ -1274,7 +1285,7 @@ preflight_tmux_xdg_migration() {
   local path="$HOME/$TMUX_LEGACY_PATH" source_present=false
   validate_home_parent_chain "$path"
   if [[ -L "$path" ]]; then
-    owned_legacy_link "$path" "$TMUX_LEGACY_PATH" "$TMUX_LEGACY_PATH" tmux replace-stage-7 || \
+    owned_legacy_link "$path" "$TMUX_LEGACY_PATH" "$TMUX_LEGACY_PATH" tmux migrate-tmux-xdg-config || \
       die "$path is not the exact reviewed legacy tmux link"
     TMUX_LEGACY_SOURCE="$OWNED_LEGACY_SOURCE"
     TMUX_LEGACY_FINGERPRINT="$(sha256_file "$TMUX_LEGACY_SOURCE")"
@@ -1347,7 +1358,7 @@ retire_tmux_legacy_link() {
   quarantine_expected_path "$path" "$TMUX_LEGACY_IDENTITY" 'reviewed legacy tmux link' || \
     die 'reviewed legacy tmux link changed before retirement'
   quarantine="$QUARANTINE_PATH"
-  owned_legacy_link "$quarantine" "$TMUX_LEGACY_PATH" "$TMUX_LEGACY_PATH" tmux replace-stage-7 || {
+  owned_legacy_link "$quarantine" "$TMUX_LEGACY_PATH" "$TMUX_LEGACY_PATH" tmux migrate-tmux-xdg-config || {
     if restore_quarantine_no_clobber "$quarantine" "$path"; then transaction_record_post_state "$path"; fi
     die 'quarantined legacy tmux link no longer has reviewed ownership'
   }

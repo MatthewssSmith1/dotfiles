@@ -22,6 +22,7 @@ PROVISION_INSTALL_LAUNCHER_QUARANTINE_IDENTITY=""
 PROVISION_INSTALL_RECEIPT_IDENTITY=""
 PROVISION_INSTALL_RECEIPT_QUARANTINE=""
 PROVISION_INSTALL_RECEIPT_QUARANTINE_IDENTITY=""
+PREFLIGHT_LAUNCHER_TAKEOVER=false
 
 provisioning_safe_path() {
   safe_relative_path "$1" && [[ "$1" != */ && "$1" != *//* ]]
@@ -163,17 +164,17 @@ cleanup_retained_provisioning_transaction() {
 }
 
 validate_provisioning_manifest() {
-  local schema="$DOTFILES_DIR/schemas/provisioning-manifest-v1.schema.json"
-  local proposal="$DOTFILES_DIR/manifests/proposals/2026-07-17-stage5-tool-pins.json"
+  local schema="$DOTFILES_DIR/schemas/provisioning-manifest.schema.json"
+  local proposal="$DOTFILES_DIR/manifests/proposals/2026-07-17-runtime-tool-provisioning.json"
   local value host url
   PROVISIONING_MANIFEST="$DOTFILES_DIR/manifests/provisioning.json"
   [[ -f "$schema" && ! -L "$schema" ]] || die 'missing provisioning manifest schema'
   [[ -f "$PROVISIONING_MANIFEST" && ! -L "$PROVISIONING_MANIFEST" ]] || die 'missing provisioning manifest'
-  [[ -f "$proposal" && ! -L "$proposal" ]] || die 'missing accepted Stage 5 pin proposal'
+  [[ -f "$proposal" && ! -L "$proposal" ]] || die 'missing accepted runtime-tool provisioning record'
   jq -e '.schema_version == 1 and .status == "accepted-for-preverified-link-installation" and
     .accepted_manifest == "manifests/provisioning.json" and
     (.previous_manifest_sha256s | type == "array" and unique == . and all(.[]; type == "string" and test("^[0-9a-f]{64}$")))' \
-    "$proposal" >/dev/null || die 'invalid accepted Stage 5 pin proposal'
+    "$proposal" >/dev/null || die 'invalid accepted runtime-tool provisioning record'
   jq -e '.type == "object" and .properties.schema_version.const == 1' "$schema" >/dev/null 2>&1 || \
     die 'invalid provisioning manifest schema'
   jq -e '
@@ -186,23 +187,32 @@ validate_provisioning_manifest() {
       (.maximum_version | type == "string" and test("^[0-9]+[.][0-9]+[.][0-9]+$"))) and
     (.tools | type == "array" and length > 0 and all(.[];
       type == "object" and
-       ((keys - ["areas","artifact","backend","commands","executable_identity","id","install_root","native_minimum","native_package","owner_policy","profiles","scope","version"]) | length == 0) and
+        ((keys - ["areas","artifact","backend","commands","executable_identity","id","install_root","native_minimum","native_package","owner_policy","profiles","scope","takeover_identity","version"]) | length == 0) and
       (["areas","artifact","backend","commands","id","install_root","owner_policy","profiles","scope","version"] - keys | length == 0) and
       (.id | type == "string" and test("^[a-z0-9-]+$")) and
       (.scope == "core" or .scope == "foundation") and
       (.areas | type == "array" and unique == . and all(.[]; type == "string" and test("^[a-z0-9-]+$"))) and
-      (.profiles | type == "array" and length > 0 and unique == . and all(.[]; . == "generic" or . == "wsl")) and
+       (.profiles | type == "array" and length > 0 and unique == . and all(.[]; . == "generic" or . == "wsl" or . == "omarchy")) and
+       (if (.profiles | index("omarchy")) != null then .id == "herdr" else true end) and
       (.owner_policy == "locked-mise" or .owner_policy == "native-or-locked-mise") and
       (if .owner_policy == "native-or-locked-mise" then
         (.native_minimum | type == "string") and (.native_package | type == "string" and test("^[a-z0-9+.-]+$"))
        else (has("native_minimum") | not) and (has("native_package") | not) end) and
       (.backend | type == "string" and test("^(core:[a-z0-9-]+|aqua:[a-z0-9._-]+/[a-z0-9._-]+)$")) and
        (.version | type == "string" and test("^[0-9][0-9A-Za-z.-]*$")) and
-       (if .id == "tmux" then
+       (if .id == "tmux" or has("takeover_identity") then
           (.executable_identity | type == "object" and keys == ["mode","sha256","size"] and
             .mode == "0755" and (.size | type == "number" and . > 0) and
             (.sha256 | type == "string" and test("^[0-9a-f]{64}$")))
-        else (has("executable_identity") | not) end) and
+         else (has("executable_identity") | not) end) and
+       (if has("takeover_identity") then
+          (.takeover_identity | type == "object" and keys == ["mode","policy","sha256","size"] and
+            .policy == "exact-launcher-binary" and .mode == "0775" and
+            (.size | type == "number" and . > 0) and
+            (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))) and
+          .owner_policy == "locked-mise" and .commands[0].protected == true and
+          (.commands[0].launcher | type == "string")
+        else true end) and
       (.commands | type == "array" and length == 1 and all(.[];
         type == "object" and keys == ["launcher","name","path","probe_args","protected","version_pattern"] and
         (.name | type == "string" and test("^[a-z0-9-]+$")) and
@@ -249,7 +259,7 @@ validate_provisioning_manifest() {
   done < <(jq -r '.tools[].areas[]' "$PROVISIONING_MANIFEST")
   if jq -er '[.tools[].id, .tools[].backend, .tools[].commands[].name] | join("\n") | test("(^|\n)(opencode|opencode-openai-codex-auth|vite\\+?)(\n|$)"; "i")' \
     "$PROVISIONING_MANIFEST" | grep -qx true; then
-    die 'provisioning manifest contains a Stage 5 excluded tool'
+    die 'provisioning manifest contains an excluded host-owned tool'
   fi
   PROVISIONING_MANIFEST_SHA="$(sha256_file "$PROVISIONING_MANIFEST")"
 }
@@ -291,7 +301,7 @@ validate_provisioning_receipt() {
   receipt_manifest="$(jq -r .manifest_sha256 "$PROVISIONING_RECEIPT")"
   if [[ "$receipt_manifest" != "$PROVISIONING_MANIFEST_SHA" ]]; then
     jq -e --arg hash "$receipt_manifest" '.previous_manifest_sha256s | index($hash) != null' \
-      "$DOTFILES_DIR/manifests/proposals/2026-07-17-stage5-tool-pins.json" >/dev/null 2>&1 || \
+      "$DOTFILES_DIR/manifests/proposals/2026-07-17-runtime-tool-provisioning.json" >/dev/null 2>&1 || \
       die 'provisioning receipt manifest identity is not accepted'
   fi
   while IFS= read -r value; do provisioning_safe_path "$value" || die "unsafe path in provisioning receipt: $value"; done < <(
@@ -613,10 +623,23 @@ receipt_launcher_hash() {
   jq -er --arg destination "$destination" '.launchers[] | select(.destination == $destination) | .content_sha256' "$PROVISIONING_RECEIPT" 2>/dev/null
 }
 
+launcher_matches_takeover_identity() {
+  local id="$1" destination="$2" mode size hash
+  jq -e --arg id "$id" '.tools[] | select(.id == $id) | has("takeover_identity")' \
+    "$PROVISIONING_MANIFEST" >/dev/null || return 1
+  [[ -f "$destination" && ! -L "$destination" && -x "$destination" && \
+    "$(stat -c %u -- "$destination")" == "$EUID" ]] || return 1
+  IFS=$'\t' read -r mode size hash < <(jq -r --arg id "$id" '.tools[] | select(.id == $id) |
+    [.takeover_identity.mode, (.takeover_identity.size | tostring), .takeover_identity.sha256] | @tsv' \
+    "$PROVISIONING_MANIFEST")
+  [[ "$(stat -c '0%a:%s' -- "$destination")" == "$mode:$size" && "$(sha256_file "$destination")" == "$hash" ]]
+}
+
 preflight_launcher() {
-  local destination_rel="$1" content="$2" destination old_hash current_hash
+  local id="$1" destination_rel="$2" content="$3" destination old_hash current_hash
   destination="$HOME/$destination_rel"
   PREFLIGHT_LAUNCHER_IDENTITY=""
+  PREFLIGHT_LAUNCHER_TAKEOVER=false
   validate_home_parent_chain "$destination"
   capture_path_identity "$destination" || { log "error: launcher destination changed during preflight: $destination"; return 1; }
   PREFLIGHT_LAUNCHER_IDENTITY="$PATH_IDENTITY"
@@ -625,7 +648,13 @@ preflight_launcher() {
   current_hash="$(sha256_file "$destination")"
   [[ "$current_hash" == "$(launcher_hash "$content")" ]] && return 0
   old_hash="$(receipt_launcher_hash "$destination_rel" || true)"
-  [[ -n "$old_hash" && "$current_hash" == "$old_hash" ]] || { log "error: unrelated launcher destination conflict: $destination"; return 1; }
+  [[ -n "$old_hash" && "$current_hash" == "$old_hash" ]] && return 0
+  if launcher_matches_takeover_identity "$id" "$destination"; then
+    PREFLIGHT_LAUNCHER_TAKEOVER=true
+    return 0
+  fi
+  log "error: unrelated launcher destination conflict: $destination"
+  return 1
 }
 
 tool_receipt_valid() {
@@ -662,6 +691,9 @@ tool_receipt_valid() {
 
 native_tool_suitable() {
   local id="$1" name args pattern minimum package path resolved output version owner
+  if [[ "${DOTFILES_TESTING:-}" == 1 && "${DOTFILES_TEST_NATIVE_TOOL_UNSUITABLE:-}" == "$id" ]]; then
+    return 1
+  fi
   [[ "$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .owner_policy' "$PROVISIONING_MANIFEST")" == native-or-locked-mise ]] || return 1
   name="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .commands[0].name' "$PROVISIONING_MANIFEST")"
   ! declare -F "$name" >/dev/null || return 1
@@ -751,7 +783,7 @@ provision_tool_status() {
 }
 
 print_provisioning_plan() {
-  local id installed=missing status
+  local id installed=missing status root executable launcher content
   log 'provisioning network plan (no download has started):'
   if ((${#PROVISION_TOOL_IDS[@]} == 0)); then
     log 'no runtime-tool network actions are selected'
@@ -770,7 +802,18 @@ print_provisioning_plan() {
     if provision_tool_status "$id"; then
       continue
     fi
-    jq -r --arg id "$id" '.tools[] | select(.id == $id) | "  " + .id + ": target=" + .version + " backend=" + .backend + " artifact=" + .artifact.url + " origins=" + (.artifact.allowed_origins | join(",")) + " root=~/" + .install_root' "$PROVISIONING_MANIFEST"
+    root="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .install_root' "$PROVISIONING_MANIFEST")"
+    executable="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .artifact.executable' "$PROVISIONING_MANIFEST")"
+    launcher="$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .commands[0].launcher // empty' "$PROVISIONING_MANIFEST")"
+    if [[ -n "$launcher" ]]; then
+      content="$(launcher_content "$HOME/$root/$executable")"
+      preflight_launcher "$id" "$launcher" "$content" || return 1
+    fi
+    if [[ "$PREFLIGHT_LAUNCHER_TAKEOVER" == true ]]; then
+      jq -r --arg id "$id" '.tools[] | select(.id == $id) | "  " + .id + ": target=" + .version + " backend=" + .backend + " source=exact-existing-launcher root=~/" + .install_root' "$PROVISIONING_MANIFEST"
+    else
+      jq -r --arg id "$id" '.tools[] | select(.id == $id) | "  " + .id + ": target=" + .version + " backend=" + .backend + " artifact=" + .artifact.url + " origins=" + (.artifact.allowed_origins | join(",")) + " root=~/" + .install_root' "$PROVISIONING_MANIFEST"
+    fi
   done
 }
 
@@ -1061,7 +1104,7 @@ install_locked_tool() {
     [[ -n "$launcher" ]] || return 0
     content="$(launcher_content "$root/$executable")"
     launcher_hash_value="$(launcher_hash "$content")"
-    preflight_launcher "$launcher" "$content" || die "launcher ownership preflight failed for $id"
+    preflight_launcher "$id" "$launcher" "$content" || die "launcher ownership preflight failed for $id"
     reset_retained_provisioning_transaction
     install_transaction_launcher "$launcher" "$content"
     fault provisioning-tool-after-launcher
@@ -1084,7 +1127,7 @@ install_locked_tool() {
   if [[ -n "$launcher" ]]; then
     content="$(launcher_content "$root/$executable")"
     launcher_hash_value="$(launcher_hash "$content")"
-    preflight_launcher "$launcher" "$content" || die "launcher ownership preflight failed for $id"
+    preflight_launcher "$id" "$launcher" "$content" || die "launcher ownership preflight failed for $id"
   fi
   link_path="$(mise_link_path "$backend" "$version")"
   if [[ -e "$link_path" || -L "$link_path" ]]; then
@@ -1093,10 +1136,18 @@ install_locked_tool() {
   fi
   ensure_directory "$parent"
   reset_retained_provisioning_transaction
-  archive="$(mktemp "$parent/.$id-download.XXXXXX")"; track_temp_path "$archive"
-  download_locked_artifact "$id" "$artifact" "$archive"
   stage="$(mktemp -d "$parent/.$id-install.XXXXXX")"; track_temp_path "$stage"
-  extract_locked_artifact "$artifact" "$archive" "$stage/root"
+  if [[ "$PREFLIGHT_LAUNCHER_TAKEOVER" == true ]]; then
+    launcher_matches_takeover_identity "$id" "$HOME/$launcher" || \
+      die "exact launcher predecessor changed before staging for $id"
+    mkdir "$stage/root"
+    cp -- "$HOME/$launcher" "$stage/root/$executable"
+    chmod 0755 "$stage/root/$executable"
+  else
+    archive="$(mktemp "$parent/.$id-download.XXXXXX")"; track_temp_path "$archive"
+    download_locked_artifact "$id" "$artifact" "$archive"
+    extract_locked_artifact "$artifact" "$archive" "$stage/root"
+  fi
   if jq -e --arg id "$id" '.tools[] | select(.id == $id) | has("executable_identity")' \
     "$PROVISIONING_MANIFEST" >/dev/null; then
     local expected_mode expected_size expected_sha
@@ -1111,6 +1162,10 @@ install_locked_tool() {
   provisioning_path_tree_identity "$stage/root" || die "staged retained install identity is unreadable for $id"
   staged_identity="$PROVISIONING_TREE_IDENTITY"
   test_hold provisioning-tool-after-staging
+  if [[ "$PREFLIGHT_LAUNCHER_TAKEOVER" == true ]]; then
+    launcher_matches_takeover_identity "$id" "$HOME/$launcher" || \
+      die "exact launcher predecessor changed after staging for $id"
+  fi
   require_expected_pre_state "$root" "$root_start_identity" 'retained install destination'
   mv -nT -- "$stage/root" "$root" 2>/dev/null || die "retained install could not be installed without clobber for $id"
   [[ ! -e "$stage/root" && ! -L "$stage/root" && -d "$root" && ! -L "$root" ]] || \
@@ -1152,7 +1207,6 @@ run_provisioning() {
   local plan_printed="${1:-false}" id overall=0 status
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     check_omarchy_neovim_drift
-    return
   fi
   if ((${#PROVISION_TOOL_IDS[@]} == 0)); then
     log 'no retained tools are mapped to the selected areas'
@@ -1168,7 +1222,10 @@ run_provisioning() {
     if ((status != 2)); then
       case "$status" in 70|130|143) return "$status" ;; *) return 1 ;; esac
     fi
-    if [[ "$MODE" == check ]]; then
+    if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+      log 'error: native Omarchy mise is required for locked Herdr provisioning'
+      overall=1
+    elif [[ "$MODE" == check ]]; then
       overall=1
     else
       install_mise

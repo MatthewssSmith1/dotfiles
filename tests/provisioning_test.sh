@@ -8,11 +8,13 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 host="$(make_host provisioning linux)"
 
 fixture="$(copy_repo_fixture provisioning)"
-# Stage 5 exercises provisioning independently of later default-ready areas.
+# Provisioning is exercised independently of default-ready areas.
 set_area_status "$fixture" bash framework
 set_area_status "$fixture" tmux framework
 set_area_status "$fixture" nvim framework
 set_area_status "$fixture" zsh framework
+set_area_status "$fixture" agents framework
+set_area_status "$fixture" herdr framework
 
 mise_artifact="$TEST_ROOT/mise-artifact"
 tool_artifact="$TEST_ROOT/starship-artifact"
@@ -108,7 +110,7 @@ invoke_fixture() {
     XDG_STATE_HOME="$home/.local/state" XDG_CACHE_HOME="$home/.cache" \
     PATH="$home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
     DOTFILES_TEST_HOST_ROOT="$host" FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" \
-    GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' "$fixture/bootstrap.sh" "$@"
+    GIT_USER_NAME='Provisioning Fixture User' GIT_USER_EMAIL='provisioning-fixture@example.com' "$fixture/bootstrap.sh" "$@"
 }
 capture() {
   local home="$1"; shift
@@ -121,6 +123,14 @@ capture() {
 # The active lock is strict JSON and excludes deferred tools.
 jq -e '.schema_version == 1 and ([.tools[].id] | index("opencode") == null) and ([.tools[].id] | index("vite+") == null)' \
   "$REPO_DIR/manifests/provisioning.json" >/dev/null || fail 'active provisioning lock is invalid'
+jq -e '
+  .tools[] | select(.id == "herdr") |
+  .version == "0.7.5" and .backend == "aqua:herdrdev/herdr" and
+  .profiles == ["generic","omarchy","wsl"] and .areas == ["herdr"] and
+  .artifact.sha256 == "3dc83288073e4c2d3c679a30e7be97bcca9141c6fd17dbbb9219142e95c59253" and
+  .executable_identity == {mode:"0755",size:21315048,sha256:"3dc83288073e4c2d3c679a30e7be97bcca9141c6fd17dbbb9219142e95c59253"} and
+  .takeover_identity == {policy:"exact-launcher-binary",mode:"0775",size:21315048,sha256:"3dc83288073e4c2d3c679a30e7be97bcca9141c6fd17dbbb9219142e95c59253"}
+' "$REPO_DIR/manifests/provisioning.json" >/dev/null || fail 'active Herdr provisioning lock is invalid'
 pass
 
 # Mise stores core backend links under the canonical tool name.
@@ -128,6 +138,77 @@ core_link="$(HOME="$TEST_ROOT/core-link-home" DOTFILES_DIR="$REPO_DIR" bash -c \
   'source "$DOTFILES_DIR/lib/provisioning.sh"; mise_link_path core:node 24.18.0')"
 [[ "$core_link" == "$TEST_ROOT/core-link-home/.local/share/mise/installs/node/24.18.0" ]] || \
   fail 'core mise backend path was not canonicalized'
+pass
+
+# Exact Herdr predecessor adoption is offline and transactional; near matches refuse.
+takeover_fixture="$(copy_repo_fixture herdr-takeover)"
+for area in git bash tmux nvim zsh agents; do set_area_status "$takeover_fixture" "$area" framework; done
+set_area_status "$takeover_fixture" herdr ready
+takeover_artifact="$TEST_ROOT/herdr-takeover-artifact"
+cat > "$takeover_artifact" <<'SCRIPT'
+#!/usr/bin/env bash
+case "${1:-}" in
+  --version) printf 'herdr 0.7.5\n' ;;
+  config) [[ "${2:-}" == check ]] ;;
+  *) exit 1 ;;
+esac
+SCRIPT
+chmod 0755 "$takeover_artifact"
+takeover_hash="$(sha256sum "$takeover_artifact" | cut -d' ' -f1)"
+takeover_size="$(stat -c %s -- "$takeover_artifact")"
+jq --arg hash "$takeover_hash" --argjson size "$takeover_size" '
+  .tools=[.tools[] | select(.id == "herdr")] |
+  .tools[0].artifact.url="https://fixtures.invalid/herdr" |
+  .tools[0].artifact.sha256=$hash |
+  .tools[0].artifact.inventory_sha256=$hash |
+  .tools[0].artifact.allowed_origins=["fixtures.invalid"] |
+  .tools[0].executable_identity={mode:"0755",size:$size,sha256:$hash} |
+  .tools[0].takeover_identity={policy:"exact-launcher-binary",mode:"0775",size:$size,sha256:$hash}
+' "$takeover_fixture/manifests/provisioning.json" > "$takeover_fixture/manifests/provisioning.json.new"
+mv "$takeover_fixture/manifests/provisioning.json.new" "$takeover_fixture/manifests/provisioning.json"
+
+invoke_takeover() {
+  local takeover_home="$1"; shift
+  HOME="$takeover_home" XDG_CONFIG_HOME="$takeover_home/.config" XDG_DATA_HOME="$takeover_home/.local/share" \
+    XDG_STATE_HOME="$takeover_home/.local/state" XDG_CACHE_HOME="$takeover_home/.cache" \
+    PATH="$takeover_home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 \
+    DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_HOST_ROOT="$host" FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" \
+    GIT_USER_NAME='Provisioning Fixture User' GIT_USER_EMAIL='provisioning-fixture@example.com' \
+    "$takeover_fixture/bootstrap.sh" --profile generic --area herdr "$@"
+}
+
+takeover_home="$(new_home herdr-takeover)"
+mkdir -p "$takeover_home/.local/bin"
+cp "$mise_artifact" "$takeover_home/.local/bin/mise"; chmod 0755 "$takeover_home/.local/bin/mise"
+cp "$takeover_artifact" "$takeover_home/.local/bin/herdr"; chmod 0775 "$takeover_home/.local/bin/herdr"
+DENY_DOWNLOAD=1 TEST_OUTPUT="$(invoke_takeover "$takeover_home" --check --provision 2>&1)" && \
+  fail 'pending exact Herdr takeover check unexpectedly converged'
+assert_contains "$TEST_OUTPUT" 'source=exact-existing-launcher'
+assert_contains "$TEST_OUTPUT" 'pending locked provisioning: herdr'
+DENY_DOWNLOAD=1 invoke_takeover "$takeover_home" --provision >/dev/null
+takeover_root="$takeover_home/.local/share/dotfiles/provisioning/tools/herdr/0.7.5/herdr"
+[[ -f "$takeover_root" && "$(stat -c %a -- "$takeover_root")" == 755 && \
+  "$(sha256sum "$takeover_root" | cut -d' ' -f1)" == "$takeover_hash" ]] || fail 'exact Herdr predecessor was not retained'
+[[ -L "$takeover_home/.local/share/mise/installs/aqua-herdrdev-herdr/0.7.5" && \
+  -x "$takeover_home/.local/bin/herdr" && "$(sha256sum "$takeover_home/.local/bin/herdr" | cut -d' ' -f1)" != "$takeover_hash" ]] || \
+  fail 'Herdr mise link or protected launcher is missing'
+jq -e 'any(.tools[]; .id == "herdr") and any(.launchers[]; .tool_id == "herdr")' \
+  "$takeover_home/.local/state/dotfiles/provisioning/v1/receipt.json" >/dev/null || fail 'Herdr receipt is incomplete'
+DENY_DOWNLOAD=1 invoke_takeover "$takeover_home" --check --provision >/dev/null || fail 'adopted Herdr did not converge offline'
+
+conflict_home="$(new_home herdr-takeover-conflict)"
+mkdir -p "$conflict_home/.local/bin"
+cp "$mise_artifact" "$conflict_home/.local/bin/mise"; chmod 0755 "$conflict_home/.local/bin/mise"
+cp "$takeover_artifact" "$conflict_home/.local/bin/herdr"; printf '\nchanged\n' >> "$conflict_home/.local/bin/herdr"; chmod 0775 "$conflict_home/.local/bin/herdr"
+conflict_before="$(sha256sum "$conflict_home/.local/bin/herdr")"
+set +e
+TEST_OUTPUT="$(DENY_DOWNLOAD=1 invoke_takeover "$conflict_home" --provision 2>&1)"
+TEST_RC=$?
+set -e
+((TEST_RC != 0)) || fail 'non-exact Herdr predecessor was adopted'
+assert_contains "$TEST_OUTPUT" 'unrelated launcher destination conflict'
+[[ "$conflict_before" == "$(sha256sum "$conflict_home/.local/bin/herdr")" && \
+  ! -e "$conflict_home/.local/share/dotfiles/provisioning/tools/herdr/0.7.5" ]] || fail 'Herdr takeover refusal mutated the predecessor'
 pass
 
 # CLI intent is explicit and area selection does not pull in the core set.
@@ -164,7 +245,7 @@ capture "$home" --provision
 receipt="$home/.local/state/dotfiles/provisioning/v1/receipt.json"
 jq -e '([.tools[].id] | sort) == ["mise","starship"] and .launchers[0].destination == ".local/bin/starship"' "$receipt" >/dev/null || \
   fail 'retained provisioning receipt is incomplete'
-validate_json_schema "$REPO_DIR/schemas/provisioning-receipt-v1.schema.json" "$receipt"
+validate_json_schema "$REPO_DIR/schemas/provisioning-receipt.schema.json" "$receipt"
 [[ "$before_config" == "$(sha256sum "$home/.config/opencode/opencode.json")" ]] || fail 'OpenCode config changed during apply'
 [[ "$before_binary" == "$(sha256sum "$home/.local/share/mise/installs/opencode/9.9.9/opencode")" ]] || fail 'OpenCode install changed during apply'
 pass
@@ -478,8 +559,8 @@ shadow_apply_home="$(new_home shadow-apply)"
 set +e
 TEST_OUTPUT="$(HOME="$shadow_apply_home" PATH="$shadow_bin:$shadow_apply_home/.local/bin:$fake_bin:/usr/bin:/bin" \
   DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 DOTFILES_TEST_HOST_ROOT="$host" \
-  FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" GIT_USER_NAME='Stage Five User' \
-  GIT_USER_EMAIL='stage5@example.com' "$fixture/bootstrap.sh" --provision 2>&1)"
+  FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" GIT_USER_NAME='Provisioning Fixture User' \
+  GIT_USER_EMAIL='provisioning-fixture@example.com' "$fixture/bootstrap.sh" --provision 2>&1)"
 TEST_RC=$?
 set -e
 ((TEST_RC == 1)) || fail 'provisioning apply accepted a remaining protected shadow'
@@ -507,7 +588,7 @@ bad_hash_home="$(new_home bad-hash)"
 set +e
 TEST_OUTPUT="$(HOME="$bad_hash_home" PATH="$bad_hash_home/.local/bin:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
   DOTFILES_TEST_HOST_ROOT="$host" FIXTURE_MISE="$mise_artifact" FIXTURE_TOOL="$tool_artifact" \
-  GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' "$bad_hash_repo/bootstrap.sh" --provision 2>&1)"
+  GIT_USER_NAME='Provisioning Fixture User' GIT_USER_EMAIL='provisioning-fixture@example.com' "$bad_hash_repo/bootstrap.sh" --provision 2>&1)"
 TEST_RC=$?
 set -e
 ((TEST_RC == 1)) || fail 'mise checksum mismatch was accepted'
@@ -531,7 +612,7 @@ chmod +x "$redirect_bin/curl"
 redirect_home="$(new_home redirect)"
 set +e
 TEST_OUTPUT="$(HOME="$redirect_home" PATH="$redirect_home/.local/bin:$redirect_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
-  DOTFILES_TEST_HOST_ROOT="$host" GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' \
+  DOTFILES_TEST_HOST_ROOT="$host" GIT_USER_NAME='Provisioning Fixture User' GIT_USER_EMAIL='provisioning-fixture@example.com' \
   "$fixture/bootstrap.sh" --provision 2>&1)"
 TEST_RC=$?
 set -e
@@ -594,7 +675,7 @@ mkdir "$archive_root"
 printf 'expected\n' > "$archive_root/tool"
 tar -czf "$TEST_ROOT/tool.tar.gz" -C "$archive_root" tool
 set +e
-HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage5-test \
+HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=provisioning-test \
   bash -c 'mkdir -p "$HOME"; source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/provisioning.sh"; archive_members_safe "$1" tar.gz aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
   _ "$TEST_ROOT/tool.tar.gz" >/dev/null 2>&1
 TEST_RC=$?
@@ -610,12 +691,12 @@ ln -s ../lib/tool "$symlink_archive_root/bin/tool"
 tar -czf "$TEST_ROOT/symlink-tool.tar.gz" -C "$symlink_archive_root" bin lib
 symlink_inventory="$(tar -tzf "$TEST_ROOT/symlink-tool.tar.gz" | sha256sum)"
 symlink_inventory="${symlink_inventory%% *}"
-HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage5-test \
+HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=provisioning-test \
   bash -c 'source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/provisioning.sh"; archive_members_safe "$1" tar.gz "$2"' \
   _ "$TEST_ROOT/symlink-tool.tar.gz" "$symlink_inventory" || fail 'safe archived symlink was rejected'
 ln -s /tmp "$symlink_archive_root/escape"
 set +e
-HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage5-test \
+HOME="$TEST_ROOT/archive-home" TARGET_ROOT="$TEST_ROOT/archive-home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=provisioning-test \
   bash -c 'source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/provisioning.sh"; extracted_links_safe "$1"' \
   _ "$symlink_archive_root" >/dev/null 2>&1
 TEST_RC=$?
@@ -630,7 +711,7 @@ cp -a "$fixture/." "$isolation_repo/"
 sed -i 's/^area|bash|framework$/area|bash|ready/' "$isolation_repo/manifests/areas.tsv"
 # Keep this dependency-isolation fixture deterministic on workstations that now
 # have every later Bash dependency installed.
-sed -i 's/|bash|apply,check|generic,wsl|fzf|/|bash|apply,check|generic,wsl|stage5-missing-command|/' \
+sed -i 's/|bash|apply,check|generic,wsl|fzf|/|bash|apply,check|generic,wsl|provisioning-missing-command|/' \
   "$isolation_repo/manifests/dependencies.tsv"
 isolation_home="$(new_home isolation)"
 set +e
@@ -638,7 +719,7 @@ TEST_OUTPUT="$(HOME="$isolation_home" XDG_CONFIG_HOME="$isolation_home/.config" 
   XDG_DATA_HOME="$isolation_home/.local/share" XDG_STATE_HOME="$isolation_home/.local/state" \
   XDG_CACHE_HOME="$isolation_home/.cache" \
   PATH="$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 DOTFILES_TEST_IGNORE_SYSTEM_MISE=1 DOTFILES_TEST_ARCH=x86_64 \
-  DOTFILES_TEST_HOST_ROOT="$host" GIT_USER_NAME='Stage Five User' GIT_USER_EMAIL='stage5@example.com' \
+  DOTFILES_TEST_HOST_ROOT="$host" GIT_USER_NAME='Provisioning Fixture User' GIT_USER_EMAIL='provisioning-fixture@example.com' \
   "$isolation_repo/bootstrap.sh" --area bash --area git 2>&1)"
 TEST_RC=$?
 set -e
@@ -666,7 +747,7 @@ fi
 SCRIPT
 chmod +x "$omarchy_home/.local/share/omarchy/bin/omarchy-version" "$TEST_ROOT/omarchy-bin/nvim" "$TEST_ROOT/omarchy-bin/pacman"
 set +e
-TEST_OUTPUT="$(HOME="$omarchy_home" TARGET_ROOT="$omarchy_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage5-test \
+TEST_OUTPUT="$(HOME="$omarchy_home" TARGET_ROOT="$omarchy_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=provisioning-test \
   SELECTED_PROFILE=omarchy PATH="$TEST_ROOT/omarchy-bin:/usr/bin:/bin" bash -c \
   'source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/provisioning.sh"; check_omarchy_core_drift; check_omarchy_neovim_drift' 2>&1)"
 TEST_RC=$?
@@ -676,7 +757,7 @@ assert_contains "$TEST_OUTPUT" 'warning: Omarchy core version drift'
 assert_contains "$TEST_OUTPUT" 'warning: omarchy-nvim package drift'
 printf 'malformed\nextra\n' > "$omarchy_home/.local/share/omarchy/version"
 set +e
-TEST_OUTPUT="$(HOME="$omarchy_home" TARGET_ROOT="$omarchy_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage5-test \
+TEST_OUTPUT="$(HOME="$omarchy_home" TARGET_ROOT="$omarchy_home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=provisioning-test \
   SELECTED_PROFILE=omarchy PATH="$TEST_ROOT/omarchy-bin:/usr/bin:/bin" bash -c \
   'source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"; source "$DOTFILES_DIR/lib/provisioning.sh"; check_omarchy_core_drift' 2>&1)"
 TEST_RC=$?

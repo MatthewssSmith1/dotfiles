@@ -14,6 +14,8 @@ packages/
     tmux/
     nvim/
     zsh/
+    agents/
+    herdr/
   upstream/
     git/
     bash/
@@ -50,6 +52,8 @@ Profiles expand areas into this ordered package closure:
 | tmux | `common/tmux` | `upstream/tmux`, `generic/tmux`, `common/tmux` | `upstream/tmux`, `generic/tmux`, `wsl/tmux`, `common/tmux` |
 | Neovim | `common/nvim` | `upstream/nvim`, `generic/nvim`, `common/nvim` | Same as Generic |
 | zsh | `common/zsh` | `common/zsh` | `common/zsh` |
+| Agents | `common/agents` | `common/agents` | `common/agents` |
+| Herdr | `common/herdr` | `common/herdr` | `common/herdr` |
 
 Baseline packages deploy before adapters, which deploy before personal packages. Packages must use include/source boundaries rather than target the same path. Manifest expansion rejects duplicate payload destinations before Stow runs.
 
@@ -70,7 +74,7 @@ For Bash, package order is deployment order, not startup order. The stable commo
   package definition still exists; otherwise remove links directly from
   recorded per-target ownership after the same lexical and resolved checks.
 - Use `--no-folding` so multiple packages can safely share
-  `~/.config/dotfiles/`.
+  `~/.config/dotfiles/` and `~/.agents/`.
 - Keep docs, scripts, tests, metadata, ignored assets, deployment state, and
   host-local files outside every Stow payload.
 - Preflight every operation for one selected area before changing that area.
@@ -84,8 +88,7 @@ The per-area root-Stow cutover is complete: bootstrap cannot invoke root `stow .
   lexical target and normalized resolved destination match the reviewed old
   path (`manifests/legacy-links.json`).
 - Tracked compatibility source paths are removed only after every known host
-  has migrated or remains pinned to an older checkout. Ignored agent skills
-  are user-managed and permanently outside migration ownership.
+  has migrated or remains pinned to an older checkout.
 - Moving an area's payload files before its known old links are removed is
   forbidden because it would create broken links.
 
@@ -98,11 +101,12 @@ Bootstrap must:
 - Auto-detect the profile using the rules in [Architecture](architecture.md).
 - Support a validated `--profile` override.
 - Treat repeated `--area` options as the complete requested area set.
-- Use all default areas when no `--area` is supplied. During the staged
-  migration, `manifests/areas.tsv` records each area as `ready` or
-  `framework`; default apply and check select only `ready` areas, and
-  explicitly selecting a `framework` area is refused until its payload
-  lands. Removal ignores readiness because it is state-driven.
+- Use all default areas when no `--area` is supplied. `manifests/areas.tsv`
+  records each area as `ready` or `framework`; default apply and check select
+  only `ready` areas, and explicitly selecting a `framework` area is refused
+  because it has no deployable payload. Removal ignores readiness because it
+  is state-driven. Production areas are all ready; framework status remains
+  available for developing future areas safely.
 - Provide a non-mutating `--check` mode.
 - Support explicit `--provision` intent. Provisioning never follows merely from
   omitting `--area`; ordinary apply remains configuration-only.
@@ -121,7 +125,8 @@ Bootstrap must:
   Drift is expected, and updating a pin is a separate explicit operation.
 - Never change the login shell.
 - Do not install, remove, upgrade, reconfigure, or inspect OpenCode or
-  `opencode-openai-codex-auth`. Unrelated operations preserve the active
+  `opencode-openai-codex-auth`, except that the agents area validates the
+  parent path and owns `~/.config/opencode/AGENTS.md`. Unrelated operations preserve the active
   executable; `~/.config/opencode/opencode.json` or `opencode.jsonc`;
   `package.json`, lockfiles, plugins, and `node_modules` under that directory;
   the unpinned auth-plugin declaration; credentials; sessions; and provider
@@ -144,7 +149,7 @@ bootstrap.sh --remove [--area <area> ...]
 
 Every non-remove form also accepts the existing validated `--profile` override in any parser-supported order. `--provision` without `--check` means configuration apply plus approved provisioning. `--check --provision` reports configuration and provisioning convergence but remains offline and non-mutating. `--provision` is invalid with `--remove`.
 
-No-area `--provision` is the only full runtime-tool provisioning operation. It selects the core personal application set (Node, pnpm, Claude Code, and Worktrunk) plus platform foundations for every eventual default area, including tmux, Neovim, and Starship, even while some configuration areas are framework-only. An area-scoped provisioning run selects only dependencies assigned to the explicit areas and never the core set. Framework-only areas remain unselectable until their payload stages land except for the exact tmux lifecycle below, so full provisioning does not imply that unfinished configuration is ready. Without `--provision`, a no-area run still selects only the currently `ready` configuration areas.
+No-area `--provision` is the only full runtime-tool provisioning operation. It selects the core personal application set (Node, pnpm, Claude Code, and Worktrunk) plus platform foundations for the default areas, including tmux, Neovim, and Starship. An area-scoped provisioning run selects only dependencies assigned to the explicit areas and never the core set. Provisioning does not change area readiness, and framework-only areas remain unselectable except for tmux's explicit plugin lifecycle below. Without `--provision`, a no-area run selects the currently `ready` configuration areas.
 
 tmux plugins are a separate lifecycle. No-area provisioning may provision the tmux executable foundation but never plugins. The only plugin provisioning apply interface is exactly `bootstrap.sh --provision --area tmux`; the corresponding check remains offline and non-mutating. See [tmux](tools/tmux.md#plugin-lifecycle).
 
@@ -160,6 +165,7 @@ This table is canonical. Other documents link here rather than broadening its cl
 | `bootstrap.sh --provision` apply | Selected configuration, deployment state, and retained provisioning roots | Allowed only for the printed, locked runtime-tool plan; no baseline, Neovim asset/plugin, OpenCode, Codex auth, or Vite+ operation |
 | Bootstrap `--remove` | Selected home and state files | Forbidden |
 | `scripts/upstream verify` | None | Forbidden |
+| `scripts/agent-skills verify` | None | Forbidden |
 | `scripts/upstream sync` | Resolved checkout manifest and snapshots plus same-filesystem staging | Allowed for pinned baseline inputs |
 | `scripts/tmux-parser-fixtures validate-lock` or `verify --root <cache-root>` | None | Forbidden |
 | `scripts/tmux-parser-fixtures sync --root <cache-root>` | Test-only archive cache, same-parent extraction staging, and the managed parser-fixture root under the caller-selected cache | Allowed only for the complete HTTPS package plan printed before download; never installs the package or changes deployment state |
@@ -175,7 +181,7 @@ Provisioning apply must print every planned networked action before the first ne
 
 Ordinary tmux apply and both check forms verify the exact plugin closure offline and refuse incomplete or drifted state. Only the explicit area-scoped plugin provisioning apply may stage missing or clean-drift replacements. Dirty, ambiguous, non-owned, linked-worktree, and symlinked managed objects refuse without mutation. Eligible replacements are assembled and verified in same-filesystem staging and swapped transactionally rather than modified in place. The machine contract and exact pins are in `manifests/tmux-plugins.lock.json`.
 
-The plugin receipt is retained separately at `~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. Its v1 schema records the active lock hash and the ordered repository, commit, tree, and directory identity of every checkout. The atomically compare-and-swapped full receipt is the plugin transaction's commit point; it is not incrementally updated and is not area-removal ownership. Runtime provisioning, plugin provisioning, tmux configuration preflight, and tmux configuration apply are ordered gates. A failure or terminal signal in either provisioning layer prevents both tmux configuration stages; statuses `70`, `130`, and `143` remain distinct rather than being collapsed into an aggregate failure. This ordering also applies if tmux later becomes a default ready area; the readiness manifest is not changed by provisioning.
+The plugin receipt is retained separately at `~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. Its v1 schema records the active lock hash and the ordered repository, commit, tree, and directory identity of every checkout. The atomically compare-and-swapped full receipt is the plugin transaction's commit point; it is not incrementally updated and is not area-removal ownership. Runtime provisioning, plugin provisioning, tmux configuration preflight, and tmux configuration apply are ordered gates. A failure or terminal signal in either provisioning layer prevents both tmux configuration operations; statuses `70`, `130`, and `143` remain distinct rather than being collapsed into an aggregate failure. Provisioning never changes the readiness manifest.
 
 ## Deployment State
 
@@ -196,7 +202,11 @@ Use one versioned JSON state file per area plus a process lock:
     tmux.json
     nvim.json
     zsh.json
+    agents.json
+    herdr.json
 ```
+
+Schema filenames and `$id` values are stable and unversioned. Data carries its compatibility version in `schema_version`; validators must either continue accepting a recorded version or require an explicit migration before replacing its contract. Versioned state and receipt directories remain persisted compatibility namespaces.
 
 Each area state records schema version, profile, area, resolved checkout root, target root, ordered qualified package IDs, every deployed target path and its expected lexical source, every managed directory created by deployment, managed attachment IDs, destinations, and expected content hashes, and any backup paths created by that area. State exists only for exact cleanup and mismatch refusal; it never reconciles profiles or overrides detection. Neovim state may additionally contain `restored_lock_sha256`, exactly 64 lowercase hexadecimal characters. The field is absent after initial deployment and is written only after complete restore verification. Existing v1 state without it remains schema-valid, but Neovim `--check` reports a pending restore and fails convergence. A value different from the deployed lock reports stale restore and also fails convergence; no other area may record the field. State and migration-ledger files must be regular, non-symlink, EUID-owned files. Recorded, desired, and legacy package links are accepted or removed only while their symlink ownership is also EUID-safe, including a recheck at the mutation point.
 
@@ -299,6 +309,7 @@ Neovim's accepted backup policy — git history for the configuration, timestamp
 | Node and pnpm | Host-owned and retained; bootstrap does not replace them | Locked mise artifacts |
 | Claude Code | Host-owned and retained; bootstrap does not replace it | Locked mise artifact |
 | Worktrunk | Host-owned and retained; bootstrap does not replace it | Locked mise artifact |
+| Herdr | Locked mise artifact through native mise | Locked mise artifact |
 | OpenCode and `opencode-openai-codex-auth` | Deferred; preserve existing installation and auth state | Deferred; preserve existing installation and auth state |
 | Vite+ | Project-local mise files | Project-local mise files |
 
@@ -312,7 +323,7 @@ The Omarchy tmux baseline is written for tmux 3.5. Ubuntu's distro packages lag 
 
 The general principle: lean into mise wherever it can absorb tool-management complexity, instead of writing bespoke install, pin, or update logic.
 
-On generic and WSL systems, only explicit provisioning apply may install a known, checksum-verified mise version when mise is absent. It must accept a newer compatible existing version and never downgrade it. `--check --provision` reports the missing tool and planned installation without network access or mutation; ordinary check and apply do not select optional core applications.
+On generic and WSL systems, only explicit provisioning apply may install a known, checksum-verified mise version when mise is absent. It must accept a newer compatible existing version and never downgrade it. Omarchy provisioning uses its native mise owner and may install only locked Herdr. `--check --provision` reports the missing tool and planned installation without network access or mutation; ordinary check and apply do not select optional core applications.
 
 Use additive fragments:
 
@@ -336,7 +347,7 @@ An arbitrary unexported alias or function in an already-running parent shell is 
 
 ## Accepted Pin Record
 
-The reviewed proposal is `manifests/proposals/2026-07-17-stage5-tool-pins.json`; the active lock is `manifests/provisioning.json`. Bootstrap verifies each artifact itself before installing it into a retained root and registering that exact root with its fully qualified backend through offline `mise link`. Mise/Aqua is never allowed to substitute an unchecked download. Vite+ ownership and the OpenCode/Codex deferral remain accepted decisions.
+The reviewed proposal is `manifests/proposals/2026-07-17-runtime-tool-provisioning.json`; the active lock is `manifests/provisioning.json`. Bootstrap verifies each artifact itself before installing it into a retained root and registering that exact root with its fully qualified backend through offline `mise link`. Mise/Aqua is never allowed to substitute an unchecked download. Vite+ ownership and the OpenCode/Codex deferral remain accepted decisions.
 
 ## Test Isolation
 

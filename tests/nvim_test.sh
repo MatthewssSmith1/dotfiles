@@ -11,7 +11,7 @@ RESTORE="$REPO_DIR/packages/generic/nvim/.local/share/dotfiles/bin/nvim-restore"
 
 # ---------------------------------------------------------------------------
 # Restore transaction, rollbacks, flock, XDG migration, reviewed links, and
-# ready dispatch (from stage8_nvim_test.sh)
+# ready dispatch
 # ---------------------------------------------------------------------------
 
 [[ ! -e "$REPO_DIR/packages/generic/nvim/.empty-package" ]] || fail 'generic placeholder remains'
@@ -38,7 +38,7 @@ grep -F 'prebuilt_binaries = { download = false }' "$REPO_DIR/packages/generic/n
 [[ "$(git -C "$REPO_DIR" hash-object packages/upstream/nvim/.config/nvim/lua/config/lazy.lua)" == \
   "$(jq -r '.sources[] | select(.source.path == "lua/config/lazy.lua").transform.output_blob' "$REPO_DIR/manifests/sources.json")" ]] || fail 'lazy transform provenance drifted'
 
-fixture="$TEST_ROOT/stage8"
+fixture="$TEST_ROOT/nvim-fixture"
 mkdir "$fixture"
 home="$fixture/home"
 repos="$fixture/repos"
@@ -242,17 +242,17 @@ run_nvim_area() {
   [[ "$operation" != check ]] || mode=check
   [[ "$operation" != remove ]] || mode=remove
   HOME="$lifecycle_home" TARGET_ROOT="$lifecycle_home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-    SCRIPT_NAME=stage8-nvim-test SELECTED_PROFILE="$profile" MODE="$mode" DOTFILES_TESTING=1 \
+    SCRIPT_NAME=nvim-test SELECTED_PROFILE="$profile" MODE="$mode" DOTFILES_TESTING=1 \
     DOTFILES_TEST_NVIM_BIN="$fixture/nvim-version" DOTFILES_TEST_TIMESTAMP=20260720T120000Z \
-    DOTFILES_TEST_FAIL_AT="$fail_at" STAGE8_FAST="${STAGE8_FAST:-0}" bash -c '
+    DOTFILES_TEST_FAIL_AT="$fail_at" NVIM_TEST_FAST="${NVIM_TEST_FAST:-0}" bash -c '
       set -Eeuo pipefail
       source "$DOTFILES_DIR/lib/common.sh"
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/nvim.sh"
-      if [[ "$STAGE8_FAST" == 1 ]]; then validate_nvim_payload() { :; }; fi
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready)
+      if [[ "$NVIM_TEST_FAST" == 1 ]]; then validate_nvim_payload() { :; }; fi
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+      AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready [agents]=framework [herdr]=framework)
       if [[ "$MODE" == remove ]]; then remove_nvim
       elif [[ "$MODE" == check ]]; then preflight_nvim
       else preflight_nvim; apply_nvim
@@ -279,7 +279,7 @@ chmod 0600 "$lifecycle/.local/state/dotfiles/nvim-restored-lock"
 mkdir "$lifecycle/.cache/nvim.20260720T120000Z.bak"
 run_nvim_area "$lifecycle" generic check >/dev/null
 [[ -d "$lifecycle/.local/share/nvim" ]] || fail 'check mutated default runtime roots'
-run_nvim_area "$lifecycle" generic apply >/dev/null
+NVIM_TEST_FAST=1 run_nvim_area "$lifecycle" generic apply >/dev/null
 nvim_state="$lifecycle/.local/state/dotfiles/v1/nvim.json"
 ledger="$lifecycle/.local/state/dotfiles/v1/migrations.json"
 [[ -f "$nvim_state" && ! -e "$lifecycle/.local/share/nvim" && -f "$lifecycle/.local/share/nvim.20260720T120000Z.bak/data" ]] || fail 'default runtime migration failed'
@@ -290,12 +290,12 @@ ledger_before="$(sha256sum "$ledger")"
 deployed_hash="$(sha256sum "$lifecycle/.config/nvim/lazy-lock.json" | cut -d' ' -f1)"
 jq --arg hash "$deployed_hash" '.restored_lock_sha256=$hash' "$nvim_state" > "$nvim_state.tmp"
 mv "$nvim_state.tmp" "$nvim_state"; chmod 0600 "$nvim_state"
-run_nvim_area "$lifecycle" generic apply >/dev/null
+NVIM_TEST_FAST=1 run_nvim_area "$lifecycle" generic apply >/dev/null
 [[ "$(sha256sum "$ledger")" == "$ledger_before" ]] || fail 'reapply changed completed runtime migrations'
 [[ "$(jq -r .restored_lock_sha256 "$nvim_state")" == "$deployed_hash" ]] || fail 'reapply did not preserve a marker matching the deployed lock'
 jq '.restored_lock_sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' "$nvim_state" > "$nvim_state.tmp"
 mv "$nvim_state.tmp" "$nvim_state"; chmod 0600 "$nvim_state"
-run_nvim_area "$lifecycle" generic apply >/dev/null
+NVIM_TEST_FAST=1 run_nvim_area "$lifecycle" generic apply >/dev/null
 [[ "$(jq -r '.restored_lock_sha256 // empty' "$nvim_state")" == '' ]] || fail 'reapply preserved a stale restore marker'
 
 # Existing state without the complete runtime ledger is never allowed to
@@ -303,7 +303,7 @@ run_nvim_area "$lifecycle" generic apply >/dev/null
 cp "$ledger" "$fixture/saved-ledger"
 rm "$ledger"
 mkdir -p "$lifecycle/.local/share/nvim/generated"
-if STAGE8_FAST=1 run_nvim_area "$lifecycle" generic apply >/dev/null 2>&1; then
+if NVIM_TEST_FAST=1 run_nvim_area "$lifecycle" generic apply >/dev/null 2>&1; then
   fail 'existing Neovim state without its runtime ledger was accepted'
 fi
 [[ -d "$lifecycle/.local/share/nvim/generated" ]] || fail 'missing-ledger refusal remigrated generated runtime data'
@@ -311,22 +311,22 @@ mv "$fixture/saved-ledger" "$ledger"; chmod 0600 "$ledger"
 mkdir -p "$lifecycle/.local/share/nvim/lazy/retained" "$lifecycle/.local/state/dotfiles/nvim-preserved/retained"
 run_nvim_area "$lifecycle" generic remove >/dev/null
 [[ ! -e "$nvim_state" && -f "$ledger" && -d "$lifecycle/.local/share/nvim/lazy/retained" && -d "$lifecycle/.local/state/dotfiles/nvim-preserved/retained" ]] || fail 'remove did not retain Neovim runtime and ledger data'
-STAGE8_FAST=1 run_nvim_area "$lifecycle" generic apply >/dev/null
+NVIM_TEST_FAST=1 run_nvim_area "$lifecycle" generic apply >/dev/null
 [[ -d "$lifecycle/.local/share/nvim/generated" && ! -e "$lifecycle/.local/share/nvim.20260720T120000Z.1.bak" ]] || \
   fail 'reapply after removal remigrated retained/generated runtime data'
-STAGE8_FAST=1 run_nvim_area "$lifecycle" generic remove >/dev/null
+NVIM_TEST_FAST=1 run_nvim_area "$lifecycle" generic remove >/dev/null
 
 # Custom HOME-contained XDG roots are supported; external roots refuse before mutation.
 custom="$fixture/lifecycle-custom"
 mkdir -p "$custom/xdg/data/nvim" "$custom/xdg/state/nvim" "$custom/xdg/cache/nvim"
 printf x > "$custom/xdg/data/nvim/value"
 HOME="$custom" XDG_DATA_HOME="$custom/xdg/data" XDG_STATE_HOME="$custom/xdg/state" XDG_CACHE_HOME="$custom/xdg/cache" \
-  TARGET_ROOT="$custom" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=stage8-nvim-test \
+  TARGET_ROOT="$custom" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=nvim-test \
   SELECTED_PROFILE=wsl MODE=apply DOTFILES_TESTING=1 DOTFILES_TEST_NVIM_BIN="$fixture/nvim-version" \
   DOTFILES_TEST_TIMESTAMP=20260720T120000Z bash -c '
     set -Eeuo pipefail; source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"; source "$DOTFILES_DIR/lib/areas/nvim.sh"
-    AREA_ORDER=(git bash tmux nvim zsh); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready)
+    AREA_ORDER=(git bash tmux nvim zsh agents herdr); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready [agents]=framework [herdr]=framework)
     preflight_nvim; apply_nvim
   ' >/dev/null
 [[ -f "$custom/xdg/data/nvim.20260720T120000Z.bak/value" ]] || fail 'custom XDG runtime root was not preserved'
@@ -358,7 +358,7 @@ for boundary in nvim-after-data-move nvim-after-state-move nvim-after-cache-move
   printf data > "$crash_home/.local/share/nvim/value"
   printf state > "$crash_home/.local/state/nvim/value"
   printf cache > "$crash_home/.cache/nvim/value"
-  if STAGE8_FAST=1 run_nvim_area "$crash_home" generic apply "$boundary" >/dev/null 2>&1; then
+  if NVIM_TEST_FAST=1 run_nvim_area "$crash_home" generic apply "$boundary" >/dev/null 2>&1; then
     fail "fault boundary $boundary succeeded"
   fi
   [[ "$(< "$crash_home/.local/share/nvim/value")" == data && \
@@ -382,13 +382,13 @@ run_legacy_area() {
      (.hosts[] | select(.id == "wsl-ubuntu") | .checkout_root)=$root' \
     "$REPO_DIR/manifests/legacy-links.json" > "$legacy_repo/manifests/legacy-links.json"
   HOME="$legacy_home" TARGET_ROOT="$legacy_home" CHECKOUT_ROOT="$legacy_repo" DOTFILES_DIR="$legacy_repo" \
-    SCRIPT_NAME=stage8-nvim-legacy SELECTED_PROFILE=generic MODE=apply DOTFILES_TESTING=1 \
+    SCRIPT_NAME=nvim-test SELECTED_PROFILE=generic MODE=apply DOTFILES_TESTING=1 \
     DOTFILES_TEST_NVIM_BIN="$fixture/nvim-version" DOTFILES_TEST_TIMESTAMP=20260720T120000Z \
     DOTFILES_TEST_FAIL_AT="$fail_at" ENGINE_DIR="$REPO_DIR" bash -c '
       set -Eeuo pipefail; source "$ENGINE_DIR/lib/common.sh"; source "$ENGINE_DIR/lib/engine.sh"
       source "$ENGINE_DIR/lib/provisioning.sh"; source "$ENGINE_DIR/lib/areas/nvim.sh"
       validate_nvim_payload() { :; }
-      AREA_ORDER=(git bash tmux nvim zsh); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready)
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready [agents]=framework [herdr]=framework)
       preflight_nvim; [[ "$1" == check ]] || apply_nvim
     ' _ "$operation"
 }
@@ -454,7 +454,7 @@ pass
 
 # ---------------------------------------------------------------------------
 # Readiness rows and isolated real Neovim startup under runtime policy with
-# network sentinels (from stage8_nvim_readiness_test.sh)
+# network sentinels
 # ---------------------------------------------------------------------------
 
 # The restore-repository override from the previous section must not leak into
@@ -507,7 +507,7 @@ function M.setup(opts)
   package.loaded["lazy.core.config"] = {
     plugins = { local_project = { url = "https://example.invalid/project.git", dir = vim.fn.stdpath("data") .. "/missing-local" } },
   }
-  vim.fn.writefile({ "runtime-policy-ok" }, vim.env.STAGE8_REPORT)
+  vim.fn.writefile({ "runtime-policy-ok" }, vim.env.NVIM_TEST_REPORT)
 end
 return M
 LUA
@@ -529,7 +529,7 @@ install_network_sentinels "$home" with-git
 HOME="$home" XDG_CONFIG_HOME="$home/xdg/config" XDG_DATA_HOME="$home/xdg/data" \
   XDG_STATE_HOME="$home/xdg/state" XDG_CACHE_HOME="$home/xdg/cache" \
   PATH="$home/fake-bin:$PATH" \
-  STAGE8_REPORT="$fixture/report" nvim --headless -u "$config/init.lua" -i NONE +qa >/dev/null 2>"$fixture/nvim.err" || {
+  NVIM_TEST_REPORT="$fixture/report" nvim --headless -u "$config/init.lua" -i NONE +qa >/dev/null 2>"$fixture/nvim.err" || {
     cat "$fixture/nvim.err" >&2
     fail 'isolated real Neovim startup failed'
   }
@@ -538,7 +538,7 @@ HOME="$home" XDG_CONFIG_HOME="$home/xdg/config" XDG_DATA_HOME="$home/xdg/data" \
 
 # A generic deployment refuses an omarchy-profile preflight until removed.
 if HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
-  SCRIPT_NAME=stage8-ready SELECTED_PROFILE=omarchy DOTFILES_TESTING=1 DOTFILES_TEST_NVIM_BIN="$(command -v nvim)" \
+  SCRIPT_NAME=nvim-test SELECTED_PROFILE=omarchy DOTFILES_TESTING=1 DOTFILES_TEST_NVIM_BIN="$(command -v nvim)" \
   bash -c 'set -Eeuo pipefail; source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh";
     source "$DOTFILES_DIR/lib/provisioning.sh"; source "$DOTFILES_DIR/lib/areas/nvim.sh"; preflight_nvim' \
   >/dev/null 2>&1; then
@@ -547,4 +547,156 @@ fi
 
 pass
 
-printf 'nvim_test: PASS\n'
+# Native Omarchy loader lifecycle and refresh recovery.
+readonly NATIVE_LOADER_RELATIVE='.config/nvim/plugin/dotfiles-personal.lua'
+readonly NATIVE_FAKE_NVIM="$TEST_ROOT/bin/native-nvim"
+mkdir -p "$TEST_ROOT/bin"
+printf '#!/usr/bin/env bash\nprintf "NVIM v0.12.4\\n"\n' > "$NATIVE_FAKE_NVIM"
+chmod 0755 "$NATIVE_FAKE_NVIM"
+
+make_native_nvim_home() {
+  local home="$TEST_ROOT/native-home-$1"
+  mkdir -p "$home/.config/nvim/lua/config" "$home/.config/nvim/lua/plugins" \
+    "$home/.config/nvim/plugin/after" "$home/.local/state/dotfiles/v1"
+  printf 'require("config.lazy")\n' > "$home/.config/nvim/init.lua"
+  printf 'vim.opt.relativenumber = false\n' > "$home/.config/nvim/lua/config/options.lua"
+  printf 'return {}\n' > "$home/.config/nvim/lua/plugins/theme.lua"
+  printf '%s\n' '-- native transparency' > "$home/.config/nvim/plugin/after/transparency.lua"
+  printf '%s' "$home"
+}
+
+run_native_nvim_area() {
+  local home="$1" operation="$2" fail_at="${3:-}" mode=apply
+  [[ "$operation" != remove ]] || mode=remove
+  [[ "$operation" != check ]] || mode=check
+  HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFILES_DIR="$REPO_DIR" \
+    SCRIPT_NAME=nvim-native-test SELECTED_PROFILE=omarchy MODE="$mode" \
+    DOTFILES_TESTING=1 DOTFILES_TEST_NVIM_BIN="$NATIVE_FAKE_NVIM" DOTFILES_TEST_FAIL_AT="$fail_at" bash -c '
+      set -Eeuo pipefail
+      source "$DOTFILES_DIR/lib/common.sh"
+      source "$DOTFILES_DIR/lib/engine.sh"
+      source "$DOTFILES_DIR/lib/provisioning.sh"
+      source "$DOTFILES_DIR/lib/areas/nvim.sh"
+      AREA_ORDER=(git bash tmux nvim zsh agents herdr)
+      AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=ready [zsh]=ready [agents]=framework [herdr]=framework)
+      if [[ "$MODE" == remove ]]; then
+        remove_nvim
+      elif [[ "$MODE" == check ]]; then
+        preflight_nvim
+        check_nvim_restore_convergence
+      else
+        preflight_nvim
+        apply_nvim
+      fi
+    '
+}
+
+native_loader_hash() { sha256sum "$1/$NATIVE_LOADER_RELATIVE" | cut -d' ' -f1; }
+
+home="$(make_native_nvim_home check)"
+cp -a "$home" "$TEST_ROOT/native-check-before"
+TEST_OUTPUT="$(run_native_nvim_area "$home" check 2>&1)" && fail 'undeployed native check unexpectedly converged'
+assert_contains "$TEST_OUTPUT" 'pending native Neovim loader'
+diff --no-dereference -r "$home" "$TEST_ROOT/native-check-before" >/dev/null || fail 'native check mutated HOME'
+pass
+
+home="$(make_native_nvim_home lifecycle)"
+cp -a "$home/.config/nvim" "$TEST_ROOT/native-before-apply"
+run_native_nvim_area "$home" apply >/dev/null
+[[ -f "$home/$NATIVE_LOADER_RELATIVE" && ! -L "$home/$NATIVE_LOADER_RELATIVE" ]] || fail 'loader was not created as a regular file'
+[[ "$(stat -c %a -- "$home/$NATIVE_LOADER_RELATIVE")" == 644 ]] || fail 'loader mode is not 0644'
+grep -qF -- '-- >>> dotfiles nvim >>>' "$home/$NATIVE_LOADER_RELATIVE" || fail 'loader lacks the begin marker'
+grep -qF 'personal.lua' "$home/$NATIVE_LOADER_RELATIVE" || fail 'loader does not source the personal layer'
+[[ -L "$home/.config/dotfiles/nvim/personal.lua" ]] || fail 'personal layer link was not deployed'
+state="$home/.local/state/dotfiles/v1/nvim.json"
+jq -e '
+  .profile == "omarchy" and .packages == ["common/nvim"] and
+  (.attachments | length == 1) and .attachments[0].id == "nvim-native-loader-v1.created" and
+  .attachments[0].path == ".config/nvim/plugin/dotfiles-personal.lua" and
+  (.restored_lock_sha256 == null) and .backups == [] and
+  ([.managed_directories[] | select(startswith(".config/nvim"))] | length == 0)
+' "$state" >/dev/null || fail 'native Neovim state is not the expected shape'
+first_hash="$(native_loader_hash "$home")"
+pass
+
+run_native_nvim_area "$home" apply >/dev/null
+[[ "$(native_loader_hash "$home")" == "$first_hash" ]] || fail 'reapply changed loader bytes'
+run_native_nvim_area "$home" check >/dev/null || fail 'converged native check failed'
+pass
+
+rm -rf "$home/.config/nvim"
+cp -a "$TEST_ROOT/native-before-apply" "$home/.config/nvim"
+TEST_OUTPUT="$(run_native_nvim_area "$home" check 2>&1)" && fail 'post-refresh check unexpectedly converged'
+assert_contains "$TEST_OUTPUT" 'pending native Neovim loader reattachment'
+run_native_nvim_area "$home" apply >/dev/null
+[[ "$(native_loader_hash "$home")" == "$first_hash" ]] || fail 'reattached loader bytes differ'
+run_native_nvim_area "$home" check >/dev/null || fail 'post-reattachment check failed'
+pass
+
+printf '%s\n' '-- tampered' >> "$home/$NATIVE_LOADER_RELATIVE"
+TEST_OUTPUT="$(run_native_nvim_area "$home" check 2>&1)" && fail 'drifted loader passed check'
+assert_contains "$TEST_OUTPUT" 'native Neovim loader contains unmanaged content'
+run_native_nvim_area "$home" apply >/dev/null 2>&1 && fail 'drifted loader was overwritten by apply'
+interior="$(make_native_nvim_home interior)"
+run_native_nvim_area "$interior" apply >/dev/null
+sed -i 's/^local personal = .*$/local personal = "tampered"/' "$interior/$NATIVE_LOADER_RELATIVE"
+TEST_OUTPUT="$(run_native_nvim_area "$interior" check 2>&1)" && fail 'interior-tampered loader passed check'
+assert_contains "$TEST_OUTPUT" 'guarded attachment is partial, malformed, nested, duplicate, or modified'
+sed -i 's/-- tampered//' "$home/$NATIVE_LOADER_RELATIVE"
+sed -i '${/^$/d}' "$home/$NATIVE_LOADER_RELATIVE"
+run_native_nvim_area "$home" check >/dev/null || fail 'restored loader failed check'
+pass
+
+foreign="$(make_native_nvim_home foreign)"
+printf '%s\n' '-- user file' > "$foreign/$NATIVE_LOADER_RELATIVE"
+TEST_OUTPUT="$(run_native_nvim_area "$foreign" apply 2>&1)" && fail 'foreign loader path was adopted'
+assert_contains "$TEST_OUTPUT" 'unrelated file exists at the native Neovim loader path'
+pass
+
+bare="$TEST_ROOT/native-home-bare"
+mkdir -p "$bare/.local/state/dotfiles/v1"
+TEST_OUTPUT="$(run_native_nvim_area "$bare" apply 2>&1)" && fail 'missing native baseline was accepted'
+assert_contains "$TEST_OUTPUT" 'native Omarchy Neovim config is missing or unsafe'
+pass
+
+for forgery in '.attachments[0].id = "nvim-native-loader-v1.existing-empty"' \
+  '.attachments[0].content_hash = "0000000000000000000000000000000000000000000000000000000000000000"'; do
+  forged="$(make_native_nvim_home "forged-$TEST_COUNT-${forgery//[^a-z]/}")" || true
+  run_native_nvim_area "$forged" apply >/dev/null
+  state="$forged/.local/state/dotfiles/v1/nvim.json"
+  jq -c "$forgery" "$state" > "$state.new" && mv "$state.new" "$state" && chmod 0600 "$state"
+  TEST_OUTPUT="$(run_native_nvim_area "$forged" check 2>&1)" && fail "forged state passed check: $forgery"
+  assert_contains "$TEST_OUTPUT" 'unknown attachment'
+done
+pass
+
+run_native_nvim_area "$home" remove >/dev/null
+[[ ! -e "$home/$NATIVE_LOADER_RELATIVE" ]] || fail 'removal retained the loader'
+[[ ! -e "$home/.local/state/dotfiles/v1/nvim.json" ]] || fail 'removal retained state'
+[[ ! -e "$home/.config/dotfiles/nvim/personal.lua" ]] || fail 'removal retained the personal link'
+diff --no-dereference -r "$home/.config/nvim" "$TEST_ROOT/native-before-apply" >/dev/null || \
+  fail 'native tree differs from its pre-apply snapshot after removal'
+pass
+
+run_native_nvim_area "$home" apply >/dev/null
+rm "$home/$NATIVE_LOADER_RELATIVE"
+TEST_OUTPUT="$(run_native_nvim_area "$home" remove 2>&1)" && fail 'removal proceeded with an absent loader'
+assert_contains "$TEST_OUTPUT" 'recorded guarded attachment is absent'
+[[ -f "$home/.local/state/dotfiles/v1/nvim.json" ]] || fail 'refused removal dropped state'
+run_native_nvim_area "$home" apply >/dev/null 2>&1 || fail 'reattachment after refused removal failed'
+run_native_nvim_area "$home" remove >/dev/null || fail 'clean removal failed after reattachment'
+pass
+
+faulted="$(make_native_nvim_home faulted)"
+cp -a "$faulted" "$TEST_ROOT/native-faulted-before"
+TEST_OUTPUT="$(run_native_nvim_area "$faulted" apply nvim-after-attachment 2>&1)" && fail 'apply fault did not fail'
+diff --no-dereference -r "$faulted" "$TEST_ROOT/native-faulted-before" >/dev/null || \
+  fail 'apply fault did not roll back the HOME tree'
+run_native_nvim_area "$faulted" apply >/dev/null
+cp -a "$faulted" "$TEST_ROOT/native-faulted-applied"
+TEST_OUTPUT="$(run_native_nvim_area "$faulted" remove nvim-remove-after-attachment 2>&1)" && fail 'remove fault did not fail'
+diff --no-dereference -r "$faulted" "$TEST_ROOT/native-faulted-applied" >/dev/null || \
+  fail 'remove fault did not roll back the HOME tree'
+pass
+
+printf 'PASS: Neovim domain checks (%d groups)\n' "$TEST_COUNT"

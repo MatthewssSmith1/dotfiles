@@ -106,7 +106,7 @@ preflight_identity() {
   validate_home_parent_chain "$path"
 
   if [[ -L "$path" ]]; then
-    owned_legacy_link "$path" .gitconfig.local .gitconfig.local git migrate-stage-2 || \
+    owned_legacy_link "$path" .gitconfig.local .gitconfig.local git migrate-git-config || \
       die "$path is an unknown identity symlink"
     [[ -f "$OWNED_LEGACY_SOURCE" && ! -L "$OWNED_LEGACY_SOURCE" ]] || \
       die "known legacy identity source is missing: $OWNED_LEGACY_SOURCE"
@@ -282,7 +282,7 @@ preflight_global() {
   validate_home_parent_chain "$path"
 
   if [[ -L "$path" ]]; then
-    owned_legacy_link "$path" .gitconfig .gitconfig git migrate-stage-2 || \
+    owned_legacy_link "$path" .gitconfig .gitconfig git migrate-git-config || \
       die "$path is an unknown global-config symlink"
     GLOBAL_KIND=legacy
     GLOBAL_ACTION=replace

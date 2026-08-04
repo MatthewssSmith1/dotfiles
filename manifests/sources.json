@@ -1,5 +1,5 @@
 {
-  "$schema": "../schemas/source-manifest-v1.schema.json",
+  "$schema": "../schemas/source-manifest.schema.json",
   "schema_version": 1,
   "snapshot_root": "packages/upstream",
   "sources": [
@@ -458,7 +458,7 @@
         "mode": "100644"
       },
       "transform": {
-        "type": "stage8-nvim-policy-v1",
+        "type": "nvim-offline-bootstrap-policy",
         "output_blob": "343e7df3f01c2379c5bff5b4c79059c08e8ce4b8"
       }
     },
@@ -515,7 +515,7 @@
         "mode": "100644"
       },
       "transform": {
-        "type": "stage8-nvim-policy-v1",
+        "type": "nvim-offline-bootstrap-policy",
         "output_blob": "d1fdc89c37b8798f06a1283637745ea88b4e7921"
       }
     },

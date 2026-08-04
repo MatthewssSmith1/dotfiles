@@ -16,6 +16,8 @@ For tmux, the native `~/.config/tmux/tmux.conf` remains the regular Omarchy-owne
 
 Development tools resolve to native Omarchy packages. Bootstrap fails if a prohibited command such as Neovim resolves through a mise shim instead of the native package. See the ownership table in [Deployment](../deployment.md#executable-ownership). Missing native owners and forbidden exported-function, `PATH`, shim, user-local, or project shadows are blocking. Arbitrary unexported aliases and functions in the parent shell are outside bootstrap's inherited visibility; the managed interactive shell closes that boundary without executing rejected aliases, functions, or executable shadows.
 
+Herdr is the sole exception: explicit provisioning installs its checksum-locked release through native mise. Its regular config and predecessor restoration follow the shared [Herdr contract](../tools/herdr.md).
+
 Bash and zsh are ready; native attachment and refresh behavior were validated live on this profile.
 
 ## Version Drift

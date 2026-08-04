@@ -62,7 +62,7 @@ Inside a tmux session in a Windows Terminal tab, after applying all required unb
 5. `echo $TERM` inside tmux prints `tmux-256color`.
 6. A truecolor test script shows a smooth gradient.
 7. Mouse focus, selection, and scrolling work.
-8. `printf %s stage7-osc52 | tmux load-buffer -w -` places `stage7-osc52` on
+8. `printf %s osc52-check | tmux load-buffer -w -` places `osc52-check` on
    the Windows clipboard.
 9. If the protocol analysis is confirmed, `prefix + h` and `prefix + x` cover
    the two unavailable Alt bindings.

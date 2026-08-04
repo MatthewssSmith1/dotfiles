@@ -109,7 +109,7 @@ The executable-owner pass never sources host-local code. Host-local aliases and 
 
 ## Transitional zsh
 
-zsh is the current login shell and remains available as a behaviorally frozen escape hatch while the stock Omarchy Bash experience is evaluated. History, vi mode, key bindings, Powerlevel10k, Zinit, plugins, completion styles, zoxide, fzf, mise, Worktrunk, aliases, and OpenCode PATH behavior receive no new features during the migration. Converging the two setups or retiring zsh is a deliberate post-migration decision recorded in [Deferred Work](../deferred.md#shell-convergence).
+zsh is the current login shell and remains available as a behaviorally frozen escape hatch while Bash with Starship is the primary configured workflow. History, vi mode, key bindings, Powerlevel10k, Zinit, plugins, completion styles, zoxide, fzf, mise, Worktrunk, aliases, and OpenCode PATH behavior receive no new features. Converging the two setups or retiring zsh is a deliberate decision recorded in [Deferred Work](../deferred.md#shell-convergence).
 
 The retained zsh behavior uses distro-owned fzf completion and key-binding files directly. It does not source the legacy host installer hook or add `~/.fzf/bin`; this is an ownership correction rather than a new shell feature.
 
