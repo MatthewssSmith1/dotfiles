@@ -4,9 +4,9 @@ Notes for native Omarchy machines. On this profile, installed Omarchy defaults a
 
 ## Refresh-Managed Files
 
-Omarchy refresh or reinstall operations can replace Bash, tmux, Starship, and Neovim configuration. Those destinations stay regular Omarchy-owned files, never symlinks into this checkout. Shared behavior attaches through small guarded regular-file changes (marker blocks, idempotent, drift-reporting), and the Neovim refresh (`omarchy-nvim-setup`) can additionally clear Neovim data, state, and cache — recovery recreates only the managed loader.
+Omarchy refresh or reinstall operations can replace Bash, tmux, Starship, and Neovim configuration. Those destinations stay regular Omarchy-owned files, never symlinks into this checkout. Shared behavior attaches through the canonical guarded-attachment contract in [Deployment](../deployment.md#native-omarchy-attachments); the Neovim refresh (`omarchy-nvim-setup`) can additionally clear Neovim data, state, and cache — recovery recreates only the managed loader.
 
-For Bash specifically, bootstrap appends an additive block that sources only common personal integrations after the native `.bashrc`; it does not use the generic/WSL bypass strategy and does not replace the native Starship baseline. A supported refresh may reattach a completely absent exact block, while partial, duplicate, nested, malformed, or modified markers remain blocking. No native login attachment is planned without fixture-backed evidence that one is needed.
+For Bash specifically, bootstrap appends an additive block that sources only common personal integrations after the native `.bashrc`; it does not use the generic/WSL bypass strategy and does not replace the native Starship baseline. No native login attachment is planned without fixture-backed evidence that one is needed.
 
 After a supported refresh, re-run bootstrap to reapply attachments; it converges without duplicating them.
 

@@ -58,7 +58,7 @@ An explicit Omarchy refresh may replace user configuration and clear Neovim data
 
 ## Reset And Migration
 
-Migration must recognize individually Stowed Kickstart links left on previously deployed hosts and remove only links owned by reviewed historical source paths. It must refuse unrelated regular-file conflicts and avoid carrying old plugin state into the new configuration accidentally.
+Kickstart-link retirement on previously deployed hosts is part of the live generic/WSL apply contract below; the retired configuration itself exists only in Git history.
 
 Accepted backup policy: git history is the configuration backup. The former live `~/.config/nvim` consisted of Stow links into the retired tree, so it needed no separate copy: removal of the links was sufficient, and any recovery is a checkout of history. Host-local runtime state is preserved by renaming `~/.local/share/nvim`, `~/.local/state/nvim`, and `~/.cache/nvim` to timestamped `.bak` siblings rather than deleting them.
 

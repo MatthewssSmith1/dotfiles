@@ -2,11 +2,11 @@
 
 ## Status
 
-This document describes current generic-profile behavior and validated environments. The repository README remains authoritative for area readiness.
+This document describes current generic-profile behavior and validated environments. `manifests/areas.tsv` remains authoritative for area readiness.
 
 Notes for generic Linux hosts — Ubuntu 24.04 and newer is the primary target platform — including remote VPSs. These hosts will use the generic profile: pinned Omarchy baseline snapshots plus portability adapters. See [Architecture](../architecture.md).
 
-Bootstrap preserves existing regular Bash startup files rather than replacing them: a prepended managed `.bashrc` block runs the dispatcher and bypasses the preserved legacy remainder, while a state-stable login block uses the first existing `.bash_profile`, `.bash_login`, or `.profile`. Removal restores pre-existing bytes and modes exactly. The detailed attachment and load-order contract is in [Shell](../tools/shell.md). Git, Bash, tmux, Neovim, transitional zsh, agents, and [Herdr](../tools/herdr.md) are ready and default-selected.
+Bootstrap preserves existing regular Bash startup files rather than replacing them: a prepended managed `.bashrc` block runs the dispatcher and bypasses the preserved legacy remainder, while a state-stable login block uses the first existing `.bash_profile`, `.bash_login`, or `.profile`. Removal restores pre-existing bytes and modes exactly. The detailed attachment and load-order contract is in [Shell](../tools/shell.md). All areas are ready and default-selected ([Architecture](../architecture.md#areas)).
 
 The tmux area uses `~/.config/tmux/tmux.conf` as an XDG dispatcher and keeps the byte-identical Omarchy baseline private at `~/.config/dotfiles/upstream/tmux/tmux.conf`. It then loads the generic adapter and common persistence, with no host-local layer. A fresh host provisions the locked runtime and plugin closure explicitly before configuration apply.
 

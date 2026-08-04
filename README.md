@@ -36,9 +36,9 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
   ~/dotfiles/bootstrap.sh --check --area git
 ```
 
-Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline. Git, Bash, tmux, Neovim, transitional zsh, agents, and Herdr are ready and selected by default; native Omarchy attaches Git, Bash, tmux, and the Neovim personal loader to installed baselines. Default selection skips the transitional zsh area on hosts where zsh is not installed and has never been deployed; explicit `--area zsh` still requires it. Bootstrap preserves unrelated shell, agent, application, and authentication state.
+Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline, and bootstrap preserves unrelated shell, agent, application, and authentication state. All seven areas are ready and selected by default; selection and skip rules are in [Architecture](docs/architecture.md#areas).
 
-Bash with Starship is the primary configured workflow; the account's zsh login shell is never changed. Generic and WSL Bash use byte-reversible startup-file blocks; native Omarchy uses a separate additive attachment. On a first WSL deployment, bootstrap enforces the operational order: apply `--area bash`, smoke-test it from a separate process, then apply `--area zsh`. A default or combined apply cannot perform both first-time shell deployments; later default applies converge normally. See the [shell contract](docs/tools/shell.md).
+Bash with Starship is the primary configured workflow; the account's zsh login shell is never changed. On a first WSL deployment, bootstrap enforces an explicit bash-then-zsh order with a smoke test between; see the [shell contract](docs/tools/shell.md).
 
 ## Provisioning
 
@@ -61,9 +61,7 @@ A fresh host must first run the complete `--provision --area tmux` lifecycle, wh
 ~/dotfiles/bootstrap.sh --provision --area tmux
 ```
 
-Generic and WSL hosts put the dispatcher at `~/.config/tmux/tmux.conf`, loading a private byte-identical Omarchy baseline, the generic adapter, a command-empty WSL adapter where present, and common persistence, then perform guarded TPM initialization as the final action. Native Omarchy keeps its regular baseline and receives only a guarded common-persistence attachment. tmux has no host-local layer.
-
-The exact TPM, Resurrect, Assistant Resurrect, and Continuum commits are in `manifests/tmux-plugins.lock.json`. Startup and ordinary apply/check are offline and never install or update plugins. Removal retains `~/.tmux/plugins/` and `~/.tmux/resurrect/`. See the full [tmux contract](docs/tools/tmux.md) and manual [Windows Terminal unbinds](docs/environments/windows-terminal.md).
+The exact plugin pins are in `manifests/tmux-plugins.lock.json`. Startup and ordinary apply/check are offline and never install or update plugins; removal retains `~/.tmux/plugins/` and `~/.tmux/resurrect/`. Layout and load order are in the [tmux contract](docs/tools/tmux.md); manual [Windows Terminal unbinds](docs/environments/windows-terminal.md) still apply.
 
 ## Windows Host
 

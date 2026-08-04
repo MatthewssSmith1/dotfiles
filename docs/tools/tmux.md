@@ -35,7 +35,7 @@ if-shell 'test -r "$HOME/.config/dotfiles/tmux/persistence.conf"' \
 # <<< dotfiles tmux <<<
 ```
 
-The common file's own final command performs guarded TPM initialization. The attachment uses the deployment engine's regular-file marker, identity, rollback, drift, and exact-removal rules. A supported refresh may reattach a completely absent exact block; malformed, duplicate, partial, modified, or nested markers refuse. Native Omarchy never receives the private generic baseline, generic adapter, WSL adapter, dispatcher, or a host-local source.
+The common file's own final command performs guarded TPM initialization. The attachment follows the canonical contract in [Deployment](../deployment.md#native-omarchy-attachments). Native Omarchy never receives the private generic baseline, generic adapter, WSL adapter, dispatcher, or a host-local source.
 
 ## Baseline Behavior
 
@@ -69,14 +69,7 @@ TPM is first, Resurrect follows it, and Continuum is the final TPM plugin so no 
 
 ## Plugin Lock
 
-[`manifests/tmux-plugins.lock.json`](../../manifests/tmux-plugins.lock.json) is the machine-readable source of truth and conforms to [`schemas/tmux-plugin-lock.schema.json`](../../schemas/tmux-plugin-lock.schema.json). Array order is checkout/persistence order. Filtering it to `loading: "tpm"` is the exact TPM declaration/load order; the `managed-hooks` row is not passed to TPM.
-
-| Checkout | Loading | Repository | Commit | Expected directory |
-|----------|---------|------------|--------|--------------------|
-| TPM | TPM | `https://github.com/tmux-plugins/tpm` | `e261deb1b47614eed3400089ce7197dc68acc4eb` | `~/.tmux/plugins/tpm` |
-| tmux-resurrect | TPM | `https://github.com/tmux-plugins/tmux-resurrect` | `cff343cf9e81983d3da0c8562b01616f12e8d548` | `~/.tmux/plugins/tmux-resurrect` |
-| tmux-assistant-resurrect | managed hooks only | `https://github.com/timvw/tmux-assistant-resurrect` | `9ea274cc91b64ad0360f1a827950381e637f39a7` | `~/.tmux/plugins/tmux-assistant-resurrect` |
-| tmux-continuum | TPM, last | `https://github.com/tmux-plugins/tmux-continuum` | `0698e8f4b17d6454c71bf5212895ec055c578da0` | `~/.tmux/plugins/tmux-continuum` |
+[`manifests/tmux-plugins.lock.json`](../../manifests/tmux-plugins.lock.json) is the machine-readable source of truth for the exact repositories, commits, and checkout directories, and conforms to [`schemas/tmux-plugin-lock.schema.json`](../../schemas/tmux-plugin-lock.schema.json). Array order is checkout/persistence order. Filtering it to `loading: "tpm"` is the exact TPM declaration/load order; the `managed-hooks` row is not passed to TPM.
 
 An exact local closure has all and only the declared checkout directories, each at its locked commit with the exact `origin`, a clean worktree and index, and an EUID-owned, non-symlinked checkout path. The plugin root and every path component bootstrap manages must also be EUID-owned real directories rather than symlinks. A missing checkout, unexpected entry, dirty checkout, repository mismatch, non-Git object, linked worktree, unsafe owner, symlinked path, or unreadable metadata is not an exact closure. All read-only Git inspection runs with `GIT_OPTIONAL_LOCKS=0`; exact validation must leave every checkout's `.git/index` identity, bytes, mode, size, and mtime unchanged.
 
