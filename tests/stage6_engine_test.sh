@@ -43,7 +43,7 @@ trap cleanup_test EXIT
 
 DOTFILES_DIR="$REPO_DIR"
 CHECKOUT_ROOT="$REPO_DIR"
-AREA_ORDER=(git bash tmux nvim zsh)
+AREA_ORDER=(git bash tmux nvim zsh herdr)
 readonly ATTACHMENT_BEGIN='# >>> dotfiles managed stage6 fixture >>>'
 readonly ATTACHMENT_END='# <<< dotfiles managed stage6 fixture <<<'
 readonly ATTACHMENT_TOKEN='dotfiles managed stage6 fixture'

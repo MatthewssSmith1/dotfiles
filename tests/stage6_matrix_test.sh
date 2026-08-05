@@ -90,8 +90,8 @@ run_bash_area() {
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/bash.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+      AREA_ORDER=(git bash tmux nvim zsh herdr)
+      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [herdr]=framework)
       run_controlled_bash() { :; }
       if [[ "$MODE" == remove ]]; then remove_bash; else preflight_bash; apply_bash; fi
     '
@@ -402,8 +402,8 @@ run_network_isolated env HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_D
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [herdr]=framework)
     run_controlled_bash() {
       HOME="$HOME" PATH="$HOME/fake-bin:/usr/bin:/bin" DOTFILES_BASH_CONTROLLED_VALIDATION=1 \
         DOTFILES_BASH_VALIDATE_OWNERSHIP=0 DOTFILES_BASH_VALIDATION_ROOT="'$COMMON_ROOT'" \
@@ -430,8 +430,8 @@ PATH="$home/fake-bin:/usr/bin:/bin" run_network_isolated env HOME="$home" TARGET
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [herdr]=framework)
     remove_bash
   '
 [[ ! -e "$home/network-attempted" ]] || fail 'Bash removal invoked a network sentinel'

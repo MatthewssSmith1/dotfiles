@@ -11,6 +11,8 @@ Opinionated Bash, zsh, Git, Neovim, and tmux configuration. [GNU Stow](https://w
 - Git defaults with private identity stored outside the repository
 - Neovim based on pinned LazyVim and Omarchy release inputs
 - tmux with persistent layouts and AI assistant session restoration
+- herdr, an agent-native terminal multiplexer on trial alongside tmux,
+  version-pinned through mise
 - Windows Terminal theming applied from the Windows host
 
 ## Profiles
@@ -35,7 +37,7 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' \
   ~/dotfiles/bootstrap.sh --check --area git
 ```
 
-Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline. Git, Bash, tmux, Neovim, and transitional zsh are ready and selected by default; native Omarchy attaches Git, Bash, tmux, and the Neovim personal loader to installed baselines. Default selection skips the transitional zsh area on hosts where zsh is not installed and has never been deployed; explicit `--area zsh` still requires it. Bootstrap preserves unrelated shell, agent, application, and authentication state.
+Bootstrap is user-scoped, refuses to run as root, never installs distro packages, and does not change the login shell. Ordinary apply, check, and removal stay offline. Git, Bash, tmux, Neovim, transitional zsh, and herdr are ready and selected by default; native Omarchy attaches Git, Bash, tmux, and the Neovim personal loader to installed baselines. Default selection skips the transitional zsh area on hosts where zsh is not installed and has never been deployed; explicit `--area zsh` still requires it. Bootstrap preserves unrelated shell, agent, application, and authentication state.
 
 Bash with Starship is the primary configured workflow; the account's zsh login shell is never changed. Generic and WSL Bash use byte-reversible startup-file blocks; native Omarchy uses a separate additive attachment. On a first WSL deployment, bootstrap enforces the operational order: apply `--area bash`, smoke-test it from a separate process, then apply `--area zsh`. A default or combined apply cannot perform both first-time shell deployments; later default applies converge normally. See the [shell contract](docs/tools/shell.md).
 

@@ -38,8 +38,8 @@ run_tmux_area() {
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/tmux.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready)
+      AREA_ORDER=(git bash tmux nvim zsh herdr)
+      AREA_STATUS=([git]=ready [bash]=ready [tmux]=framework [nvim]=framework [zsh]=ready [herdr]=framework)
       PROVISIONING_MANIFEST="$DOTFILES_DIR/manifests/provisioning.json"
       tmux_validate_exact_plugin_closure() { :; }
       if [[ "$MODE" == remove ]]; then

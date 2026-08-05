@@ -1,0 +1,4 @@
+# herdr is trialed through mise; promote it to provisioning.json if it
+# graduates into the core tool set.
+[tools]
+herdr = "0.8.0"

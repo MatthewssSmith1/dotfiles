@@ -130,10 +130,11 @@ The default areas are:
 - tmux
 - Neovim
 - Transitional zsh configuration
+- herdr (trial multiplexer; config and mise version pin only)
 
 No `--area` selection means all default areas, except that default selection skips the transitional zsh area when zsh is not installed and has never been deployed on the host; explicit `--area zsh` still requires it. Repeated `--area` options select only those areas. Omitting a previously deployed area does not remove it. A conflict in one selected area must not prevent an unrelated area from being deployed independently.
 
-The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, and transitional zsh are ready and default-selected. Neovim readiness covers generic, WSL, and native Omarchy; the native personal loader is implemented as a guarded attachment.
+The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neovim, transitional zsh, and herdr are ready and default-selected. Neovim readiness covers generic, WSL, and native Omarchy; the native personal loader is implemented as a guarded attachment. The herdr area is a generic stow-only area: it deploys the shared `~/.config/herdr/config.toml` and a mise conf.d version pin, and installs nothing itself; the binary arrives through an explicit `mise install herdr`, which records the artifact checksum in the machine-local mise lockfile rather than the repository's provisioning manifest.
 
 ## Ownership Boundaries
 

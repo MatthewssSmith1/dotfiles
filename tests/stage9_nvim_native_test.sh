@@ -46,8 +46,8 @@ run_nvim_area() {
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/nvim.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=ready [zsh]=ready)
+      AREA_ORDER=(git bash tmux nvim zsh herdr)
+      AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=ready [zsh]=ready [herdr]=framework)
       if [[ "$MODE" == remove ]]; then
         remove_nvim
       elif [[ "$MODE" == check ]]; then

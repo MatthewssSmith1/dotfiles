@@ -36,6 +36,7 @@ make_engine_fixture() {
   fixture="$(copy_repo_fixture "$name")"
   set_area_status "$fixture" tmux framework
   set_area_status "$fixture" nvim framework
+  set_area_status "$fixture" herdr framework
   if [[ "$name" != real-baselines && "$name" != default-ready ]]; then
     for area in starship tmux nvim; do
       rm -rf -- "$fixture/packages/upstream/$area"
@@ -105,7 +106,8 @@ area|git|ready
 area|bash|ready
 area|tmux|ready
 area|nvim|ready
-area|zsh|ready'
+area|zsh|ready
+area|herdr|ready'
 [[ "$(cat "$REPO_DIR/manifests/areas.tsv")" == "$expected_areas" ]] || \
   fail 'manifests/areas.tsv does not record the current readiness table'
 declare -A EXPECTED_CLOSURES=(
@@ -114,16 +116,19 @@ declare -A EXPECTED_CLOSURES=(
   [generic:tmux]='upstream/tmux,generic/tmux,common/tmux'
   [generic:nvim]='upstream/nvim,generic/nvim,common/nvim'
   [generic:zsh]='common/zsh'
+  [generic:herdr]='common/herdr'
   [wsl:git]='upstream/git,generic/git,common/git'
   [wsl:bash]='upstream/bash,upstream/starship,generic/bash,wsl/bash,common/bash'
   [wsl:tmux]='upstream/tmux,generic/tmux,wsl/tmux,common/tmux'
   [wsl:nvim]='upstream/nvim,generic/nvim,common/nvim'
   [wsl:zsh]='common/zsh'
+  [wsl:herdr]='common/herdr'
   [omarchy:git]='common/git'
   [omarchy:bash]='common/bash'
   [omarchy:tmux]='common/tmux'
   [omarchy:nvim]='common/nvim'
   [omarchy:zsh]='common/zsh'
+  [omarchy:herdr]='common/herdr'
 )
 for key in "${!EXPECTED_CLOSURES[@]}"; do
   profile="${key%%:*}"
@@ -132,8 +137,8 @@ for key in "${!EXPECTED_CLOSURES[@]}"; do
     fail "profile $profile does not list the canonical $area closure"
 done
 for profile in omarchy generic wsl; do
-  [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 5 ]] || \
-    fail "profile $profile does not list exactly five area closures"
+  [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 6 ]] || \
+    fail "profile $profile does not list exactly six area closures"
 done
 for package in generic/git; do
   root="$REPO_DIR/packages/$package"
@@ -529,7 +534,7 @@ trap cleanup_test EXIT
 
 DOTFILES_DIR="$REPO_DIR"
 CHECKOUT_ROOT="$REPO_DIR"
-AREA_ORDER=(git bash tmux nvim zsh)
+AREA_ORDER=(git bash tmux nvim zsh herdr)
 readonly ATTACHMENT_BEGIN='# >>> dotfiles managed stage6 fixture >>>'
 readonly ATTACHMENT_END='# <<< dotfiles managed stage6 fixture <<<'
 readonly ATTACHMENT_TOKEN='dotfiles managed stage6 fixture'

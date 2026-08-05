@@ -1,0 +1,8 @@
+# Shared herdr configuration deployed by the dotfiles herdr area.
+# herdr runs with built-in defaults for any absent key; print them with
+# `herdr --default-config` and validate edits with `herdr config check`.
+
+# herdr is versioned through the mise pin in 40-dotfiles-herdr.toml; keep the
+# built-in updater from suggesting out-of-band upgrades.
+[update]
+version_check = false

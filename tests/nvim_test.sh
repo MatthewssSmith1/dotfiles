@@ -251,8 +251,8 @@ run_nvim_area() {
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/nvim.sh"
       if [[ "$STAGE8_FAST" == 1 ]]; then validate_nvim_payload() { :; }; fi
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready)
+      AREA_ORDER=(git bash tmux nvim zsh herdr)
+      AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready [herdr]=framework)
       if [[ "$MODE" == remove ]]; then remove_nvim
       elif [[ "$MODE" == check ]]; then preflight_nvim
       else preflight_nvim; apply_nvim
@@ -326,7 +326,7 @@ HOME="$custom" XDG_DATA_HOME="$custom/xdg/data" XDG_STATE_HOME="$custom/xdg/stat
   DOTFILES_TEST_TIMESTAMP=20260720T120000Z bash -c '
     set -Eeuo pipefail; source "$DOTFILES_DIR/lib/common.sh"; source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"; source "$DOTFILES_DIR/lib/areas/nvim.sh"
-    AREA_ORDER=(git bash tmux nvim zsh); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready)
+    AREA_ORDER=(git bash tmux nvim zsh herdr); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready [herdr]=framework)
     preflight_nvim; apply_nvim
   ' >/dev/null
 [[ -f "$custom/xdg/data/nvim.20260720T120000Z.bak/value" ]] || fail 'custom XDG runtime root was not preserved'
@@ -388,7 +388,7 @@ run_legacy_area() {
       set -Eeuo pipefail; source "$ENGINE_DIR/lib/common.sh"; source "$ENGINE_DIR/lib/engine.sh"
       source "$ENGINE_DIR/lib/provisioning.sh"; source "$ENGINE_DIR/lib/areas/nvim.sh"
       validate_nvim_payload() { :; }
-      AREA_ORDER=(git bash tmux nvim zsh); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready)
+      AREA_ORDER=(git bash tmux nvim zsh herdr); AREA_STATUS=([git]=ready [bash]=ready [tmux]=ready [nvim]=framework [zsh]=ready [herdr]=framework)
       preflight_nvim; [[ "$1" == check ]] || apply_nvim
     ' _ "$operation"
 }
