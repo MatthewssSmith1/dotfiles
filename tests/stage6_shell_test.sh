@@ -147,8 +147,8 @@ mapfile -t init_trace < "$home/init-trace"
 managed_definitions="$(run_payload "$home" generic 0 \
   'source "$DOTFILES_BASH_VALIDATION_ROOT/rc.bash"; alias -p; declare -f sff zd open n tdl tdlm tsl')"
 expected_definitions="$(HOME="$home" PATH="$home/fake-bin:/usr/bin:/bin" TERM=xterm-256color \
-  bash --noprofile --norc -c 'shopt -s expand_aliases; source "$1"; source "$2"; alias -p; declare -f sff zd open n tdl tdlm tsl' \
-  _ "$UPSTREAM_ROOT/aliases" "$UPSTREAM_ROOT/fns/tmux")"
+  bash --noprofile --norc -c 'shopt -s expand_aliases; _dotfiles_bash_trace() { :; }; source "$1"; source "$2"; source "$3"; alias -p; declare -f sff zd open n tdl tdlm tsl' \
+  _ "$UPSTREAM_ROOT/aliases" "$UPSTREAM_ROOT/fns/tmux" "$COMMON_ROOT/personal.bash")"
 [[ "$managed_definitions" == "$expected_definitions" ]] || fail 'managed aliases or tmux helpers differ from the pinned payload behavior'
 pass
 
@@ -348,8 +348,8 @@ run_area_fixture() {
       source "$DOTFILES_DIR/lib/engine.sh"
       source "$DOTFILES_DIR/lib/provisioning.sh"
       source "$DOTFILES_DIR/lib/areas/bash.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+      AREA_ORDER=(git bash tmux nvim zsh herdr)
+      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [herdr]=framework)
       run_controlled_bash() { :; }
       if [[ "$MODE" == remove ]]; then remove_bash; else preflight_bash; apply_bash; fi
     '
@@ -385,8 +385,8 @@ TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFIL
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [herdr]=framework)
     remove_bash
   ' 2>&1)"
 status=$?
@@ -488,8 +488,8 @@ TEST_OUTPUT="$(HOME="$home" TARGET_ROOT="$home" CHECKOUT_ROOT="$REPO_DIR" DOTFIL
     source "$DOTFILES_DIR/lib/engine.sh"
     source "$DOTFILES_DIR/lib/provisioning.sh"
     source "$DOTFILES_DIR/lib/areas/bash.sh"
-    AREA_ORDER=(git bash tmux nvim zsh)
-    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+    AREA_ORDER=(git bash tmux nvim zsh herdr)
+    AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [herdr]=framework)
     run_controlled_bash() { :; }
     preflight_bash
     apply_bash
@@ -564,8 +564,8 @@ run_zsh_area_fixture() {
       source "'$REPO_DIR'/lib/common.sh"
       source "'$REPO_DIR'/lib/engine.sh"
       source "'$REPO_DIR'/lib/areas/zsh.sh"
-      AREA_ORDER=(git bash tmux nvim zsh)
-      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework)
+      AREA_ORDER=(git bash tmux nvim zsh herdr)
+      AREA_STATUS=([git]=ready [bash]=framework [tmux]=framework [nvim]=framework [zsh]=framework [herdr]=framework)
       if [[ "$MODE" == remove ]]; then
         remove_zsh
       elif [[ "$MODE" == check ]]; then
