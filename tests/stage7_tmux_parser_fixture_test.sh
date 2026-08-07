@@ -53,7 +53,7 @@ set -e
   "$TEST_OUTPUT" == *'existing, non-symlink directory'* ) ]] || \
   fail 'fixture verification accepted a symlinked cache-root component'
 
-nested="$TEST_ROOT/nested-cache"; mkdir "$nested"
+nested="$TEST_ROOT/nested-cache"; mkdir "$nested"; chmod 0700 "$nested"
 generation="$nested/.tmux-parser-fixtures-generation.unsafe"; mkdir -p "$generation/ubuntu-jammy-tmux-3-2a-amd64/usr/bin"
 ln -s /usr/bin/tmux "$generation/ubuntu-jammy-tmux-3-2a-amd64/usr/bin/tmux"
 ln -s "${generation##*/}" "$nested/tmux-parser-fixtures-v1"
