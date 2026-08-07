@@ -105,6 +105,7 @@ nvim_expected_targets() {
     .config/nvim/lua/plugins/disable-news-alert.lua
     .config/nvim/lua/plugins/dotfiles-runtime-policy.lua
     .config/nvim/lua/plugins/example.lua
+    .config/nvim/lua/plugins/neo-tree.lua
     .config/nvim/lua/plugins/omarchy-theme-hotreload.lua
     .config/nvim/lua/plugins/snacks-animated-scrolling-off.lua
     .config/nvim/lua/plugins/theme.lua
