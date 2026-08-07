@@ -1,3 +1,4 @@
+onboarding = false
 # Shared herdr configuration deployed by the dotfiles herdr area.
 # herdr runs with built-in defaults for any absent key; print them with
 # `herdr --default-config` and validate edits with `herdr config check`.
