@@ -29,6 +29,9 @@ cleanup() {
   if declare -F cleanup_retained_provisioning_transaction >/dev/null; then
     cleanup_retained_provisioning_transaction || ROLLBACK_FAILED=true
   fi
+  if declare -F cleanup_retired_provisioning_transaction >/dev/null; then
+    cleanup_retired_provisioning_transaction || ROLLBACK_FAILED=true
+  fi
   if declare -F cleanup_before_temp_paths >/dev/null; then
     cleanup_before_temp_paths || true
   fi

@@ -17,6 +17,18 @@
       "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
     }
   },
+  "retired_tools": [
+    {
+      "id": "claude-code",
+      "backend": "aqua:anthropics/claude-code",
+      "version": "2.1.212",
+      "platform": "linux-x86_64",
+      "install_root": ".local/share/dotfiles/provisioning/tools/claude-code/2.1.212",
+      "executable": "claude",
+      "executable_sha256": "044a88cf3a5180776617fd3da1238dcbf9141ddec449a39cf7d2af1ac78e684e",
+      "launcher": null
+    }
+  ],
   "tools": [
     {
       "id": "node",
@@ -59,27 +71,6 @@
         "allowed_origins": ["github.com", "release-assets.githubusercontent.com"]
       },
       "commands": [{"name": "pnpm", "path": "pnpm", "probe_args": ["--version"], "version_pattern": "^11\\.13\\.1$", "protected": false, "launcher": null}]
-    },
-    {
-      "id": "claude-code",
-      "scope": "core",
-      "areas": [],
-      "profiles": ["generic", "wsl"],
-      "owner_policy": "locked-mise",
-      "backend": "aqua:anthropics/claude-code",
-      "version": "2.1.212",
-      "install_root": ".local/share/dotfiles/provisioning/tools/claude-code/2.1.212",
-      "artifact": {
-        "platform": "linux-x86_64",
-        "url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/2.1.212/linux-x64/claude",
-        "sha256": "044a88cf3a5180776617fd3da1238dcbf9141ddec449a39cf7d2af1ac78e684e",
-        "inventory_sha256": "044a88cf3a5180776617fd3da1238dcbf9141ddec449a39cf7d2af1ac78e684e",
-        "format": "raw",
-        "executable": "claude",
-        "strip_components": 0,
-        "allowed_origins": ["storage.googleapis.com"]
-      },
-      "commands": [{"name": "claude", "path": "claude", "probe_args": ["--version"], "version_pattern": "^2\\.1\\.212([[:space:]].*)?$", "protected": false, "launcher": null}]
     },
     {
       "id": "worktrunk",

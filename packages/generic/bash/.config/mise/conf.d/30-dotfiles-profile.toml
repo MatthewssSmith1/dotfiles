@@ -2,5 +2,4 @@
 [tools]
 node = "24.18.0"
 "aqua:pnpm/pnpm" = "11.13.1"
-"aqua:anthropics/claude-code" = "2.1.212"
 "aqua:max-sixty/worktrunk" = "0.68.0"

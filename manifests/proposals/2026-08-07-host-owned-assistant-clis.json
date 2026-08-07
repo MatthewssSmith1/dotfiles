@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "accepted-host-owned-assistant-lifecycle",
+  "accepted_manifest": "manifests/provisioning.json",
+  "accepted_on": "2026-08-07",
+  "supersedes": "manifests/proposals/2026-07-17-stage5-tool-pins.json",
+  "previous_manifest_sha256s": [
+    "805f72ea87e29a8725ab9487108dfe3788a789eacb3fb6086916a554720e1e2d",
+    "c59ff0355557d999812cf0b080754cb3d9957ce97b7f3dba71b29b3b35d54087"
+  ],
+  "ownership": [
+    {"id": "claude-code", "generic": "host-native", "wsl": "host-native", "omarchy": "platform-native"},
+    {"id": "opencode", "generic": "host-native", "wsl": "host-native", "omarchy": "platform-native"}
+  ],
+  "notes": [
+    "Bootstrap does not install, pin, update, remove, require, or inspect either assistant or its application state.",
+    "The Claude Code tombstone accepts only the former locked receipt identity and supports one explicit offline retirement transaction.",
+    "Retired repository-provisioned binaries and old mise OpenCode versions remain host recovery artifacts until separately removed."
+  ]
+}

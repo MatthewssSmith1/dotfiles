@@ -21,9 +21,11 @@ PROFILE_OVERRIDE=""
 AREAS=()
 PROVISION=false
 EXPLICIT_AREA_SELECTION=false
+EXPLICIT_APPLY=false
+RETIRE_PROVISIONED=""
 
 usage() {
-  printf 'usage: %s [apply|--check|--remove] [--provision] [--profile omarchy|generic|wsl] [--area <area>[,<area>...] ...]\n' "$SCRIPT_NAME" >&2
+  printf 'usage: %s [apply|--check|--remove] [--provision] [--profile omarchy|generic|wsl] [--area <area>[,<area>...] ...]\n       %s [--check] --retire-provisioned <tool-id>\n' "$SCRIPT_NAME" "$SCRIPT_NAME" >&2
   exit 1
 }
 
@@ -44,13 +46,14 @@ add_area() {
 }
 
 parse_cli() {
-  local operation_seen=false provision_seen=false profile_seen=false
+  local operation_seen=false provision_seen=false profile_seen=false retire_seen=false
 
   while (($# > 0)); do
     case "$1" in
       apply)
         [[ "$operation_seen" == false ]] || usage
         MODE=apply
+        EXPLICIT_APPLY=true
         operation_seen=true
         ;;
       --check)
@@ -67,6 +70,18 @@ parse_cli() {
         [[ "$provision_seen" == false ]] || usage
         PROVISION=true
         provision_seen=true
+        ;;
+      --retire-provisioned)
+        (($# >= 2)) || usage
+        [[ "$retire_seen" == false && "$2" =~ ^[a-z0-9-]+$ ]] || usage
+        RETIRE_PROVISIONED="$2"
+        retire_seen=true
+        shift
+        ;;
+      --retire-provisioned=*)
+        [[ "$retire_seen" == false && "${1#*=}" =~ ^[a-z0-9-]+$ ]] || usage
+        RETIRE_PROVISIONED="${1#*=}"
+        retire_seen=true
         ;;
       --profile)
         (($# >= 2)) || usage
@@ -96,6 +111,14 @@ parse_cli() {
   done
 
   [[ "$MODE" != remove || "$PROVISION" == false ]] || die '--provision is invalid with --remove'
+
+  if [[ -n "$RETIRE_PROVISIONED" ]]; then
+    [[ "$MODE" != remove ]] || die '--retire-provisioned is invalid with --remove'
+    [[ "$EXPLICIT_APPLY" == false ]] || die '--retire-provisioned is an operation and is invalid with explicit apply'
+    [[ "$PROVISION" == false ]] || die '--retire-provisioned is invalid with --provision'
+    [[ "$EXPLICIT_AREA_SELECTION" == false ]] || die '--retire-provisioned is invalid with --area'
+    [[ -z "$PROFILE_OVERRIDE" ]] || die '--retire-provisioned is invalid with --profile'
+  fi
 
   if [[ -n "$PROFILE_OVERRIDE" ]]; then
     [[ "$MODE" != remove ]] || die '--profile is invalid with --remove'
@@ -346,6 +369,19 @@ main() {
 
   validate_area_manifest
   validate_dependency_manifest
+
+  if [[ -n "$RETIRE_PROVISIONED" ]]; then
+    validate_provisioning_manifest
+    detect_provisioning_platform
+    acquire_lock
+    (
+      set -Eeuo pipefail
+      trap cleanup EXIT
+      validate_provisioning_receipt
+      retire_provisioned_tool "$RETIRE_PROVISIONED"
+    )
+    return
+  fi
 
   if [[ "$MODE" == remove ]]; then
     select_recorded_areas

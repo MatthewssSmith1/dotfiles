@@ -68,6 +68,8 @@ An in-place `do-release-upgrade` is not the accepted migration path. If chosen o
 
 Bootstrap never uses `sudo`; it prints the exact command for missing dependencies. The expected set on a fresh WSL host matches [generic Linux](generic.md#manual-package-step). The locked Aqua tmux fallback uses a verified prebuilt artifact and adds no source-build dependencies. Ordinary apply remains offline and configuration-only. Only explicit `--provision` apply may fetch locked runtime tools; `--check --provision` reports that plan without network access or mutation. The tmux implementation uses only `bootstrap.sh --provision --area tmux` for plugin provisioning; startup, ordinary apply, and checks never fetch or repair plugins.
 
+Claude Code and OpenCode follow the same host-owned vendor-native Linux lifecycle as generic hosts, installed inside WSL. Their absence is not bootstrap drift, and bootstrap does not inspect or mutate their application state.
+
 ## Shell Rollout
 
 Bash and zsh are ready after their isolated implementation gates passed. WSL operational acceptance passed after the explicit Bash apply/check and separate Bash smoke session, followed by the zsh migration. The existing zsh login shell remains the recovery path; bootstrap never changed it.

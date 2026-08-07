@@ -29,6 +29,7 @@ sed -i 's/^area|bash|ready$/area|bash|framework/; s/^area|tmux|ready$/area|tmux|
 
 mise_artifact="$TEST_ROOT/mise-artifact"
 tool_artifact="$TEST_ROOT/starship-artifact"
+retired_artifact="$TEST_ROOT/claude-artifact"
 cat > "$mise_artifact" <<'SCRIPT'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -61,10 +62,15 @@ cat > "$tool_artifact" <<'SCRIPT'
 #!/usr/bin/env bash
 if [[ "${1:-}" == --version ]]; then printf 'starship 1.26.0\n'; else exit 91; fi
 SCRIPT
-chmod +x "$mise_artifact" "$tool_artifact"
+cat > "$retired_artifact" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'fixture retired Claude Code\n'
+SCRIPT
+chmod +x "$mise_artifact" "$tool_artifact" "$retired_artifact"
 mise_hash="$(sha256sum "$mise_artifact" | cut -d' ' -f1)"
 tool_hash="$(sha256sum "$tool_artifact" | cut -d' ' -f1)"
-jq --arg mise_hash "$mise_hash" --arg tool_hash "$tool_hash" '
+retired_hash="$(sha256sum "$retired_artifact" | cut -d' ' -f1)"
+jq --arg mise_hash "$mise_hash" --arg tool_hash "$tool_hash" --arg retired_hash "$retired_hash" '
   .mise.artifact.url="https://fixtures.invalid/mise" |
   .mise.artifact.sha256=$mise_hash |
   .mise.artifact.inventory_sha256=$mise_hash |
@@ -82,7 +88,8 @@ jq --arg mise_hash "$mise_hash" --arg tool_hash "$tool_hash" '
   .tools[0].artifact.strip_components=0 |
   .tools[0].artifact.executable="starship" |
   .tools[0].artifact.allowed_origins=["fixtures.invalid"] |
-  .tools[0].commands[0].path="starship"
+  .tools[0].commands[0].path="starship" |
+  .retired_tools[0].executable_sha256=$retired_hash
 ' "$fixture/manifests/provisioning.json" > "$fixture/manifests/provisioning.json.new"
 mv "$fixture/manifests/provisioning.json.new" "$fixture/manifests/provisioning.json"
 
@@ -129,8 +136,12 @@ capture() {
   set -e
 }
 
-# The active lock and both schemas are strict JSON and exclude deferred tools.
-jq -e '.schema_version == 1 and ([.tools[].id] | index("opencode") == null) and ([.tools[].id] | index("vite+") == null)' \
+# The active lock and both schemas are strict JSON and exclude unowned tools.
+jq -e '.schema_version == 1 and
+  ([.tools[].id] | index("claude-code") == null) and
+  ([.tools[].id] | index("opencode") == null) and
+  ([.tools[].id] | index("vite+") == null) and
+  ([.retired_tools[].id] == ["claude-code"])' \
   "$REPO_DIR/manifests/provisioning.json" >/dev/null || fail 'active provisioning lock is invalid'
 jq empty "$REPO_DIR/schemas/provisioning-manifest-v1.schema.json" \
   "$REPO_DIR/schemas/provisioning-receipt-v1.schema.json" || fail 'provisioning schema JSON is invalid'

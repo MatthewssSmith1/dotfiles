@@ -32,9 +32,11 @@ Ubuntu 24.04's tmux is older than the baseline target, so bootstrap uses the loc
 
 ## Network Expectations
 
-Network behavior is defined by the canonical [operation matrix](../deployment.md#operation-and-network-policy). In particular, `--check`, removal, Bash startup, and tmux startup are offline; `--check --provision` is also offline and non-mutating, and ordinary apply is configuration-only. Only explicit `--provision` apply may fetch its printed, locked runtime-tool plan. No-area provisioning selects Node, pnpm, Claude Code, Worktrunk, and platform foundations; area-scoped provisioning selects only dependencies for selected areas. Only `bootstrap.sh --provision --area tmux` may provision the exact locked tmux plugin closure; no-area provisioning selects the executable foundation but not plugins. The first explicit `nvim` launch may restore locked plugins under its separate lifecycle.
+Network behavior is defined by the canonical [operation matrix](../deployment.md#operation-and-network-policy). In particular, `--check`, removal, Bash startup, and tmux startup are offline; `--check --provision` is also offline and non-mutating, and ordinary apply is configuration-only. Only explicit `--provision` apply may fetch its printed, locked runtime-tool plan. No-area provisioning selects Node, pnpm, Worktrunk, and platform foundations; area-scoped provisioning selects only dependencies for selected areas. Only `bootstrap.sh --provision --area tmux` may provision the exact locked tmux plugin closure; no-area provisioning selects the executable foundation but not plugins. The first explicit `nvim` launch may restore locked plugins under its separate lifecycle.
 
 Managed Bash startup is always offline. The only shell-startup network exception is transitional zsh's first start when its Zinit entrypoint is absent; an initialized zsh startup is offline. Bootstrap never changes the login shell.
+
+Claude Code and OpenCode use vendor-native user installations on this profile. They may update through their own lifecycle, but bootstrap does not install, require, inspect, or update them. Managed shell PATH gives their native user locations precedence over inherited global mise selections.
 
 ## Validated Environments
 
@@ -47,7 +49,7 @@ Acceptance covered:
 - Migration of legacy repository-root Stow links into independent Git, Bash,
   tmux, Neovim, and transitional zsh areas.
 - Exact distro ownership for `zoxide`, `eza`, `bat`/`batcat`, and `fd`/`fdfind`.
-- Locked, receipted Node 24.18.0, pnpm 11.13.1, Claude Code 2.1.212,
+- Pre-migration locked, receipted Node 24.18.0, pnpm 11.13.1, Claude Code 2.1.212,
   Worktrunk 0.68.0, tmux 3.7b, Neovim 0.12.4, and Starship 1.26.0.
 - Offline area checks, two ordinary configuration-only applies, and the full
   no-area provisioning check.
