@@ -148,7 +148,7 @@ path_prepend "$PNPM_HOME/bin"
 
 # Development Tools
 path_append "$HOME/.fly/bin"           # Fly.io
-path_append "$HOME/.opencode/bin"      # OpenCode
+path_prepend "$HOME/.opencode/bin"     # OpenCode
 
 # =========================
 # TOOL INITIALIZATION

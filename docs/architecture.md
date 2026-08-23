@@ -150,15 +150,17 @@ The manifest, not this conceptual list, controls readiness. Git, Bash, tmux, Neo
   regular files.
 - Platform package managers own stable generic CLI dependencies where
   practical.
-- Mise owns workstation language runtimes and approved user-scoped tools. Lean
-  into mise wherever it can absorb tool-management complexity, including
-  locked versions, user-scoped installs without `sudo`, and verified prebuilt
-  tools, rather than inventing bespoke installers.
+- Mise owns workstation language runtimes and approved user-scoped tools, but
+  not Claude Code or OpenCode.
 - Projects retain higher precedence through their own mise and tool files.
   Vite+ is project-owned through those files and has no global bootstrap owner.
-- OpenCode and `opencode-openai-codex-auth` remain host-owned except for the
-  agents area's global instruction link; configuration, plugins, credentials,
-  sessions, executable ownership, and authentication remain untouched.
+- Claude Code and OpenCode are host-owned on every profile. Generic Linux and
+  WSL use vendor-native user installations; Omarchy retains its platform-native
+  owners. Except for the agents area's instruction bridges, bootstrap owns
+  neither executable nor application state, including plugins such as
+  `opencode-openai-codex-auth`, and requires neither command for convergence.
+- Host-owned assistants may update through their own runtime lifecycle. That
+  does not broaden bootstrap's offline network policy.
 
 Executable ownership checks cover inherited exported functions, candidates on bootstrap's effective `PATH`, mise resolution from neutral and controlled project directories, and a controlled managed interactive Bash that can observe aliases and non-exported functions without executing rejected objects. Unexported aliases and functions in an arbitrary parent shell are not inherited; bootstrap does not parse unrelated startup files in an attempt to infer them.
 

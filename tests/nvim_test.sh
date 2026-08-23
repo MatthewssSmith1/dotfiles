@@ -33,6 +33,8 @@ jq -e '. as $lock |
 ' "$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json" >/dev/null || fail 'generic shared specs lack lock coverage'
 grep -F 'opts.ensure_installed = {}' "$REPO_DIR/packages/generic/nvim/.config/nvim/lua/plugins/dotfiles-runtime-policy.lua" >/dev/null || fail 'runtime installers are not explicitly empty'
 grep -F 'prebuilt_binaries = { download = false }' "$REPO_DIR/packages/generic/nvim/.config/nvim/lua/plugins/dotfiles-runtime-policy.lua" >/dev/null || fail 'Blink binary downloading is not disabled'
+grep -F 'width = 25' "$REPO_DIR/packages/generic/nvim/.config/nvim/lua/plugins/neo-tree.lua" >/dev/null || \
+  fail 'Neo-tree width is not pinned to 25 columns'
 [[ "$(git -C "$REPO_DIR" hash-object packages/upstream/nvim/.config/nvim/init.lua)" == \
   "$(jq -r '.sources[] | select(.source.path == "init.lua").transform.output_blob' "$REPO_DIR/manifests/sources.json")" ]] || fail 'init transform provenance drifted'
 [[ "$(git -C "$REPO_DIR" hash-object packages/upstream/nvim/.config/nvim/lua/config/lazy.lua)" == \

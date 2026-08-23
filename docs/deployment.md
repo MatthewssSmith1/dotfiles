@@ -124,13 +124,11 @@ Bootstrap must:
   errors; parseable version mismatches produce separate non-blocking warnings.
   Drift is expected, and updating a pin is a separate explicit operation.
 - Never change the login shell.
-- Do not install, remove, upgrade, reconfigure, or inspect OpenCode or
-  `opencode-openai-codex-auth`, except that the agents area validates the
-  parent path and owns `~/.config/opencode/AGENTS.md`. Unrelated operations preserve the active
-  executable; `~/.config/opencode/opencode.json` or `opencode.jsonc`;
-  `package.json`, lockfiles, plugins, and `node_modules` under that directory;
-  the unpinned auth-plugin declaration; credentials; sessions; and provider
-  state.
+- Do not install, pin, remove, upgrade, require, reconfigure, or inspect Claude
+  Code, OpenCode, or their application state except for explicit Claude Code
+  retirement and the agents area's instruction bridges. Unrelated operations
+  preserve executables, settings, credentials, plugins (including
+  `opencode-openai-codex-auth`), sessions, and provider state.
 - Be convergent and safe to run repeatedly.
 
 Accepted forms are:
@@ -140,6 +138,8 @@ bootstrap.sh
 bootstrap.sh --check
 bootstrap.sh --provision
 bootstrap.sh --check --provision
+bootstrap.sh --retire-provisioned claude-code
+bootstrap.sh --check --retire-provisioned claude-code
 bootstrap.sh --area <area> [--area <area> ...]
 bootstrap.sh --check --area <area> [--area <area> ...]
 bootstrap.sh --provision --area <area> [--area <area> ...]
@@ -147,9 +147,9 @@ bootstrap.sh --check --provision --area <area> [--area <area> ...]
 bootstrap.sh --remove [--area <area> ...]
 ```
 
-Every non-remove form also accepts the existing validated `--profile` override in any parser-supported order. `--provision` without `--check` means configuration apply plus approved provisioning. `--check --provision` reports configuration and provisioning convergence but remains offline and non-mutating. `--provision` is invalid with `--remove`.
+Every ordinary non-remove form also accepts the existing validated `--profile` override in any parser-supported order. `--provision` without `--check` means configuration apply plus approved provisioning. `--check --provision` reports configuration and provisioning convergence but remains offline and non-mutating. `--provision` is invalid with `--remove`. Assistant retirement is a separate offline operation and is mutually exclusive with apply, removal, provisioning, profile overrides, and area selection.
 
-No-area `--provision` is the only full runtime-tool provisioning operation. It selects the core personal application set (Node, pnpm, Claude Code, and Worktrunk) plus platform foundations for the default areas, including tmux, Neovim, and Starship. An area-scoped provisioning run selects only dependencies assigned to the explicit areas and never the core set. Provisioning does not change area readiness, and framework-only areas remain unselectable. Without `--provision`, a no-area run selects the currently `ready` configuration areas.
+No-area `--provision` is the only full runtime-tool provisioning operation. It selects Node, pnpm, Worktrunk, Herdr, and platform foundations including tmux, Neovim, and Starship. An area-scoped run selects only dependencies assigned to explicit areas and never the core set. Provisioning does not change readiness; ordinary no-area runs select the currently `ready` configuration areas.
 
 tmux plugins are a separate lifecycle. No-area provisioning may provision the tmux executable foundation but never plugins. The only plugin provisioning apply interface is exactly `bootstrap.sh --provision --area tmux`; the corresponding check remains offline and non-mutating. See [tmux](tools/tmux.md#plugin-lifecycle).
 
@@ -163,6 +163,7 @@ This table is canonical. Other documents link here rather than broadening its cl
 | `bootstrap.sh --check --provision` | None | Forbidden; reports the same locked provisioning set the corresponding provisioning apply would select |
 | Ordinary bootstrap apply | Selected configuration and deployment state files | Forbidden; configuration-only |
 | `bootstrap.sh --provision` apply | Selected configuration, deployment state, and retained provisioning roots | Allowed only for the printed, locked runtime-tool plan; no baseline, Neovim asset/plugin, OpenCode, Codex auth, or Vite+ operation |
+| `bootstrap.sh [--check] --retire-provisioned claude-code` | Check: none; apply: exact retired receipt and mise registration only | Forbidden |
 | Bootstrap `--remove` | Selected home and state files | Forbidden |
 | `scripts/upstream verify` | None | Forbidden |
 | `scripts/agent-skills verify` | None | Forbidden |
@@ -176,6 +177,7 @@ This table is canonical. Other documents link here rather than broadening its cl
 | First explicit generic Neovim launch | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim restore after a lock change | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim runtime-asset provisioning | Declared Mason, Treesitter, rock, or build state | Allowed only under the accepted asset policy |
+| User-invoked Claude Code or OpenCode runtime | Host-owned application state | Governed by the application's native lifecycle; outside bootstrap |
 
 Provisioning apply must print every planned networked action before the first network-capable command executes. Startup must never install or update tools implicitly except for the documented missing-Zinit first-start behavior. Neovim plugin installation occurs only during the first explicit launch or a later explicit restore after a lock change. Upstream sync never deploys configuration. Within `$HOME`, it may touch only the resolved checkout and a same-filesystem staging directory beside the content it will atomically replace; all unrelated home paths are forbidden.
 
@@ -311,21 +313,22 @@ Neovim's accepted backup policy — git history for the configuration, timestamp
 | Neovim, Starship | Native packages | Suitable package or locked mise fallback |
 | mise | Native package | Pinned user-scoped install when absent |
 | Node and pnpm | Host-owned and retained; bootstrap does not replace them | Locked mise artifacts |
-| Claude Code | Host-owned and retained; bootstrap does not replace it | Locked mise artifact |
+| Claude Code | Omarchy/native owner | Vendor-native user install |
 | Worktrunk | Host-owned and retained; bootstrap does not replace it | Locked mise artifact |
 | Herdr | Locked mise artifact through native mise | Locked mise artifact |
-| OpenCode and `opencode-openai-codex-auth` | Deferred; preserve existing installation and auth state | Deferred; preserve existing installation and auth state |
+| OpenCode | Omarchy/native owner | Vendor-native user install |
+| Assistant plugins and application state | Host-owned and untouched | Host-owned and untouched |
 | Vite+ | Project-local mise files | Project-local mise files |
 
 On Omarchy, bootstrap must fail if a prohibited command such as Neovim resolves through a mise shim instead of the native package. Alignment does not require identical installation mechanisms, but it does require unambiguous owners and compatible behavior.
 
-Vite+ is intentionally project-owned. Projects declare and lock it in their own mise files; bootstrap never invokes the official installer, creates or updates a global executable, treats Vite+ as a protected profile command, or initializes it globally from managed Bash or zsh. The reviewed pre-existing global zsh hook is durably retired. Project precedence is expected for it. OpenCode and its Codex auth plugin are deferred until a separately reviewed change defines a locked plugin lifecycle and proves preservation of configuration and authentication.
+Vite+ is intentionally project-owned. Projects declare and lock it in their own mise files; bootstrap never invokes the official installer, creates or updates a global executable, treats Vite+ as a protected profile command, or initializes it globally from managed Bash or zsh. The reviewed pre-existing global zsh hook is durably retired. Project precedence is expected for it. Claude Code, OpenCode, and assistant plugins remain outside repository provisioning and application-state ownership.
 
 The Omarchy tmux baseline is written for tmux 3.5. Ubuntu's distro packages lag (22.04 ships 3.2a, 24.04 ships 3.4), so the mise fallback is the expected owner on generic systems. Pin the fully qualified Aqua backend and lock its verified prebuilt artifact; do not rely on mise's shorthand registry order. This removes tmux source-build dependencies from the manual package step. Interim behavior on hosts that have not converged is defined in [tmux](tools/tmux.md#runtime-and-terminals).
 
 ## Mise
 
-The general principle: lean into mise wherever it can absorb tool-management complexity, instead of writing bespoke install, pin, or update logic.
+Use mise for approved repository-managed tools, not for host-owned assistants.
 
 On generic and WSL systems, only explicit provisioning apply may install a known, checksum-verified mise version when mise is absent. It must accept a newer compatible existing version and never downgrade it. Omarchy provisioning uses its native mise owner and may install only locked Herdr. `--check --provision` reports the missing tool and planned installation without network access or mutation; ordinary check and apply do not select optional core applications.
 
@@ -337,9 +340,11 @@ Use additive fragments:
   30-dotfiles-profile.toml
 ```
 
-Loose selectors express maintenance intent. The committed `manifests/provisioning.json` lock holds the exact versions, backends, artifacts, inventory identities, hashes, and origins used by explicit provisioning. Project mise files retain higher precedence for project runtimes, but may not silently shadow profile-owned commands such as tmux or native Omarchy Neovim. Bootstrap must not silently advance locked versions.
+Loose selectors express maintenance intent. The committed `manifests/provisioning.json` lock holds the exact versions, backends, artifacts, inventory identities, hashes, and origins used by explicit provisioning. Managed fragments contain no Claude Code or OpenCode selector. Project mise files retain higher precedence for project runtimes, but may not silently shadow profile-owned commands such as tmux or native Omarchy Neovim. Bootstrap must not silently advance locked versions.
 
 The retained provisioning receipt is a regular non-symlinked EUID-owned mode-`0600` file. A retained tool root, its mise link, protected launcher, and both receipt rows are one transaction: every read-modify-write compares and swaps against the exact version it validated, and verified installation of the new combined receipt is the commit point. Initial mise installation and launcher-only repair use the same combined receipt boundary, so no stale receipt can survive without its binary. Failure or signal rolls back only unchanged transaction-created objects; changed or appeared same-UID objects are retained at the path named in the recovery diagnostic, and a post-commit cleanup failure never reverts the committed transaction. This remains subject to the malicious same-UID between-syscall boundary documented below.
+
+The Claude Code retirement tombstone accepts only the former locked identity. Its dedicated compare-and-swap operation removes that exact receipt row and mise registration while retaining the binary root; drift refuses before mutation and uncommitted failures restore both metadata objects.
 
 ### Observable Ownership Boundary
 
@@ -349,11 +354,11 @@ An arbitrary unexported alias or function in an already-running parent shell is 
 
 ## Accepted Pin Record
 
-The reviewed proposal is `manifests/proposals/2026-07-17-runtime-tool-provisioning.json`; the active lock is `manifests/provisioning.json`. Bootstrap verifies each artifact itself before installing it into a retained root and registering that exact root with its fully qualified backend through offline `mise link`. Mise/Aqua is never allowed to substitute an unchecked download. Vite+ ownership and the OpenCode/Codex deferral remain accepted decisions.
+The active ownership proposal is `manifests/proposals/2026-08-07-host-owned-assistant-clis.json`; it supersedes `manifests/proposals/2026-07-17-runtime-tool-provisioning.json`, retained as pin history. The active lock is `manifests/provisioning.json`. Bootstrap verifies each managed artifact before installing it into a retained root and registering that exact root through offline `mise link`; Mise/Aqua may not substitute an unchecked download.
 
 ## Test Isolation
 
-Automated tests use a temporary `HOME`, temporary XDG roots, fixture host and mise roots, controlled `PATH`, and fixture checkouts when manifests or area readiness differ. They must not inspect or mutate the developer's real home, user executable directories, mise data, or active OpenCode installation. Provisioning applies use fake, local artifacts in fixtures; no real provisioning apply is part of the automated gate.
+Automated tests use a temporary `HOME`, temporary XDG roots, fixture host and mise roots, controlled `PATH`, and fixture checkouts when manifests or area readiness differ. They must not inspect or mutate the developer's real home, user executable directories, mise data, or active assistant installations and state. Provisioning applies use fake, local artifacts in fixtures; no real provisioning apply is part of the automated gate.
 
 ## Acceptance Criteria
 
@@ -370,7 +375,9 @@ Automated tests use a temporary `HOME`, temporary XDG roots, fixture host and mi
 - Legacy links are removed only after exact ownership checks.
 - Local files, authentication, and unrelated regular files remain intact.
 - Omarchy commands resolve to approved native owners.
-- Generic managed tools resolve to their locked approved owners.
+- Repository-managed tools resolve to their locked approved owners; host-owned
+  assistants are optional and resolve ahead of stale inherited mise paths when
+  installed.
 - Profile mismatch is refused until explicit state-driven removal succeeds.
 - State updates are atomic, and concurrent bootstrap runs are refused.
 - Bootstrap does not use `sudo`, change the login shell, or update baselines.

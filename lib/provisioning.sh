@@ -1,6 +1,7 @@
 # Locked retained-tool provisioning and executable ownership; sourced by bootstrap.sh.
 
 PROVISIONING_MANIFEST=""
+PROVISIONING_PROPOSAL=""
 PROVISIONING_RECEIPT=""
 PROVISIONING_MANIFEST_SHA=""
 PROVISIONING_PLATFORM=""
@@ -23,6 +24,16 @@ PROVISION_INSTALL_RECEIPT_IDENTITY=""
 PROVISION_INSTALL_RECEIPT_QUARANTINE=""
 PROVISION_INSTALL_RECEIPT_QUARANTINE_IDENTITY=""
 PREFLIGHT_LAUNCHER_TAKEOVER=false
+PROVISION_RETIRE_ACTIVE=false
+PROVISION_RETIRE_COMMITTED=false
+PROVISION_RETIRE_ROOT=""
+PROVISION_RETIRE_ROOT_IDENTITY=""
+PROVISION_RETIRE_LINK=""
+PROVISION_RETIRE_LINK_QUARANTINE=""
+PROVISION_RETIRE_LINK_QUARANTINE_IDENTITY=""
+PROVISION_RETIRE_RECEIPT_IDENTITY=""
+PROVISION_RETIRE_RECEIPT_QUARANTINE=""
+PROVISION_RETIRE_RECEIPT_QUARANTINE_IDENTITY=""
 
 provisioning_safe_path() {
   safe_relative_path "$1" && [[ "$1" != */ && "$1" != *//* ]]
@@ -163,11 +174,40 @@ cleanup_retained_provisioning_transaction() {
   [[ "$failed" == false ]]
 }
 
+reset_retired_provisioning_transaction() {
+  PROVISION_RETIRE_ACTIVE=true; PROVISION_RETIRE_COMMITTED=false
+  PROVISION_RETIRE_ROOT=""; PROVISION_RETIRE_ROOT_IDENTITY=""
+  PROVISION_RETIRE_LINK=""
+  PROVISION_RETIRE_LINK_QUARANTINE=""; PROVISION_RETIRE_LINK_QUARANTINE_IDENTITY=""
+  PROVISION_RETIRE_RECEIPT_IDENTITY=""
+  PROVISION_RETIRE_RECEIPT_QUARANTINE=""; PROVISION_RETIRE_RECEIPT_QUARANTINE_IDENTITY=""
+}
+
+cleanup_retired_provisioning_transaction() {
+  local failed=false
+  [[ "$PROVISION_RETIRE_ACTIVE" == true && "$PROVISION_RETIRE_COMMITTED" == false ]] || return 0
+  if [[ -n "$PROVISION_RETIRE_RECEIPT_IDENTITY" ]]; then
+    provisioning_remove_installed_path "$PROVISIONING_RECEIPT" "$PROVISION_RETIRE_RECEIPT_IDENTITY" \
+      'retirement receipt' || failed=true
+  fi
+  if [[ -n "$PROVISION_RETIRE_RECEIPT_QUARANTINE" ]]; then
+    provisioning_restore_quarantine "$PROVISION_RETIRE_RECEIPT_QUARANTINE" \
+      "$PROVISION_RETIRE_RECEIPT_QUARANTINE_IDENTITY" "$PROVISIONING_RECEIPT" || failed=true
+  fi
+  if [[ -n "$PROVISION_RETIRE_LINK_QUARANTINE" ]]; then
+    provisioning_restore_quarantine "$PROVISION_RETIRE_LINK_QUARANTINE" \
+      "$PROVISION_RETIRE_LINK_QUARANTINE_IDENTITY" "$PROVISION_RETIRE_LINK" || failed=true
+  fi
+  PROVISION_RETIRE_ACTIVE=false
+  [[ "$failed" == false ]]
+}
+
 validate_provisioning_manifest() {
   local schema="$DOTFILES_DIR/schemas/provisioning-manifest.schema.json"
   local proposal="$DOTFILES_DIR/manifests/proposals/2026-07-17-runtime-tool-provisioning.json"
   local value host url
   PROVISIONING_MANIFEST="$DOTFILES_DIR/manifests/provisioning.json"
+  PROVISIONING_PROPOSAL="$DOTFILES_DIR/manifests/proposals/2026-08-07-host-owned-assistant-clis.json"
   [[ -f "$schema" && ! -L "$schema" ]] || die 'missing provisioning manifest schema'
   [[ -f "$PROVISIONING_MANIFEST" && ! -L "$PROVISIONING_MANIFEST" ]] || die 'missing provisioning manifest'
   [[ -f "$proposal" && ! -L "$proposal" ]] || die 'missing accepted runtime-tool provisioning record'
@@ -175,16 +215,34 @@ validate_provisioning_manifest() {
     .accepted_manifest == "manifests/provisioning.json" and
     (.previous_manifest_sha256s | type == "array" and unique == . and all(.[]; type == "string" and test("^[0-9a-f]{64}$")))' \
     "$proposal" >/dev/null || die 'invalid accepted runtime-tool provisioning record'
+  [[ -f "$PROVISIONING_PROPOSAL" && ! -L "$PROVISIONING_PROPOSAL" ]] || \
+    die 'missing accepted assistant ownership proposal'
+  jq -e '.schema_version == 1 and .status == "accepted-host-owned-assistant-lifecycle" and
+    .accepted_manifest == "manifests/provisioning.json" and
+    .supersedes == "manifests/proposals/2026-07-17-runtime-tool-provisioning.json" and
+    ([.ownership[].id] | sort) == ["claude-code","opencode"] and
+    all(.ownership[]; .generic == "host-native" and .wsl == "host-native" and .omarchy == "platform-native") and
+    (.previous_manifest_sha256s | type == "array" and unique == . and all(.[]; type == "string" and test("^[0-9a-f]{64}$")))' \
+    "$PROVISIONING_PROPOSAL" >/dev/null || die 'invalid accepted assistant ownership proposal'
   jq -e '.type == "object" and .properties.schema_version.const == 1' "$schema" >/dev/null 2>&1 || \
     die 'invalid provisioning manifest schema'
   jq -e '
-    type == "object" and keys == ["mise","platforms","schema_version","tools"] and
+    type == "object" and keys == ["mise","platforms","retired_tools","schema_version","tools"] and
     .schema_version == 1 and
     (.platforms | type == "array" and length > 0 and all(.[]; . == "linux-x86_64") and unique == .) and
     (.mise | type == "object" and keys == ["artifact","destination","maximum_version","minimum_version","version"] and
       (.version | type == "string" and test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
       (.minimum_version | type == "string" and test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
       (.maximum_version | type == "string" and test("^[0-9]+[.][0-9]+[.][0-9]+$"))) and
+    (.retired_tools | type == "array" and unique == . and all(.[];
+      type == "object" and keys == ["backend","executable","executable_sha256","id","install_root","launcher","platform","version"] and
+      (.id | type == "string" and test("^[a-z0-9-]+$")) and
+      (.backend | type == "string" and test("^(core:[a-z0-9-]+|aqua:[a-z0-9._-]+/[a-z0-9._-]+)$")) and
+      (.version | type == "string" and test("^[0-9][0-9A-Za-z.-]*$")) and
+      .platform == "linux-x86_64" and (.install_root | type == "string") and
+      (.executable | type == "string") and
+      (.executable_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and .launcher == null)) and
+    ([.retired_tools[].id] | unique | length) == (.retired_tools | length) and
     (.tools | type == "array" and length > 0 and all(.[];
       type == "object" and
         ((keys - ["areas","artifact","backend","commands","executable_identity","id","install_root","native_minimum","native_package","owner_policy","profiles","scope","takeover_identity","version"]) | length == 0) and
@@ -220,6 +278,7 @@ validate_provisioning_manifest() {
         (.version_pattern | type == "string" and length > 0) and (.protected | type == "boolean") and
         (.launcher == null or (.launcher | type == "string")))))) and
     ([.tools[].id] | unique | length) == (.tools | length) and
+    ([.tools[].id, .retired_tools[].id] | unique | length) == ((.tools | length) + (.retired_tools | length)) and
     ([.tools[].commands[].name] | unique | length) == ([.tools[].commands[].name] | length) and
     ([.tools[].commands[].launcher | select(. != null)] | unique | length) == ([.tools[].commands[].launcher | select(. != null)] | length) and
     ([.tools[].install_root] | unique | length) == (.tools | length) and
@@ -235,7 +294,7 @@ validate_provisioning_manifest() {
   ' "$PROVISIONING_MANIFEST" >/dev/null || die 'malformed or unknown provisioning manifest'
 
   while IFS= read -r value; do provisioning_safe_path "$value" || die "unsafe provisioning path: $value"; done < <(
-    jq -r '.mise.destination, .mise.artifact.executable, .tools[].install_root, .tools[].artifact.executable, .tools[].commands[].path, .tools[].commands[].launcher // empty' "$PROVISIONING_MANIFEST"
+    jq -r '.mise.destination, .mise.artifact.executable, .tools[].install_root, .tools[].artifact.executable, .tools[].commands[].path, .tools[].commands[].launcher // empty, .retired_tools[].install_root, .retired_tools[].executable' "$PROVISIONING_MANIFEST"
   )
   while IFS=$'\t' read -r url host; do
     [[ "$url" =~ ^https://([^/:?#]+)(/|$) ]] || die "invalid provisioning URL: $url"
@@ -257,11 +316,18 @@ validate_provisioning_manifest() {
   while IFS= read -r value; do
     [[ -n "${AREA_STATUS[$value]+x}" ]] || die "provisioning manifest references unknown area '$value'"
   done < <(jq -r '.tools[].areas[]' "$PROVISIONING_MANIFEST")
-  if jq -er '[.tools[].id, .tools[].backend, .tools[].commands[].name] | join("\n") | test("(^|\n)(opencode|opencode-openai-codex-auth|vite\\+?)(\n|$)"; "i")' \
+  if jq -er '[.tools[].id, .tools[].backend, .tools[].commands[].name] | join("\n") | test("(^|\n)(claude-code|opencode|opencode-openai-codex-auth|vite\\+?)(\n|$)"; "i")' \
     "$PROVISIONING_MANIFEST" | grep -qx true; then
     die 'provisioning manifest contains an excluded host-owned tool'
   fi
   PROVISIONING_MANIFEST_SHA="$(sha256_file "$PROVISIONING_MANIFEST")"
+}
+
+provisioning_manifest_hash_accepted() {
+  local hash="$1"
+  [[ "$hash" == "$PROVISIONING_MANIFEST_SHA" ]] ||
+    jq -e --arg hash "$hash" '.previous_manifest_sha256s | index($hash) != null' \
+      "$PROVISIONING_PROPOSAL" >/dev/null 2>&1
 }
 
 detect_provisioning_platform() {
@@ -280,7 +346,7 @@ detect_provisioning_platform() {
 }
 
 validate_provisioning_receipt() {
-  local value id backend version platform root executable expected_backend destination receipt_manifest active_version hash before
+  local value id backend version platform root executable expected_backend destination receipt_manifest active_version hash before expected
   PROVISIONING_RECEIPT="$HOME/.local/state/dotfiles/provisioning/v1/receipt.json"
   validate_home_parent_chain "$PROVISIONING_RECEIPT"
   capture_path_identity "$PROVISIONING_RECEIPT" || die 'provisioning receipt changed before validation'
@@ -299,15 +365,12 @@ validate_provisioning_receipt() {
       (.content_sha256 | type == "string" and test("^[0-9a-f]{64}$"))) and ([.[].destination] | unique | length) == length)
   ' "$PROVISIONING_RECEIPT" >/dev/null || die 'malformed or newer provisioning receipt'
   receipt_manifest="$(jq -r .manifest_sha256 "$PROVISIONING_RECEIPT")"
-  if [[ "$receipt_manifest" != "$PROVISIONING_MANIFEST_SHA" ]]; then
-    jq -e --arg hash "$receipt_manifest" '.previous_manifest_sha256s | index($hash) != null' \
-      "$DOTFILES_DIR/manifests/proposals/2026-07-17-runtime-tool-provisioning.json" >/dev/null 2>&1 || \
-      die 'provisioning receipt manifest identity is not accepted'
-  fi
+  provisioning_manifest_hash_accepted "$receipt_manifest" || \
+    die 'provisioning receipt manifest identity is not accepted'
   while IFS= read -r value; do provisioning_safe_path "$value" || die "unsafe path in provisioning receipt: $value"; done < <(
     jq -r '.tools[].install_root, .tools[].executable, .launchers[].destination' "$PROVISIONING_RECEIPT"
   )
-  while IFS=$'\t' read -r id backend version platform root executable; do
+  while IFS=$'\t' read -r id backend version platform root executable hash; do
     if [[ "$id" == mise ]]; then
       destination="$(jq -r '.mise.destination' "$PROVISIONING_MANIFEST")"
       active_version="$(jq -r '.mise.version' "$PROVISIONING_MANIFEST")"
@@ -319,13 +382,25 @@ validate_provisioning_receipt() {
         die 'mise provisioning receipt executable identity is invalid'
       continue
     fi
+    if jq -e --arg id "$id" '.retired_tools[] | select(.id == $id)' "$PROVISIONING_MANIFEST" >/dev/null; then
+      expected="$(jq -r --arg id "$id" '.retired_tools[] | select(.id == $id) |
+        [.id,.backend,.version,.platform,.install_root,.executable,.executable_sha256] | @tsv' "$PROVISIONING_MANIFEST")"
+      [[ "$id"$'\t'"$backend"$'\t'"$version"$'\t'"$platform"$'\t'"$root"$'\t'"$executable"$'\t'"$hash" == "$expected" ]] || \
+        die "provisioning receipt retired identity is invalid for $id"
+      [[ -d "$HOME/$root" && ! -L "$HOME/$root" && "$(stat -c %u -- "$HOME/$root")" == "$EUID" &&
+        -f "$HOME/$root/$executable" && ! -L "$HOME/$root/$executable" && -x "$HOME/$root/$executable" &&
+        "$(stat -c %u -- "$HOME/$root/$executable")" == "$EUID" &&
+        "$(sha256_file "$HOME/$root/$executable")" == "$hash" ]] || \
+        die "provisioning receipt retired executable identity is invalid for $id"
+      continue
+    fi
     expected_backend="$(jq -er --arg id "$id" '.tools[] | select(.id == $id) | .backend' "$PROVISIONING_MANIFEST" 2>/dev/null)" || \
       die "provisioning receipt contains unknown tool '$id'"
     [[ "$backend" == "$expected_backend" && "$platform" == "$PROVISIONING_PLATFORM" ]] || \
       die "provisioning receipt owner identity is invalid for $id"
     [[ "$root" == ".local/share/dotfiles/provisioning/tools/$id/"* ]] || \
       die "provisioning receipt install root is stale for $id"
-  done < <(jq -r '.tools[] | [.id,.backend,.version,.platform,.install_root,.executable] | @tsv' "$PROVISIONING_RECEIPT")
+  done < <(jq -r '.tools[] | [.id,.backend,.version,.platform,.install_root,.executable,.executable_sha256] | @tsv' "$PROVISIONING_RECEIPT")
   while IFS=$'\t' read -r id destination; do
     [[ "$(jq -r --arg id "$id" '.tools[] | select(.id == $id) | .commands[0].launcher // empty' "$PROVISIONING_MANIFEST")" == "$destination" ]] || \
       die "provisioning receipt launcher identity is invalid for $id"
@@ -873,6 +948,124 @@ write_receipt_update() {
   local content="$1" expected="$2"
   write_string_atomic "$content" "$PROVISIONING_RECEIPT" 0600 "$expected"
   verify_provisioning_receipt_write "$content"
+}
+
+write_retirement_receipt_cas() {
+  local content="$1" expected="$2" temporary quarantine
+  temporary="$(mktemp "${PROVISIONING_RECEIPT%/*}/.receipt.json.retirement.XXXXXX")"
+  track_temp_path "$temporary"
+  printf '%s\n' "$content" > "$temporary"
+  chmod 0600 "$temporary"
+  require_expected_pre_state "$PROVISIONING_RECEIPT" "$expected" 'provisioning retirement receipt'
+  provisioning_quarantine_expected_path "$PROVISIONING_RECEIPT" "$expected" \
+    'provisioning retirement receipt' || die 'provisioning receipt changed before retirement commit'
+  quarantine="$PROVISIONING_QUARANTINE_PATH"
+  PROVISION_RETIRE_RECEIPT_QUARANTINE="$quarantine"
+  PROVISION_RETIRE_RECEIPT_QUARANTINE_IDENTITY="$expected"
+  install_regular_no_clobber "$temporary" "$PROVISIONING_RECEIPT" \
+    'provisioning retirement receipt install' "$quarantine"
+  capture_path_identity "$PROVISIONING_RECEIPT" || die 'retirement receipt post-state is unreadable'
+  PROVISION_RETIRE_RECEIPT_IDENTITY="$PATH_IDENTITY"
+  test_hold provisioning-retirement-after-receipt
+  fault provisioning-retirement-after-receipt
+  verify_provisioning_receipt_write "$content" "$PROVISION_RETIRE_RECEIPT_IDENTITY"
+}
+
+verify_retired_provisioning_transaction() {
+  local id="$1" content="$2"
+  provisioning_path_tree_identity "$PROVISION_RETIRE_ROOT" || return 1
+  [[ "$PROVISIONING_TREE_IDENTITY" == "$PROVISION_RETIRE_ROOT_IDENTITY" ]] || return 1
+  capture_path_identity "$PROVISION_RETIRE_LINK" || return 1
+  [[ "$PATH_IDENTITY" == absent ]] || return 1
+  verify_provisioning_receipt_write "$content" "$PROVISION_RETIRE_RECEIPT_IDENTITY" || return 1
+  jq -e --arg id "$id" --arg manifest "$PROVISIONING_MANIFEST_SHA" '
+    .manifest_sha256 == $manifest and
+    ([.tools[] | select(.id == $id)] | length) == 0 and
+    ([.launchers[] | select(.tool_id == $id)] | length) == 0
+  ' "$PROVISIONING_RECEIPT" >/dev/null
+}
+
+commit_retired_provisioning_transaction() {
+  local failed=false
+  PROVISION_RETIRE_COMMITTED=true
+  PROVISION_RETIRE_ACTIVE=false
+  if provisioning_discard_quarantine "$PROVISION_RETIRE_RECEIPT_QUARANTINE" \
+    "$PROVISION_RETIRE_RECEIPT_QUARANTINE_IDENTITY" 'retirement receipt'; then
+    PROVISION_RETIRE_RECEIPT_QUARANTINE=""
+  else
+    retain_tracked_temp_path "$PROVISION_RETIRE_RECEIPT_QUARANTINE"
+    printf '[%s] error: committed retirement retained old receipt recovery path: %s\n' \
+      "$SCRIPT_NAME" "$PROVISION_RETIRE_RECEIPT_QUARANTINE" >&2
+    failed=true
+  fi
+  if provisioning_discard_quarantine "$PROVISION_RETIRE_LINK_QUARANTINE" \
+    "$PROVISION_RETIRE_LINK_QUARANTINE_IDENTITY" 'retired mise registration'; then
+    PROVISION_RETIRE_LINK_QUARANTINE=""
+  else
+    retain_tracked_temp_path "$PROVISION_RETIRE_LINK_QUARANTINE"
+    printf '[%s] error: committed retirement retained old mise registration recovery path: %s\n' \
+      "$SCRIPT_NAME" "$PROVISION_RETIRE_LINK_QUARANTINE" >&2
+    failed=true
+  fi
+  [[ "$failed" == false ]]
+}
+
+retire_provisioned_tool() {
+  local id="$1" root_rel executable backend version expected_hash root link row expected content
+  jq -e --arg id "$id" '.retired_tools[] | select(.id == $id)' "$PROVISIONING_MANIFEST" >/dev/null || \
+    die "tool '$id' is not declared for provisioning retirement"
+  if [[ ! -f "$PROVISIONING_RECEIPT" ]] ||
+    ! jq -e --arg id "$id" '.tools[] | select(.id == $id)' "$PROVISIONING_RECEIPT" >/dev/null; then
+    log "retired provisioning for $id is converged; no changes made"
+    return 0
+  fi
+
+  IFS=$'\t' read -r backend version root_rel executable expected_hash < <(jq -r --arg id "$id" '
+    .retired_tools[] | select(.id == $id) |
+    [.backend,.version,.install_root,.executable,.executable_sha256] | @tsv
+  ' "$PROVISIONING_MANIFEST")
+  root="$HOME/$root_rel"
+  link="$(mise_link_path "$backend" "$version")"
+  provisioning_path_tree_identity "$root" || die "retained root identity is unreadable for $id"
+  [[ "$PROVISIONING_TREE_IDENTITY" != absent ]] || die "retained root is absent for $id"
+  capture_path_identity "$link" || die "mise registration identity is unreadable for $id"
+  expected="$PATH_IDENTITY"
+  [[ "$expected" != absent && -L "$link" && "$(realpath -e -- "$link" 2>/dev/null || true)" == "$root" ]] || \
+    die "mise registration does not match the retired owner for $id"
+  row="$(jq -c --arg id "$id" '.tools[] | select(.id == $id)' "$PROVISIONING_RECEIPT")"
+  log "retirement receipt row: $row"
+  log "retirement mise registration: $link -> $root"
+  if [[ "$MODE" == check ]]; then
+    log "pending provisioning retirement: $id"
+    return 1
+  fi
+
+  read_provisioning_receipt
+  [[ "$PROVISIONING_RECEIPT_READ_IDENTITY" == "$PROVISIONING_RECEIPT_IDENTITY" ]] || \
+    die 'provisioning receipt changed before retirement transaction'
+  content="$(jq -c --arg id "$id" --arg manifest "$PROVISIONING_MANIFEST_SHA" '
+    .manifest_sha256=$manifest |
+    .tools=[.tools[] | select(.id != $id)] |
+    .launchers=[.launchers[] | select(.tool_id != $id)]
+  ' <<< "$PROVISIONING_RECEIPT_READ_CONTENT")"
+
+  reset_retired_provisioning_transaction
+  PROVISION_RETIRE_ROOT="$root"
+  provisioning_path_tree_identity "$root" || die "retained root changed before retirement for $id"
+  PROVISION_RETIRE_ROOT_IDENTITY="$PROVISIONING_TREE_IDENTITY"
+  PROVISION_RETIRE_LINK="$link"
+  provisioning_quarantine_expected_path "$link" "$expected" 'retired mise registration' || \
+    die "mise registration changed before retirement for $id"
+  PROVISION_RETIRE_LINK_QUARANTINE="$PROVISIONING_QUARANTINE_PATH"
+  PROVISION_RETIRE_LINK_QUARANTINE_IDENTITY="$expected"
+  fault provisioning-retirement-after-link
+  write_retirement_receipt_cas "$content" "$PROVISIONING_RECEIPT_READ_IDENTITY"
+  test_hold provisioning-retirement-before-commit
+  verify_retired_provisioning_transaction "$id" "$content" || \
+    die "provisioning retirement post-state verification failed for $id"
+  commit_retired_provisioning_transaction || \
+    die "provisioning retirement committed with retained recovery paths for $id"
+  log "retired provisioning ownership for $id; retained $root"
 }
 
 record_tool_receipt() {

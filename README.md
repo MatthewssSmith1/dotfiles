@@ -12,6 +12,7 @@ Opinionated Bash, zsh, Git, Neovim, tmux, and agent configuration. [GNU Stow](ht
 - Neovim based on pinned LazyVim and Omarchy release inputs
 - tmux with persistent layouts and AI assistant session restoration
 - Pinned personal agent skills and shared OpenCode/Claude instructions
+- Herdr, a checksum-locked agent-native terminal multiplexer on trial alongside tmux
 - Windows Terminal theming applied from the Windows host
 
 ## Profiles

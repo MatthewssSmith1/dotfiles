@@ -78,9 +78,10 @@ Specific behavior:
   `cd` alias and `zd` function exist only when `zoxide` is then available.
   Other unconditional aliases remain defined even when their eventual target
   command is absent; invocation may fail normally.
-- Build duplicate-free PATH precedence from protected provisioned launchers,
-  the private wrappers, the existing OpenCode directory when present, and
-  standard system paths. Do not add NVM, Deno, Vite+, or legacy `~/.fzf/bin`.
+- Build duplicate-free PATH precedence from `~/.local/bin`, protected
+  provisioned launchers, the private wrappers, the existing `~/.opencode/bin`
+  directory, inherited paths, and standard system paths, in that order. Do not
+  add NVM, Deno, Vite+, or legacy `~/.fzf/bin`.
 - Keep the personal Bash preference layer otherwise empty initially.
 
 Non-interactive Bash returns before any managed environment mutation or initializer. Interactive SSH uses the same managed path; non-interactive SSH commands do not. Every runtime initializer is capability-guarded so an optional command disappearing after deployment causes no startup failure or diagnostic.
@@ -95,7 +96,7 @@ Initialization must be capability-guarded. Missing optional commands may reduce 
 
 Shell startup activates the shared mise fragments after environment setup and before mise-provided tools are initialized. Executable ownership and locking are defined in [Deployment](../deployment.md#mise).
 
-Worktrunk has a separate capability-guarded initialization hook when available. Its initializer child runs with `MISE_OFFLINE=1` in a denied-network user namespace after `setpriv` removes every capability and enables no-new-privileges. If that isolation cannot be established at runtime, startup silently skips the optional integration rather than running it unrestricted; check requires the isolation primitives to be usable. Vite+ remains project-owned through project mise files; managed Bash must not add a global Vite+ environment hook. NVM, Deno, legacy `~/.fzf.bash`, and the duplicate legacy Worktrunk initializer are also retired from managed Bash. Bootstrap does not install, update, configure, or inspect OpenCode or `opencode-openai-codex-auth`, and unrelated shell deployment preserves the existing executable, configuration, plugins, and authentication state.
+Worktrunk has a separate capability-guarded initialization hook when available. Its initializer child runs with `MISE_OFFLINE=1` in a denied-network user namespace after `setpriv` removes every capability and enables no-new-privileges. If that isolation cannot be established at runtime, startup silently skips the optional integration rather than running it unrestricted; check requires the isolation primitives to be usable. Vite+ remains project-owned through project mise files; managed Bash must not add a global Vite+ environment hook. NVM, Deno, legacy `~/.fzf.bash`, and the duplicate legacy Worktrunk initializer are also retired from managed Bash. Claude Code and OpenCode are optional host-owned commands. Shell aliases invoke them directly without installing, updating, configuring, or inspecting them; missing commands fail normally when invoked.
 
 The final layer is the readable real, untracked `~/.config/dotfiles/local/bash.sh`; bootstrap sources but does not own or delete it. The initial WSL file sources Cargo's `~/.cargo/env` only when readable, adds and initializes rbenv only when `~/.rbenv/bin` and the command exist, and adds `~/.elan/bin` only when that directory exists. It must remain silent when those tools are absent, must not move protected mise-owned commands behind host-local paths, and contains no Node, NVM, Deno, Vite+, installer, updater, authentication, or network behavior.
 
@@ -109,7 +110,7 @@ The executable-owner pass never sources host-local code. Host-local aliases and 
 
 ## Transitional zsh
 
-zsh is the current login shell and remains available as a behaviorally frozen escape hatch while Bash with Starship is the primary configured workflow. History, vi mode, key bindings, Powerlevel10k, Zinit, plugins, completion styles, zoxide, fzf, mise, Worktrunk, aliases, and OpenCode PATH behavior receive no new features. Converging the two setups or retiring zsh is a deliberate decision recorded in [Deferred Work](../deferred.md#shell-convergence).
+zsh is the current login shell and remains a behaviorally frozen escape hatch while Bash with Starship is primary. Existing behavior receives no new features; the OpenCode path is reordered only so its native owner wins over inherited mise paths. Convergence or retirement remains a deliberate decision in [Deferred Work](../deferred.md#shell-convergence).
 
 The retained zsh behavior uses distro-owned fzf completion and key-binding files directly. It does not source the legacy host installer hook or add `~/.fzf/bin`; this is an ownership correction rather than a new shell feature.
 

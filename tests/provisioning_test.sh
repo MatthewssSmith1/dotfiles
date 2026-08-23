@@ -18,6 +18,7 @@ set_area_status "$fixture" herdr framework
 
 mise_artifact="$TEST_ROOT/mise-artifact"
 tool_artifact="$TEST_ROOT/starship-artifact"
+retired_artifact="$TEST_ROOT/claude-artifact"
 cat > "$mise_artifact" <<'SCRIPT'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -50,10 +51,15 @@ cat > "$tool_artifact" <<'SCRIPT'
 #!/usr/bin/env bash
 if [[ "${1:-}" == --version ]]; then printf 'starship 1.26.0\n'; else exit 91; fi
 SCRIPT
-chmod +x "$mise_artifact" "$tool_artifact"
+cat > "$retired_artifact" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'fixture retired Claude Code\n'
+SCRIPT
+chmod +x "$mise_artifact" "$tool_artifact" "$retired_artifact"
 mise_hash="$(sha256sum "$mise_artifact" | cut -d' ' -f1)"
 tool_hash="$(sha256sum "$tool_artifact" | cut -d' ' -f1)"
-jq --arg mise_hash "$mise_hash" --arg tool_hash "$tool_hash" '
+retired_hash="$(sha256sum "$retired_artifact" | cut -d' ' -f1)"
+jq --arg mise_hash "$mise_hash" --arg tool_hash "$tool_hash" --arg retired_hash "$retired_hash" '
   .mise.artifact.url="https://fixtures.invalid/mise" |
   .mise.artifact.sha256=$mise_hash |
   .mise.artifact.inventory_sha256=$mise_hash |
@@ -71,7 +77,8 @@ jq --arg mise_hash "$mise_hash" --arg tool_hash "$tool_hash" '
   .tools[0].artifact.strip_components=0 |
   .tools[0].artifact.executable="starship" |
   .tools[0].artifact.allowed_origins=["fixtures.invalid"] |
-  .tools[0].commands[0].path="starship"
+  .tools[0].commands[0].path="starship" |
+  .retired_tools[0].executable_sha256=$retired_hash
 ' "$fixture/manifests/provisioning.json" > "$fixture/manifests/provisioning.json.new"
 mv "$fixture/manifests/provisioning.json.new" "$fixture/manifests/provisioning.json"
 
@@ -120,8 +127,42 @@ capture() {
   set -e
 }
 
-# The active lock is strict JSON and excludes deferred tools.
-jq -e '.schema_version == 1 and ([.tools[].id] | index("opencode") == null) and ([.tools[].id] | index("vite+") == null)' \
+make_retirement_home() {
+  local name="$1" home root link receipt
+  home="$(new_home "$name")"
+  root="$home/.local/share/dotfiles/provisioning/tools/claude-code/2.1.212"
+  link="$home/.local/share/mise/installs/aqua-anthropics-claude-code/2.1.212"
+  receipt="$home/.local/state/dotfiles/provisioning/v1/receipt.json"
+  mkdir -p "$root" "${link%/*}" "${receipt%/*}" "$home/.claude" \
+    "$home/.config/opencode/plugins" "$home/.local/share/opencode"
+  cp "$retired_artifact" "$root/claude"
+  chmod 0755 "$root/claude"
+  ln -s "$root" "$link"
+  printf '{"preserved":true}\n' > "$home/.claude/settings.json"
+  printf '{"preserved":true}\n' > "$home/.claude.json"
+  printf '{"preserved":true}\n' > "$home/.config/opencode/opencode.json"
+  printf 'preserved plugin\n' > "$home/.config/opencode/plugins/fixture.js"
+  printf 'preserved session\n' > "$home/.local/share/opencode/session"
+  jq -cn --arg manifest 805f72ea87e29a8725ab9487108dfe3788a789eacb3fb6086916a554720e1e2d \
+    --arg hash "$retired_hash" '
+      {schema_version:1,manifest_sha256:$manifest,tools:[{id:"claude-code",
+       backend:"aqua:anthropics/claude-code",version:"2.1.212",platform:"linux-x86_64",
+       install_root:".local/share/dotfiles/provisioning/tools/claude-code/2.1.212",
+       executable:"claude",executable_sha256:$hash}],launchers:[]}
+    ' > "$receipt"
+  chmod 0600 "$receipt"
+  RETIRE_HOME="$home"
+  RETIRE_ROOT="$root"
+  RETIRE_LINK="$link"
+  RETIRE_RECEIPT="$receipt"
+}
+
+# The active lock is strict JSON and excludes host- and project-owned tools.
+jq -e '.schema_version == 1 and
+  ([.tools[].id] | index("claude-code") == null) and
+  ([.tools[].id] | index("opencode") == null) and
+  ([.tools[].id] | index("vite+") == null) and
+  ([.retired_tools[].id] == ["claude-code"])' \
   "$REPO_DIR/manifests/provisioning.json" >/dev/null || fail 'active provisioning lock is invalid'
 jq -e '
   .tools[] | select(.id == "herdr") |
@@ -131,6 +172,113 @@ jq -e '
   .executable_identity == {mode:"0755",size:21315048,sha256:"3dc83288073e4c2d3c679a30e7be97bcca9141c6fd17dbbb9219142e95c59253"} and
   .takeover_identity == {policy:"exact-launcher-binary",mode:"0775",size:21315048,sha256:"3dc83288073e4c2d3c679a30e7be97bcca9141c6fd17dbbb9219142e95c59253"}
 ' "$REPO_DIR/manifests/provisioning.json" >/dev/null || fail 'active Herdr provisioning lock is invalid'
+jq -e '([.ownership[] | select(.id == "claude-code" or .id == "opencode") |
+  [.generic,.wsl,.omarchy]] | length) == 2 and
+  all(.ownership[]; .generic == "host-native" and .wsl == "host-native" and .omarchy == "platform-native")' \
+  "$REPO_DIR/manifests/proposals/2026-08-07-host-owned-assistant-clis.json" >/dev/null || \
+  fail 'assistant ownership proposal is invalid'
+pass
+
+# Retired Claude ownership is an explicit offline operation with an exact,
+# non-mutating check and a transaction that never touches assistant state.
+make_retirement_home retirement
+retire_home="$RETIRE_HOME"; retire_root="$RETIRE_ROOT"; retire_link="$RETIRE_LINK"; retire_receipt="$RETIRE_RECEIPT"
+retire_receipt_before="$(sha256sum "$retire_receipt")"
+retire_state_before="$(sha256sum "$retire_home/.claude/settings.json" "$retire_home/.claude.json" \
+  "$retire_home/.config/opencode/opencode.json" "$retire_home/.config/opencode/plugins/fixture.js" \
+  "$retire_home/.local/share/opencode/session")"
+DENY_DOWNLOAD=1 capture "$retire_home" --check --retire-provisioned claude-code
+((TEST_RC == 1)) || fail 'pending Claude retirement check did not return 1'
+assert_contains "$TEST_OUTPUT" 'retirement receipt row:'
+assert_contains "$TEST_OUTPUT" "retirement mise registration: $retire_link -> $retire_root"
+assert_contains "$TEST_OUTPUT" 'pending provisioning retirement: claude-code'
+[[ -L "$retire_link" && "$retire_receipt_before" == "$(sha256sum "$retire_receipt")" ]] || \
+  fail 'retirement check mutated provisioning metadata'
+DENY_DOWNLOAD=1 capture "$retire_home" --retire-provisioned claude-code
+((TEST_RC == 0)) || fail 'Claude retirement transaction failed'
+[[ ! -e "$retire_link" && ! -L "$retire_link" && -x "$retire_root/claude" ]] || \
+  fail 'Claude retirement removed the retained root or kept its mise registration'
+jq -e --arg manifest "$(sha256sum "$fixture/manifests/provisioning.json" | cut -d' ' -f1)" '
+  .manifest_sha256 == $manifest and
+  ([.tools[] | select(.id == "claude-code")] | length) == 0 and
+  ([.launchers[] | select(.tool_id == "claude-code")] | length) == 0
+' "$retire_receipt" >/dev/null || fail 'Claude retirement receipt did not converge'
+[[ "$retire_state_before" == "$(sha256sum "$retire_home/.claude/settings.json" "$retire_home/.claude.json" \
+  "$retire_home/.config/opencode/opencode.json" "$retire_home/.config/opencode/plugins/fixture.js" \
+  "$retire_home/.local/share/opencode/session")" ]] || fail 'Claude retirement changed assistant state'
+DENY_DOWNLOAD=1 capture "$retire_home" --retire-provisioned claude-code
+((TEST_RC == 0)) || fail 'already-retired Claude ownership was not idempotent'
+assert_contains "$TEST_OUTPUT" 'retired provisioning for claude-code is converged; no changes made'
+capture "$retire_home" --retire-provisioned unknown-tool
+((TEST_RC == 1)) || fail 'undeclared retirement tool was accepted'
+assert_contains "$TEST_OUTPUT" "tool 'unknown-tool' is not declared for provisioning retirement"
+pass
+
+# Retirement is mutually exclusive with configuration, provisioning, profile,
+# and area intent.
+for args in 'apply --retire-provisioned claude-code' '--remove --retire-provisioned claude-code' \
+  '--provision --retire-provisioned claude-code' '--area git --retire-provisioned claude-code' \
+  '--profile generic --retire-provisioned claude-code'; do
+  read -r -a argv <<< "$args"
+  capture "$retire_home" "${argv[@]}"
+  ((TEST_RC == 1)) || fail "invalid retirement CLI combination succeeded: $args"
+done
+pass
+
+# Each retirement mutation boundary restores the exact receipt and registration
+# while retaining the old binary root.
+for point in provisioning-retirement-after-link provisioning-retirement-after-receipt; do
+  make_retirement_home "retirement-$point"
+  fault_home="$RETIRE_HOME"; fault_root="$RETIRE_ROOT"; fault_link="$RETIRE_LINK"; fault_receipt="$RETIRE_RECEIPT"
+  cp -a "$fault_receipt" "$TEST_ROOT/$point.receipt"
+  set +e
+  TEST_OUTPUT="$(DOTFILES_TEST_FAIL_AT="$point" invoke_fixture "$fault_home" --retire-provisioned claude-code 2>&1)"
+  TEST_RC=$?
+  set -e
+  ((TEST_RC != 0 && TEST_RC != 70)) || fail "$point returned the wrong retirement status"
+  cmp -s "$fault_receipt" "$TEST_ROOT/$point.receipt" || fail "$point did not restore the old receipt"
+  [[ -L "$fault_link" && "$(realpath -e -- "$fault_link")" == "$fault_root" && -x "$fault_root/claude" ]] || \
+    fail "$point did not restore the exact mise registration"
+done
+pass
+
+# A concurrent receipt replacement after the exact retirement read is retained,
+# and the mise registration is never moved.
+make_retirement_home retirement-receipt-race
+race_home="$RETIRE_HOME"; race_root="$RETIRE_ROOT"; race_link="$RETIRE_LINK"; race_receipt="$RETIRE_RECEIPT"
+hold="$TEST_ROOT/retirement-receipt-race-hold"; mkdir "$hold"
+set +e
+( set +e; DOTFILES_TEST_HOLD_AT=after-provisioning-receipt-read DOTFILES_TEST_HOLD_DIR="$hold" \
+    invoke_fixture "$race_home" --retire-provisioned claude-code > "$TEST_ROOT/retirement-receipt-race.out" 2>&1; \
+  printf '%s' "$?" > "$TEST_ROOT/retirement-receipt-race.rc" ) &
+pid=$!
+set -e
+wait_for_file "$hold/after-provisioning-receipt-read.ready"
+printf '{"concurrent_retirement_receipt":true}\n' > "$race_receipt.concurrent"
+chmod 0600 "$race_receipt.concurrent"
+mv -T "$race_receipt.concurrent" "$race_receipt"
+: > "$hold/after-provisioning-receipt-read.release"
+wait "$pid" || true
+[[ "$(< "$TEST_ROOT/retirement-receipt-race.rc")" != 0 &&
+  "$(< "$race_receipt")" == '{"concurrent_retirement_receipt":true}' &&
+  -L "$race_link" && "$(realpath -e -- "$race_link")" == "$race_root" ]] || \
+  fail 'retirement receipt race did not preserve concurrent metadata and registration'
+assert_contains "$(< "$TEST_ROOT/retirement-receipt-race.out")" 'provisioning receipt changed while it was read'
+pass
+
+# Changed retired executables and registrations refuse before mutation.
+make_retirement_home retirement-drift
+drift_home="$RETIRE_HOME"; drift_root="$RETIRE_ROOT"; drift_link="$RETIRE_LINK"; drift_receipt="$RETIRE_RECEIPT"
+printf 'changed executable\n' > "$drift_root/claude"
+capture "$drift_home" --retire-provisioned claude-code
+((TEST_RC == 1)) || fail 'changed retired executable was accepted'
+assert_contains "$TEST_OUTPUT" 'retired executable identity is invalid for claude-code'
+cp "$retired_artifact" "$drift_root/claude"; chmod 0755 "$drift_root/claude"
+rm "$drift_link"; ln -s "$drift_home" "$drift_link"
+capture "$drift_home" --retire-provisioned claude-code
+((TEST_RC == 1)) || fail 'changed retired mise registration was accepted'
+assert_contains "$TEST_OUTPUT" 'mise registration does not match the retired owner for claude-code'
+[[ -L "$drift_link" && -f "$drift_receipt" ]] || fail 'retirement drift refusal mutated metadata'
 pass
 
 # Mise stores core backend links under the canonical tool name.

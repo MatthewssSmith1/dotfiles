@@ -10,3 +10,5 @@ for _dotfiles_bash_pnpm_dir in "$PNPM_HOME" "$PNPM_HOME/bin"; do
 done
 unset _dotfiles_bash_pnpm_dir
 export PATH
+
+alias c='opencode --auto'

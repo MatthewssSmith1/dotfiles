@@ -147,8 +147,8 @@ mapfile -t init_trace < "$home/init-trace"
 managed_definitions="$(run_payload "$home" generic 0 \
   'source "$DOTFILES_BASH_VALIDATION_ROOT/rc.bash"; alias -p; declare -f sff zd open n tdl tdlm tsl')"
 expected_definitions="$(HOME="$home" PATH="$home/fake-bin:/usr/bin:/bin" TERM=xterm-256color \
-  bash --noprofile --norc -c 'shopt -s expand_aliases; source "$1"; source "$2"; alias -p; declare -f sff zd open n tdl tdlm tsl' \
-  _ "$UPSTREAM_ROOT/aliases" "$UPSTREAM_ROOT/fns/tmux")"
+  bash --noprofile --norc -c 'shopt -s expand_aliases; _dotfiles_bash_trace() { :; }; source "$1"; source "$2"; source "$3"; alias -p; declare -f sff zd open n tdl tdlm tsl' \
+  _ "$UPSTREAM_ROOT/aliases" "$UPSTREAM_ROOT/fns/tmux" "$COMMON_ROOT/personal.bash")"
 [[ "$managed_definitions" == "$expected_definitions" ]] || fail 'managed aliases or tmux helpers differ from the pinned payload behavior'
 pass
 
@@ -190,6 +190,31 @@ mkdir -p "$TEST_ROOT/pnpm-empty-generic"
 TEST_OUTPUT="$(run_pnpm_payload "$TEST_ROOT/pnpm-empty-generic" "$home/fake-bin:/usr/bin:/bin")"
 [[ "$TEST_OUTPUT" == *$'\n'"$home/.local/share/pnpm/bin:$home/.local/share/pnpm:$home/fake-bin:"* ]] || \
   fail 'native startup without the generic layer did not prepend pnpm directories'
+pass
+
+# Host-native assistants win over stale inherited mise candidates, while the
+# aliases remain capability-neutral command invocations.
+home="$TEST_ROOT/home-assistant-paths"
+mkdir -p "$home/.local/bin" "$home/.opencode/bin" "$home/fake-bin"
+for path in "$home/.local/bin/claude" "$home/.opencode/bin/opencode" \
+  "$home/fake-bin/claude" "$home/fake-bin/opencode"; do
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$path"
+  chmod 0755 "$path"
+done
+TEST_OUTPUT="$(run_payload "$home" generic 0 \
+  'source "$DOTFILES_BASH_VALIDATION_ROOT/rc.bash"; command -v claude; command -v opencode; alias c; alias cx')"
+assert_contains "$TEST_OUTPUT" "$home/.local/bin/claude"
+assert_contains "$TEST_OUTPUT" "$home/.opencode/bin/opencode"
+assert_contains "$TEST_OUTPUT" "alias c='opencode --auto'"
+assert_contains "$TEST_OUTPUT" 'claude --permission-mode bypassPermissions'
+[[ "$TEST_OUTPUT" != *"$home/fake-bin/claude"* && "$TEST_OUTPUT" != *"$home/fake-bin/opencode"* ]] || \
+  fail 'inherited assistant candidate shadowed a host-native executable'
+! grep -Eiq 'claude-code|opencode' \
+  "$REPO_DIR/packages/common/bash/.config/mise/conf.d/20-dotfiles-common.toml" \
+  "$REPO_DIR/packages/generic/bash/.config/mise/conf.d/30-dotfiles-profile.toml" || \
+  fail 'managed mise fragments select a host-owned assistant'
+grep -qF 'path_prepend "$HOME/.opencode/bin"' "$REPO_DIR/packages/common/zsh/.zshrc" || \
+  fail 'zsh does not place native OpenCode ahead of inherited mise paths'
 pass
 
 # Private wrappers select distro command-name variants, preserve arguments/status, and never recurse.
