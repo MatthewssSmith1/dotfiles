@@ -18,7 +18,7 @@ Development tools resolve to native Omarchy packages. Bootstrap fails if a prohi
 
 Herdr is the sole exception: explicit provisioning installs its checksum-locked release through native mise. Its regular config and predecessor restoration follow the shared [Herdr contract](../tools/herdr.md).
 
-Claude Code and OpenCode retain their Omarchy or native host owners. This repository adds no assistant mise selector, does not require either executable, and leaves assistant application state untouched.
+Claude Code, Codex, and OpenCode retain their Omarchy or native host owners. This repository adds no assistant mise selector, does not require an assistant executable, and leaves assistant application state untouched.
 
 Bash and zsh are ready; native attachment and refresh behavior were validated live on this profile.
 

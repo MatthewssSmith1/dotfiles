@@ -160,6 +160,7 @@ make_retirement_home() {
 # The active lock is strict JSON and excludes host- and project-owned tools.
 jq -e '.schema_version == 1 and
   ([.tools[].id] | index("claude-code") == null) and
+  ([.tools[].id] | index("codex") == null) and
   ([.tools[].id] | index("opencode") == null) and
   ([.tools[].id] | index("vite+") == null) and
   ([.retired_tools[].id] == ["claude-code"])' \
@@ -172,10 +173,10 @@ jq -e '
   .executable_identity == {mode:"0755",size:21315048,sha256:"3dc83288073e4c2d3c679a30e7be97bcca9141c6fd17dbbb9219142e95c59253"} and
   .takeover_identity == {policy:"exact-launcher-binary",mode:"0775",size:21315048,sha256:"3dc83288073e4c2d3c679a30e7be97bcca9141c6fd17dbbb9219142e95c59253"}
 ' "$REPO_DIR/manifests/provisioning.json" >/dev/null || fail 'active Herdr provisioning lock is invalid'
-jq -e '([.ownership[] | select(.id == "claude-code" or .id == "opencode") |
-  [.generic,.wsl,.omarchy]] | length) == 2 and
+jq -e '([.ownership[] | select(.id == "claude-code" or .id == "codex" or .id == "opencode") |
+  [.generic,.wsl,.omarchy]] | length) == 3 and
   all(.ownership[]; .generic == "host-native" and .wsl == "host-native" and .omarchy == "platform-native")' \
-  "$REPO_DIR/manifests/proposals/2026-08-07-host-owned-assistant-clis.json" >/dev/null || \
+  "$REPO_DIR/manifests/proposals/2026-08-10-host-owned-assistant-clis.json" >/dev/null || \
   fail 'assistant ownership proposal is invalid'
 pass
 

@@ -207,7 +207,7 @@ validate_provisioning_manifest() {
   local proposal="$DOTFILES_DIR/manifests/proposals/2026-07-17-runtime-tool-provisioning.json"
   local value host url
   PROVISIONING_MANIFEST="$DOTFILES_DIR/manifests/provisioning.json"
-  PROVISIONING_PROPOSAL="$DOTFILES_DIR/manifests/proposals/2026-08-07-host-owned-assistant-clis.json"
+  PROVISIONING_PROPOSAL="$DOTFILES_DIR/manifests/proposals/2026-08-10-host-owned-assistant-clis.json"
   [[ -f "$schema" && ! -L "$schema" ]] || die 'missing provisioning manifest schema'
   [[ -f "$PROVISIONING_MANIFEST" && ! -L "$PROVISIONING_MANIFEST" ]] || die 'missing provisioning manifest'
   [[ -f "$proposal" && ! -L "$proposal" ]] || die 'missing accepted runtime-tool provisioning record'
@@ -219,8 +219,8 @@ validate_provisioning_manifest() {
     die 'missing accepted assistant ownership proposal'
   jq -e '.schema_version == 1 and .status == "accepted-host-owned-assistant-lifecycle" and
     .accepted_manifest == "manifests/provisioning.json" and
-    .supersedes == "manifests/proposals/2026-07-17-runtime-tool-provisioning.json" and
-    ([.ownership[].id] | sort) == ["claude-code","opencode"] and
+    .supersedes == "manifests/proposals/2026-08-07-host-owned-assistant-clis.json" and
+    ([.ownership[].id] | sort) == ["claude-code","codex","opencode"] and
     all(.ownership[]; .generic == "host-native" and .wsl == "host-native" and .omarchy == "platform-native") and
     (.previous_manifest_sha256s | type == "array" and unique == . and all(.[]; type == "string" and test("^[0-9a-f]{64}$")))' \
     "$PROVISIONING_PROPOSAL" >/dev/null || die 'invalid accepted assistant ownership proposal'
@@ -316,7 +316,7 @@ validate_provisioning_manifest() {
   while IFS= read -r value; do
     [[ -n "${AREA_STATUS[$value]+x}" ]] || die "provisioning manifest references unknown area '$value'"
   done < <(jq -r '.tools[].areas[]' "$PROVISIONING_MANIFEST")
-  if jq -er '[.tools[].id, .tools[].backend, .tools[].commands[].name] | join("\n") | test("(^|\n)(claude-code|opencode|opencode-openai-codex-auth|vite\\+?)(\n|$)"; "i")' \
+  if jq -er '[.tools[].id, .tools[].backend, .tools[].commands[].name] | join("\n") | test("(^|\n)(claude-code|codex|opencode|opencode-openai-codex-auth|vite\\+?)(\n|$)"; "i")' \
     "$PROVISIONING_MANIFEST" | grep -qx true; then
     die 'provisioning manifest contains an excluded host-owned tool'
   fi
