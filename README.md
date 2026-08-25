@@ -105,7 +105,7 @@ The Omarchy core, LazyVim starter, and Omarchy Neovim overlay are pinned as immu
   policy, state, native attachments
 - [Upstream](docs/upstream.md) — source pins, snapshots, synchronization
 - Tool contracts: [Git](docs/tools/git.md), [Shell](docs/tools/shell.md),
-  [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md),
+  [Local environment bundles](docs/tools/secrets.md), [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md),
   [Agents](docs/tools/agents.md)
 - Environments: [Omarchy](docs/environments/omarchy.md),
   [generic Linux](docs/environments/generic.md),

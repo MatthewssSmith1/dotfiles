@@ -74,7 +74,7 @@ for file in \
   "$WSL_ROOT/wsl.bash"; do
   [[ -f "$file" && ! -L "$file" && "$(stat -c %a -- "$file")" == 644 ]] || fail "invalid managed Bash payload: $file"
 done
-for wrapper in bat fd; do
+for wrapper in bat dotfiles-secret fd; do
   [[ -x "$REPO_DIR/packages/generic/bash/.local/share/dotfiles/bin/$wrapper" && \
     "$(stat -c %a -- "$REPO_DIR/packages/generic/bash/.local/share/dotfiles/bin/$wrapper")" == 755 ]] || \
     fail "$wrapper wrapper mode is not 0755"
@@ -196,25 +196,74 @@ pass
 # aliases remain capability-neutral command invocations.
 home="$TEST_ROOT/home-assistant-paths"
 mkdir -p "$home/.local/bin" "$home/.opencode/bin" "$home/fake-bin"
-for path in "$home/.local/bin/claude" "$home/.opencode/bin/opencode" \
-  "$home/fake-bin/claude" "$home/fake-bin/opencode"; do
+for path in "$home/.local/bin/claude" "$home/.local/bin/codex" "$home/.opencode/bin/opencode" \
+  "$home/fake-bin/claude" "$home/fake-bin/codex" "$home/fake-bin/opencode"; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$path"
   chmod 0755 "$path"
 done
 TEST_OUTPUT="$(run_payload "$home" generic 0 \
-  'source "$DOTFILES_BASH_VALIDATION_ROOT/rc.bash"; command -v claude; command -v opencode; alias c; alias cx')"
+  'source "$DOTFILES_BASH_VALIDATION_ROOT/rc.bash"; command -v claude; command -v codex; command -v opencode; alias c; alias cx; alias cy')"
 assert_contains "$TEST_OUTPUT" "$home/.local/bin/claude"
+assert_contains "$TEST_OUTPUT" "$home/.local/bin/codex"
 assert_contains "$TEST_OUTPUT" "$home/.opencode/bin/opencode"
 assert_contains "$TEST_OUTPUT" "alias c='opencode --auto'"
 assert_contains "$TEST_OUTPUT" 'claude --permission-mode bypassPermissions'
-[[ "$TEST_OUTPUT" != *"$home/fake-bin/claude"* && "$TEST_OUTPUT" != *"$home/fake-bin/opencode"* ]] || \
+assert_contains "$TEST_OUTPUT" "alias cy='codex -s danger-full-access -a never'"
+[[ "$TEST_OUTPUT" != *"$home/fake-bin/claude"* && "$TEST_OUTPUT" != *"$home/fake-bin/codex"* && \
+  "$TEST_OUTPUT" != *"$home/fake-bin/opencode"* ]] || \
   fail 'inherited assistant candidate shadowed a host-native executable'
-! grep -Eiq 'claude-code|opencode' \
+! grep -Eiq 'claude-code|codex|opencode' \
   "$REPO_DIR/packages/common/bash/.config/mise/conf.d/20-dotfiles-common.toml" \
   "$REPO_DIR/packages/generic/bash/.config/mise/conf.d/30-dotfiles-profile.toml" || \
   fail 'managed mise fragments select a host-owned assistant'
 grep -qF 'path_prepend "$HOME/.opencode/bin"' "$REPO_DIR/packages/common/zsh/.zshrc" || \
   fail 'zsh does not place native OpenCode ahead of inherited mise paths'
+pass
+
+# A host-local OpenCode wrapper is lazy, non-recursive, and argument/status preserving.
+home="$TEST_ROOT/home-opencode-secret-wrapper"
+mkdir -p "$home/.config/dotfiles/local" "$home/.opencode/bin" "$home/fake-bin"
+cat > "$home/.config/dotfiles/local/bash.sh" <<'SCRIPT'
+opencode() {
+  local executable
+  executable="$(type -P -- opencode)" || {
+    printf '%s\n' 'opencode executable is unavailable' >&2
+    return 127
+  }
+  command dotfiles-secret exec-env opencode -- "$executable" "$@"
+}
+SCRIPT
+cat > "$home/fake-bin/dotfiles-secret" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%q ' "$@" >> "$HOME/helper-invocations"
+printf '\n' >> "$HOME/helper-invocations"
+[[ "$1 $2 $3" == 'exec-env opencode --' ]] || exit 90
+shift 3
+"$@"
+SCRIPT
+cat > "$home/.opencode/bin/opencode" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%q ' "$@" >> "$HOME/opencode-invocations"
+printf '\n' >> "$HOME/opencode-invocations"
+[[ "${1:-}" != fail ]] || exit 42
+SCRIPT
+chmod 0755 "$home/fake-bin/dotfiles-secret" "$home/.opencode/bin/opencode"
+TEST_OUTPUT="$(run_payload "$home" generic 0 '
+  source "$DOTFILES_BASH_VALIDATION_ROOT/rc.bash"
+  [[ ! -e "$HOME/helper-invocations" ]]
+  opencode direct "space value"
+  eval '\''c alias "glob-*"'\''
+  set +e
+  opencode fail
+  status=$?
+  set -e
+  printf "status=%s executable=%s" "$status" "$(type -P -- opencode)"
+')"
+[[ "$TEST_OUTPUT" == "status=42 executable=$home/.opencode/bin/opencode" ]] || fail 'OpenCode wrapper changed status or recursed'
+[[ "$(wc -l < "$home/helper-invocations")" == 3 && "$(wc -l < "$home/opencode-invocations")" == 3 ]] || \
+  fail 'OpenCode wrapper did not run helper and executable exactly once per call'
+grep -Fq 'direct space\ value' "$home/opencode-invocations" || fail 'direct OpenCode arguments changed'
+grep -Fq -- '--auto alias glob-' "$home/opencode-invocations" || fail 'OpenCode alias did not reach the wrapper'
 pass
 
 # Private wrappers select distro command-name variants, preserve arguments/status, and never recurse.
@@ -408,9 +457,13 @@ run_area_fixture() {
 
 # Generic lifecycle preserves bytes/modes, chooses login precedence once, and removes exact blocks and links.
 home="$TEST_ROOT/home-lifecycle"
-mkdir -p "$home/.config/opencode"
+mkdir -p "$home/.config/opencode" "$home/.codex/sessions"
 printf 'untouched OpenCode fixture\n' > "$home/.config/opencode/opencode.json"
+printf 'model = "fixture"\n' > "$home/.codex/config.toml"
+printf '{"preserved":true}\n' > "$home/.codex/auth.json"
+printf 'preserved session\n' > "$home/.codex/sessions/fixture.jsonl"
 opencode_hash="$(sha256sum "$home/.config/opencode/opencode.json")"
+codex_hash="$(sha256sum "$home/.codex/config.toml" "$home/.codex/auth.json" "$home/.codex/sessions/fixture.jsonl")"
 printf 'legacy rc without newline' > "$home/.bashrc"
 printf 'profile legacy\n' > "$home/.profile"
 chmod 0640 "$home/.bashrc" "$home/.profile"
@@ -454,6 +507,8 @@ assert_same "$home/.profile" "$TEST_ROOT/profile.original"
 [[ "$(< "$home/.bash_profile")" == 'later higher precedence' ]] || fail 'removal touched unrelated later login file'
 [[ ! -e "$state" && ! -e "$home/.config/dotfiles/bash/rc.bash" ]] || fail 'removal retained Bash state or links'
 [[ "$(sha256sum "$home/.config/opencode/opencode.json")" == "$opencode_hash" ]] || fail 'Bash lifecycle changed OpenCode data'
+[[ "$(sha256sum "$home/.codex/config.toml" "$home/.codex/auth.json" "$home/.codex/sessions/fixture.jsonl")" == "$codex_hash" ]] || \
+  fail 'Bash lifecycle changed Codex data'
 pass
 
 # Native append remains additive, recovers complete refresh loss, and removes from the refreshed baseline.

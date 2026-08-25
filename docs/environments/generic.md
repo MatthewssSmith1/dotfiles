@@ -36,7 +36,20 @@ Network behavior is defined by the canonical [operation matrix](../deployment.md
 
 Managed Bash startup is always offline. The only shell-startup network exception is transitional zsh's first start when its Zinit entrypoint is absent; an initialized zsh startup is offline. Bootstrap never changes the login shell.
 
-Claude Code and OpenCode use vendor-native user installations on this profile. They may update through their own lifecycle, but bootstrap does not install, require, inspect, or update them. Managed shell PATH gives their native user locations precedence over inherited global mise selections.
+Claude Code, Codex, and OpenCode use vendor-native user installations on this profile. They may update through their own lifecycle, but bootstrap does not install, require, inspect, or update them. Managed shell PATH gives their native user locations precedence over inherited global mise selections.
+
+Codex installation is an explicit host-administration step. Review [OpenAI's current Codex CLI instructions](https://developers.openai.com/codex/cli/) before invoking the vendor installer:
+
+```bash
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+The installer and later `codex login` remain outside bootstrap. Codex absence is not drift, and `~/.codex` configuration, credentials, sessions, and logs remain host-owned.
+
+Optional child-only injection from persistent, host-owned environment bundles
+is documented in [Local environment bundles](../tools/secrets.md). The launcher
+is offline and read-only; bootstrap does not create, inspect, or remove real
+bundles or application wrappers.
 
 ## Validated Environments
 

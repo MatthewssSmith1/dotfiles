@@ -65,6 +65,7 @@ tmux is a deliberate three-layer physical design with no host-local layer. Gener
 ~/dotfiles/                    Git checkout by convention
 ~/.config/dotfiles/            Active configuration fragments
 ~/.config/dotfiles/local/      Untracked host-local fragments
+~/.config/dotfiles/local/secrets/     Persistent host-owned environment bundles
 ~/.agents/                     Shared instructions and agent skills
 ~/.local/state/dotfiles/       Applied profile and package state
 ```

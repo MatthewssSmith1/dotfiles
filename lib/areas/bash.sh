@@ -62,6 +62,7 @@ bash_expected_targets() {
       .config/mise/conf.d/30-dotfiles-profile.toml
       .config/starship.toml
       .local/share/dotfiles/bin/bat
+      .local/share/dotfiles/bin/dotfiles-secret
       .local/share/dotfiles/bin/fd
     )
   fi
@@ -94,7 +95,7 @@ validate_bash_payload_modes_and_syntax() {
     source="${TARGET_SOURCES[index]}"
     expected_mode=644
     case "$relative" in
-      .local/share/dotfiles/bin/bat|.local/share/dotfiles/bin/fd) expected_mode=755 ;;
+      .local/share/dotfiles/bin/bat|.local/share/dotfiles/bin/dotfiles-secret|.local/share/dotfiles/bin/fd) expected_mode=755 ;;
     esac
     mode="$(stat -c %a -- "$source")"
     [[ "$mode" == "$expected_mode" ]] || die "unexpected Bash payload mode $mode for $relative; expected $expected_mode"
@@ -448,7 +449,7 @@ write_bash_validation_script() {
 prepare_bash_network_sentinels() {
   local directory="$1" name
   mkdir -p -- "$directory"
-  for name in curl wget ssh scp sudo apt apt-get pacman dnf yum apk snap flatpak npm pnpm yarn bun pip pip3; do
+  for name in curl wget ssh scp sudo apt apt-get pacman dnf yum apk snap flatpak npm pnpm yarn bun pip pip3 dotfiles-secret; do
     printf '%s\n' '#!/usr/bin/env bash' \
       'printf "%s:%s\n" "${0##*/}" "$*" >> "${DOTFILES_NETWORK_SENTINEL_LOG:?}"' \
       'exit 97' > "$directory/$name"

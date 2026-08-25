@@ -177,6 +177,7 @@ This table is canonical. Other documents link here rather than broadening its cl
 | First explicit generic Neovim launch | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim restore after a lock change | Neovim plugin state | Locked plugin restoration allowed |
 | Explicit Neovim runtime-asset provisioning | Declared Mason, Treesitter, rock, or build state | Allowed only under the accepted asset policy |
+| Explicit `dotfiles-secret exec-env` | Child process environment only; reads one persistent host-local bundle | Forbidden; no authentication or retrieval occurs |
 | User-invoked Claude Code or OpenCode runtime | Host-owned application state | Governed by the application's native lifecycle; outside bootstrap |
 
 Provisioning apply must print every planned networked action before the first network-capable command executes. Startup must never install or update tools implicitly except for the documented missing-Zinit first-start behavior. Neovim plugin installation occurs only during the first explicit launch or a later explicit restore after a lock change. Upstream sync never deploys configuration. Within `$HOME`, it may touch only the resolved checkout and a same-filesystem staging directory beside the content it will atomically replace; all unrelated home paths are forbidden.
@@ -242,7 +243,7 @@ Checkout moves and removed package definitions are handled from recorded link ow
 
 For tmux this retention is also declarative: removal keeps both `~/.tmux/plugins/` and `~/.tmux/resurrect/`. Plugin provisioning state is not area deployment state and is never inferred as removable ownership.
 
-For generic and WSL Bash, removal restores the bytes and mode of every pre-existing startup file and deletes a login file only when state proves it was created as an exact attachment-only file. Native removal deletes only its exact appended block. Shell removal retains `~/.config/dotfiles/local/bash.sh`, `~/.config/dotfiles/local/zsh_aliases.zsh`, Zinit data and plugins, shell history, migration backups and ledger entries, and the completed Vite+ retirement; it never recreates `.zsh_aliases.local` or changes the login shell.
+For generic and WSL Bash, removal restores the bytes and mode of every pre-existing startup file and deletes a login file only when state proves it was created as an exact attachment-only file. Native removal deletes only its exact appended block. Shell removal retains `~/.config/dotfiles/local/bash.sh`, `~/.config/dotfiles/local/secrets/`, `~/.config/dotfiles/local/zsh_aliases.zsh`, Zinit data and plugins, shell history, migration backups and ledger entries, and the completed Vite+ retirement; it never recreates `.zsh_aliases.local` or changes the login shell.
 
 Retained provisioning is not recorded as removable area deployment state. Installed tools and their manifest-owned launchers survive `--remove`; checks derive expected resources from the active provisioning manifest and compare that contract with retained provisioning metadata and the actual installation.
 
