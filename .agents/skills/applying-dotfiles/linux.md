@@ -5,7 +5,7 @@
 3. Dotfiles never fetches. Install missing distro or mise tools manually from
    the exact guidance printed by preflight.
 4. Done when `check` passes cleanly and the focused suites in
-   `tests/README.md` pass. Run `tests/run.sh` for its cross-cutting triggers.
+   `tests/AGENTS.md` pass. Run `tests/run.sh` for its cross-cutting triggers.
 
 Contracts: `docs/deployment.md` and `docs/tools/`.
 

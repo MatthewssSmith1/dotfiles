@@ -1,7 +1,6 @@
 # Testing
 
-Use the smallest suites that cover the change. `tests/run.sh` remains the
-exhaustive gate, not the routine development loop.
+Use the smallest suite that covers the change. `tests/run.sh` is the exhaustive gate, not the routine loop.
 
 ## Focused Routing
 
@@ -28,30 +27,8 @@ exhaustive gate, not the routine development loop.
 
 ## Exhaustive Gate
 
-Run focused suites while iterating. Run `tests/run.sh` before committing a
-change to `dotfiles.sh`, shared deployment code, the test
-harness or runner, shared schemas or topology, an upstream refresh, or several
-areas. If scope expands or ownership is unclear, use the broader gate.
+Run focused suites while iterating. Run `tests/run.sh` before committing a change to `dotfiles.sh`, shared deployment code, the test harness or runner, shared schemas or topology, an upstream refresh, or several areas. If scope expands or ownership is unclear, use the broader gate.
 
 ## Reference Cost
 
-Measured 2026-08-03 on a two-CPU VPS using the runner's automatic one-worker
-mode. These are planning estimates, not performance contracts; the runner
-prints current elapsed times.
-
-| Suite | Approximate time |
-|---|---:|
-| `contract_test.sh` | 2s |
-| `herdr_test.sh` | 14s |
-| `upstream_test.sh` | 25s |
-| `tmux_test.sh` | 10s |
-| `agents_test.sh` | 3m |
-| `git_test.sh` | 4m |
-| `nvim_test.sh` | 10s |
-| `lean_engine_test.sh` | 1m |
-| `shell_test.sh` | 10m |
-| `run.sh` | 33m |
-
-Override bounded runner concurrency with `tests/run.sh --jobs COUNT` or
-`TEST_JOBS=COUNT`; more workers can be slower on constrained hosts. Use
-`tests/run.sh --list` to inspect the canonical suite list without running it.
+Expensive suites are `shell_test.sh` (~10m), `git_test.sh` (~4m), `agents_test.sh` (~3m), and `lean_engine_test.sh` (~1m); full `tests/run.sh` is ~30m on constrained hosts. The runner prints current timings. Override concurrency with `tests/run.sh --jobs COUNT` or `TEST_JOBS=COUNT` and inspect the suite list with `tests/run.sh --list`.
