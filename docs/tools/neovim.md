@@ -1,139 +1,40 @@
 # Neovim
 
-## Accepted Direction
-
-The retired Kickstart configuration is retained in Git history, not current HEAD. The replacement workflow is:
-
-```text
-LazyVim starter
-+ LazyVim
-+ Omarchy Neovim overlay and released lock state
-+ portability adapter where required
-+ minimal shared personal configuration
-```
-
-Do not automatically migrate Oil, Floaterm, One Monokai, custom keymaps, or any other current plugins and preferences. The initial personal layer enables only relative line numbers through normal LazyVim extension points.
-
-## Source Model
-
-There is no standalone Omarchy Neovim repository. The released configuration is assembled from pinned Git sources, the LazyVim starter tree, overlay files in `omarchy-pkgs`, and three PKGBUILD-appended option lines, plus a released `lazy-lock.json` extracted from a package artifact. Exact pins, appended lines, and the artifact trust boundary are recorded in [Upstream](../upstream.md) and [Artifacts](../artifacts/README.md).
-
-Two baseline facts worth knowing while evaluating the stock experience: the Omarchy baseline sets `relativenumber = false` (the personal layer visibly inverts this) and `autoformat = false`.
-
-The OSC-52/tmux remote-clipboard module was first evaluated as edge-only `omarchy-nvim 2026.7.15-1` and correctly refused by the latest-stable policy. It reached stable in `omarchy-nvim 2026.7.17-1` and is part of the accepted baseline since the 2026-07-28 refresh (see [Upstream](../upstream.md)).
+The accepted baseline combines the pinned LazyVim starter, the independently
+accepted `omarchy-nvim 2026.8.13-1` overlay/artifact, the Tokyo Night adapter,
+and one personal option: `relativenumber=true`.
 
 ## Native Omarchy
 
-- Let the installed `omarchy-nvim` package own the baseline.
-- Keep native Omarchy theme selection authoritative.
-- Store personal source outside the refresh-managed Neovim directory.
-- Use a small regular loader to attach the personal layer.
-- Reapply that loader after `omarchy-nvim-setup`.
-- Do not copy personal changes into package-owned baseline files.
+The installed `omarchy-nvim` package owns `~/.config/nvim`; dotfiles never
+rewrites that baseline or manages native plugins and runtime data. The area
+validates package-owned `/usr/bin/nvim`, accepted `neovim` package/runtime
+identities, and the exact accepted `omarchy-nvim` package.
 
-An explicit Omarchy refresh may replace user configuration and clear Neovim data, state, and cache. Recovery must recreate only the managed loader and let the refreshed native baseline initialize normally.
+`common/nvim` deploys the personal source outside the refresh-owned tree. One
+regular guarded loader at
+`~/.config/nvim/plugin/dotfiles-personal.lua` sources it. Lean v2 state records
+only the loader pre-state needed for exact removal. After a native refresh
+removes the loader, rerun `dotfiles.sh apply nvim` to reattach it.
 
-## Generic And WSL
+## Ubuntu
 
-- Deploy the user configuration and `lazy-lock.json` assembled from the
-  pinned sources per [Upstream](../upstream.md).
-- Do not commit or deploy any plugin cache.
-- Use the pinned default Omarchy Tokyo Night theme input.
-- Add only portability changes needed outside Omarchy.
-- Load the same relative-number personal layer used by native Omarchy.
-- Preserve the released lock state during normal bootstrap.
-- Adapt the starter bootstrap so `lazy.nvim` is checked out at the commit in
-  `lazy-lock.json` before its code executes, rather than running mutable
-  `stable` branch HEAD.
-- Disable lazy.nvim's periodic update checker so ordinary startup remains
-  offline.
-- Disable lazy.nvim's automatic missing-plugin installation during ordinary
-  startup. Missing plugins install only through the one-time first-launch
-  restore or a later explicit restore after a lock change.
-- Both restore paths run headless `Lazy restore` and verify applicable plugin
-  checkout commits against the committed lockfile.
-- Require every active shared plugin spec to have a lockfile entry. Project
-  local specs may remain enabled, but missing project plugins are reported and
-  never fetched implicitly.
+Ubuntu deploys `upstream/nvim`, `ubuntu/nvim`, and `common/nvim`. The adapter
+contains the exact `aqua:neovim/neovim@0.12.4` selector and the explicit
+`nvim-restore` helper. The area is package-only and writes no deployment state.
 
-## Reset And Migration
+Ordinary startup requires an existing lazy.nvim checkout at the commit in the
+committed `lazy-lock.json`. Missing-plugin installation, the periodic checker,
+lock updates, Lua rocks, inherited automatic Mason/Treesitter work, and Blink
+binary downloads are disabled during ordinary startup.
 
-Kickstart-link retirement on previously deployed hosts is part of the live generic/WSL apply contract below; the retired configuration itself exists only in Git history.
+Run `~/.local/share/dotfiles/bin/nvim-restore` explicitly with connectivity to
+restore plugins. It validates `lazy-lock.json`, fetches and checks out
+`lazy.nvim` at that exact lock entry, sets `DOTFILES_NVIM_RESTORING=1`, and runs
+headless `Lazy! restore`. It verifies that the lock bytes remain unchanged.
+The helper does not write deployment state, invoke callbacks, preserve or
+rename checkouts, or migrate any runtime root.
 
-Accepted backup policy: git history is the configuration backup. The former live `~/.config/nvim` consisted of Stow links into the retired tree, so it needed no separate copy: removal of the links was sufficient, and any recovery is a checkout of history. Host-local runtime state is preserved by renaming `~/.local/share/nvim`, `~/.local/state/nvim`, and `~/.cache/nvim` to timestamped `.bak` siblings rather than deleting them.
-
-Accepted first-start network policy: on a fresh generic host, network access is permitted on the first explicit `nvim` launch. A small pre-start loader runs a one-time locked restore before normal editor startup, verifies applicable plugin commits, and records the restored lockfile blob identity in Neovim area state only after success. An interrupted restore leaves the marker absent and retries on the next explicit launch without changing `lazy-lock.json`. Later plugin network access occurs only through an explicit restore command after a lock change. Bootstrap itself never fetches Neovim plugins. First start therefore requires connectivity; that is accepted. This guarantee covers plugin restoration. Mason packages, Treesitter parsers, Lua rocks, generated build outputs, and project-local Lazy specs are outside the plugin lockfile. Every automatic downloader is inventoried and assigned one policy — pinned provisioning, explicit user-initiated network access, or disabled automatic installation — so ordinary startup remains offline; see the downloader policy at the end of this document.
-
-## Native Loader
-
-The loader is the regular file `~/.config/nvim/plugin/dotfiles-personal.lua`, mode 0644, whose entire content is one guarded block (`-- >>> dotfiles nvim >>>` … `-- <<< dotfiles nvim <<<`). Config-dir `plugin/*.lua` files are sourced after init, so its `dofile` of `~/.config/dotfiles/nvim/personal.lua` (deployed by `common/nvim`, the only native package) overrides baseline options. A missing personal file is skipped silently; a runtime error notifies without breaking startup.
-
-Drift detection: area state records exactly one attachment (`nvim-native-loader-v1.created`) with the block's content hash. Preflight refuses a modified block, any bytes outside the markers, a symlink or foreign file at the path, or a forged state record. Removal deletes the loader file exactly and refuses when the loader is absent or drifted.
-
-Refresh facts verified on the live host: the config is a plain skel copy owned by the `omarchy-nvim` package, not a git checkout; refresh is the package-owned `omarchy-nvim-setup` (the `omarchy-nvim-refresh` name in older notes), which backs up `~/.config/nvim`, clears nvim data/state/cache, and re-copies skel. After refresh the loader is absent: `--check --area nvim` fails with reattachment guidance and apply recreates it byte-identically. The `nvim` executable is owned by the distro `neovim` package; the drift warning verifies `omarchy-nvim` package identity separately.
-
-Workflow proof: `bootstrap.sh --check --area nvim`, apply, `nvim --headless "+lua print(vim.o.relativenumber)" +q`, refresh, failing check, reapply, and a `--remove --area nvim` round trip leaving the native tree byte-identical.
-
-## Non-Goals
-
-- Preserving the old Kickstart configuration outside git history.
-- Migrating old plugins, colorschemes, options, or keymaps automatically.
-- Committing or deploying any Neovim plugin cache.
-- Replacing native Omarchy theme selection.
-- Adding personal preferences beyond relative line numbers initially.
-- Making generic installation byte-identical to Omarchy.
-
-## Acceptance Criteria
-
-- Native Omarchy uses its installed released baseline without repo-owned
-  replacements of refresh-managed files.
-- Generic and WSL installs derive from the pinned sources and preserve the
-  committed `lazy-lock.json`.
-- The first generic launch executes the locked lazy.nvim commit, and explicit
-  restore converges every applicable plugin checkout to its locked commit.
-- Both environments expose the intended LazyVim and Omarchy workflow.
-- Relative line numbers come from a visibly separate shared personal layer.
-- The old Kickstart configuration and its customizations are not active, and
-  old runtime state survives as timestamped `.bak` directories.
-- A native refresh can be followed by safe, idempotent loader reattachment.
-- Loader drift or unrelated files cause a refusal rather than speculative
-  repair.
-- A clean generic startup reaches the committed lock state; plugin network
-  access occurs only on the first explicit launch or a later explicit restore.
-- Ordinary generic startup performs no periodic plugin update check.
-- Ordinary startup does not install missing plugins or other runtime assets
-  implicitly; explicit restore and provisioning operations follow the
-  canonical network policy.
-- Native and generic theme behavior matches the initial stock direction.
-
-## Generic/WSL Lifecycle And Restore
-
-The dedicated Neovim area is ready for generic, WSL, and native Omarchy in `manifests/areas.tsv`; the native attachment is the guarded loader above. Generic/WSL apply validates the exact upstream/generic/common package and target closure before mutation. It retires only exact reviewed individual or folded Kickstart links, including reviewed broken links whose lexical non-dereferencing normalization and resolved normalization both match the reviewed historical source. Only exact reviewed container ancestors are accepted, and links and containers must be user-owned. Unrelated or modified topology refuses before mutation; the legacy source remains only in Git history.
-
-The first apply resolves data, state, and cache roots from XDG variables, requires canonical, non-symlink, user-owned ancestor paths beneath `HOME`, and records completion even when a root is absent. Existing roots are renamed without clobber to timestamped `.bak` siblings. Source fingerprints and backup paths are retained in `migrations.json`; collisions gain a numeric suffix. A directory-move journal restores every rename and reviewed legacy link if deployment, state, or ledger commit fails. Removal retains current runtime roots, backups, preserved plugin checkouts, credentials, and the migration ledger.
-
-The generic adapter invokes `~/.local/share/dotfiles/bin/nvim-restore --first-launch` only when `nvim.json` has no `restored_lock_sha256`. A stale value means the deployed lock changed and startup refuses with guidance to run `nvim-restore` explicitly. During that explicit restore process only, lazy.nvim may install missing plugins incrementally from its isolated copy of the committed lock; lock regeneration is disabled. The helper then runs headless `Lazy! restore`, verifies every applicable checkout, and verifies both lockfile copies byte-for-byte before invoking:
-
-```text
-${DOTFILES_NVIM_RESTORE_CALLBACK:-~/.local/share/dotfiles/bin/nvim-record-restore} <64-lowercase-hex-lock-sha256>
-```
-
-The callback opens `HOME` read-only and acquires the deployment advisory lock, fully validates `nvim.json`, requires generic/WSL and exact managed lockfile ownership, compares deployed bytes with the supplied hash, and performs an atomic compare-and-swap state update. There is no sidecar marker. First deploy omits the field. Reapply preserves it only when it identifies the current deployed lock; a changed lock omits the value and requires a successful explicit restore. `--check` fails with a pending message when the field is absent and a stale message when it differs from the deployed lock, and cannot claim full convergence in either case. An interrupted restore leaves the field absent or stale. An exact transitional restore sidecar is retired transactionally on first apply and is not trusted or imported; malformed or unsafe sidecars cause preflight refusal.
-
-### Failed First Launch Recovery
-
-1. Leave `migrations.json` and every timestamped runtime backup in place. Do
-   not rename a backup over the new runtime root; the ledger intentionally
-   prevents repeating the destructive migration.
-2. Inspect the reported checkout error. Repair only the named current checkout
-   under the active XDG data root. Clean divergent checkouts preserved by the
-   helper remain under the active XDG state root's
-   `dotfiles/nvim-preserved/` directory.
-3. Run `~/.local/share/dotfiles/bin/nvim-restore` explicitly with connectivity.
-   It verifies all applicable checkouts and unchanged lock bytes before the
-   state marker can be committed.
-4. Run `./bootstrap.sh --check --area nvim`, then launch Neovim normally. Never
-   delete `migrations.json` to force another
-   runtime rename.
-
-The downloader policy in the generic Lua layer is explicit: lazy periodic checks, ordinary-startup installation, and Lua rocks are disabled; Mason registry and package work is limited to explicit `:Mason` actions; Treesitter's automatic ensure list is empty and parser work is limited to explicit `:TSInstall` or `:TSUpdate`; project-local specs remain discoverable but missing checkouts are reported rather than installed. The inherited Mason and Treesitter build hooks are disabled, and Blink uses its Lua matcher with prebuilt-binary download disabled. Any remaining plugin build hook can run only as part of the first or later explicit restore operation.
+Apply, check, and remove never inspect or mutate Neovim data, state, or cache
+roots. Removal deletes only exact managed package links and, on native
+Omarchy, the exact personal loader.

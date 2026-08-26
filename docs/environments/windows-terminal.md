@@ -2,13 +2,21 @@
 
 ## Status
 
-Client-terminal guidance for anything typed into Windows Terminal: a WSL shell, or an SSH session into a remote Linux host. The host's profile does not matter; what matters is that Windows Terminal is the terminal. Key, color, mouse, and clipboard behavior passed on Windows Terminal 1.24.11911.0 with tmux 3.7b.
+Client-terminal guidance for SSH sessions into a remote Linux host. The host's
+profile does not matter; what matters is that Windows Terminal is the terminal.
+The accepted tmux fallback is 3.7c.
 
-Windows Terminal settings are never patched from WSL or by bootstrap. Theming is repo-managed from the Windows side via [windows/terminal/apply.ps1](../../windows/README.md); the keybinding unbinds below are still a manual step.
+Dotfiles never patches Windows Terminal settings. Theming is repo-managed from
+the Windows side via [windows/terminal/apply.ps1](../../windows/README.md); the
+keybinding unbinds below are still a manual step.
 
 ## Required Settings
 
-Windows Terminal binds `alt+enter` to fullscreen toggle by default, which consumes the Omarchy tmux vertical-split binding (`M-Enter`) before the terminal ever sees it. The arrow combinations may fall through in some states but are intercepted when Windows Terminal has panes to act on. tmux requires all eight unbinds so its behavior does not depend on client pane state. Windows Terminal 1.24 stores assignments separately from actions; add them to the `keybindings` array in `settings.json` (Settings > Open JSON file):
+Windows Terminal shortcuts can consume the Herdr map before the terminal sends
+it to the remote host. Manually unbind every combination below; `apply.ps1`
+intentionally does not manage actions or keybindings. Windows Terminal 1.24
+stores assignments separately from actions, so add these entries to the
+`keybindings` array in `settings.json` (Settings > Open JSON file):
 
 ```json
 "keybindings": [
@@ -19,13 +27,29 @@ Windows Terminal binds `alt+enter` to fullscreen toggle by default, which consum
   { "id": "unbound", "keys": "alt+down" },
   { "id": "unbound", "keys": "alt+shift+left" },
   { "id": "unbound", "keys": "alt+shift+right" },
-  { "id": "unbound", "keys": "ctrl+alt+left" }
+  { "id": "unbound", "keys": "alt+shift+up" },
+  { "id": "unbound", "keys": "alt+shift+down" },
+  { "id": "unbound", "keys": "alt+shift+enter" },
+  { "id": "unbound", "keys": "alt+escape" },
+  { "id": "unbound", "keys": "ctrl+alt+left" },
+  { "id": "unbound", "keys": "ctrl+alt+right" },
+  { "id": "unbound", "keys": "ctrl+alt+up" },
+  { "id": "unbound", "keys": "ctrl+alt+down" },
+  { "id": "unbound", "keys": "ctrl+alt+shift+left" },
+  { "id": "unbound", "keys": "ctrl+alt+shift+right" },
+  { "id": "unbound", "keys": "ctrl+alt+shift+up" },
+  { "id": "unbound", "keys": "ctrl+alt+shift+down" }
 ]
 ```
 
-## Expected Limitations To Validate
+Manual checklist: Alt+Left/Right/Up/Down, Alt+Shift+Left/Right/Up/Down,
+Alt+Enter, Alt+Shift+Enter, Alt+Escape, Ctrl+Alt+Left/Right/Up/Down, and
+Ctrl+Alt+Shift+Left/Right/Up/Down.
 
-Protocol analysis predicts that two Omarchy tmux bindings will not work with the targeted Windows Terminal and tmux versions. Treat these as planned expectations until the tmux gate records exact versions and observed input:
+## Known Limitations
+
+Unbinding removes Windows Terminal assignments, but it cannot overcome two
+Windows input/protocol limitations:
 
 - `M-S-Enter` (horizontal split): without extended keys, Alt+Shift+Enter
   transmits identically to Alt+Enter, so tmux runs the vertical-split binding
@@ -35,11 +59,19 @@ Protocol analysis predicts that two Omarchy tmux bindings will not work with the
 - `M-Escape` (kill pane): Alt+Escape is a reserved Windows shortcut (window
   z-order cycling) and never reaches the terminal. Use `prefix + x` instead.
 
-The accepted policy is to document these rather than add WSL or host-local tmux rebinds. Revisit the shared design only if tested protocol support changes.
+The accepted policy is to document these rather than add host-local rebinds.
+When Herdr key delivery is unavailable or ambiguous, use tmux as the fallback
+path and its `prefix + h` and `prefix + x` bindings. Revisit the shared design
+only if tested protocol support changes.
 
 ## Color Scheme
 
-The Omarchy tmux status uses ANSI `black` on ANSI `blue` for its session badge, and Windows Terminal's built-in schemes have insufficient contrast for that pair. The "Omarchy Tokyo Night" scheme in [windows/terminal/managed-settings.json](../../windows/terminal/managed-settings.json) (exact values from Omarchy v3.8.4's Tokyo Night `colors.toml`) is applied by `apply.ps1` as the `profiles.defaults` color scheme, so every profile (cmd, PowerShell, WSL, SSH) inherits it.
+The Omarchy tmux status uses ANSI `black` on ANSI `blue` for its session badge,
+and Windows Terminal's built-in schemes have insufficient contrast for that
+pair. The "Omarchy Tokyo Night" scheme in
+[windows/terminal/managed-settings.json](../../windows/terminal/managed-settings.json)
+uses the accepted v4 Tokyo Night source and is applied as the
+`profiles.defaults` color scheme.
 
 ## Validated Client Behavior
 
@@ -53,7 +85,9 @@ The Omarchy tmux status uses ANSI `black` on ANSI `blue` for its session badge, 
 
 ## Verification Checklist
 
-Inside a tmux session in a Windows Terminal tab, after applying all required unbinds:
+Use tmux to verify terminal key delivery when Herdr cannot provide a reliable
+result. Inside a tmux session in a Windows Terminal tab, after applying all
+required unbinds:
 
 1. `C-Space c` creates a window; `C-b c` also works.
 2. `M-2` switches to window 2.

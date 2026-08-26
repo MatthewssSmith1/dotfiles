@@ -4,7 +4,7 @@
 #   set -Eeuo pipefail
 #   source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 #
-# Provides TEST_DIR, REPO_DIR, BOOTSTRAP, a self-cleaning TEST_ROOT, assertion and
+# Provides TEST_DIR, REPO_DIR, DOTFILES, a self-cleaning TEST_ROOT, assertion and
 # capture helpers, host/home fixtures, network sentinels, repo-copy fixtures, and
 # JSON Schema validation. A test file may redefine any function after sourcing;
 # the later definition wins. Define test_extra_cleanup() for domain-specific
@@ -15,7 +15,7 @@ umask 0022
 HARNESS_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly TEST_DIR="$(cd -- "$HARNESS_LIB_DIR/.." && pwd -P)"
 readonly REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd -P)"
-readonly BOOTSTRAP="$REPO_DIR/bootstrap.sh"
+readonly DOTFILES="$REPO_DIR/dotfiles.sh"
 
 TEST_ROOT="$(mktemp -d)"
 TEST_COUNT=0
@@ -77,12 +77,61 @@ wait_for_file() {
   fail "timed out waiting for $path"
 }
 
+# System fixtures root every modeled absolute path below TEST_ROOT. Tests must
+# use fixture_path rather than joining or probing the corresponding host path.
+fixture_path() {
+  local root="$1" path="$2"
+  [[ "$root" == "$TEST_ROOT"/* && -d "$root" ]] || fail "invalid system fixture root: $root"
+  [[ "$path" == /* && "$path" != *'/../'* && "$path" != */.. && "$path" != *'/./'* ]] || \
+    fail "invalid absolute fixture path: $path"
+  printf '%s%s' "${root%/}" "$path"
+}
+
+prepare_system_fixture_root() {
+  local root="$1"
+  mkdir -p "$root/etc" "$root/proc/sys/kernel" "$root/usr/bin" "$root/usr/share" \
+    "$root/var/lib/dotfiles-test"
+}
+
+make_system_fixture() {
+  local name="$1" root
+  root="$TEST_ROOT/system-$name"
+  prepare_system_fixture_root "$root"
+  printf '%s' "$root"
+}
+
+# Ownership records use absolute fixture paths so future package checks can be
+# exercised without invoking host pacman or inspecting host files.
+record_pacman_ownership() {
+  local root="$1" owner="$2" path
+  shift 2
+  [[ -n "$owner" && $# -gt 0 ]] || fail 'pacman ownership requires an owner and at least one path'
+  for path in "$@"; do
+    fixture_path "$root" "$path" >/dev/null
+    printf '%s\t%s\n' "$path" "$owner" >> "$root/var/lib/dotfiles-test/pacman-owners.tsv"
+  done
+}
+
+fixture_pacman_owner() {
+  local root="$1" path="$2" metadata owner=""
+  fixture_path "$root" "$path" >/dev/null
+  metadata="$root/var/lib/dotfiles-test/pacman-owners.tsv"
+  [[ -f "$metadata" ]] || return 1
+  while IFS=$'\t' read -r recorded_path recorded_owner; do
+    [[ "$recorded_path" == "$path" ]] || continue
+    [[ -z "$owner" ]] || fail "duplicate pacman ownership metadata for $path"
+    owner="$recorded_owner"
+  done < "$metadata"
+  [[ -n "$owner" ]] || return 1
+  printf '%s' "$owner"
+}
+
 # Host fixtures emulate /etc/os-release and the WSL kernel marker under
-# DOTFILES_TEST_HOST_ROOT.
+# DOTFILES_TEST_HOST_ROOT, and include isolated /usr/bin and /usr/share trees.
 make_host() {
   local name="$1" kind="$2" id="${3:-ubuntu}" version="${4:-24.04}"
   local root="$TEST_ROOT/host-$name"
-  mkdir -p "$root/etc" "$root/proc/sys/kernel"
+  prepare_system_fixture_root "$root"
   printf 'ID="%s"\nVERSION_ID="%s"\n' "$id" "$version" > "$root/etc/os-release"
   case "$kind" in
     wsl) printf '6.6.0-MiCrOsOfT-standard-WSL2\n' > "$root/proc/sys/kernel/osrelease" ;;
@@ -99,28 +148,20 @@ new_home() {
   printf '%s' "$home"
 }
 
-# capture runs a bootstrap under test-controlled HOME/host and records
+# capture runs dotfiles under test-controlled HOME/host and records
 # TEST_OUTPUT/TEST_RC. Knobs, all optional:
 #   TEST_GIT_USER_NAME / TEST_GIT_USER_EMAIL  identity exported to the run
 #   CAPTURE_PATH_PREFIX  prepended to PATH for the run
-#   CAPTURE_DEFAULT_AREA appended as --area <name> unless the caller passes one
 capture() {
-  local home="$1" host="$2" bootstrap="$3"
+  local home="$1" host="$2" dotfiles="$3"
   shift 3
-  if [[ -n "${CAPTURE_DEFAULT_AREA:-}" ]]; then
-    local argument explicit_area=false
-    for argument in "$@"; do
-      [[ "$argument" != --area && "$argument" != --area=* ]] || explicit_area=true
-    done
-    [[ "$explicit_area" == true ]] || set -- "$@" --area "$CAPTURE_DEFAULT_AREA"
-  fi
   local path_value="$PATH"
   [[ -z "${CAPTURE_PATH_PREFIX:-}" ]] || path_value="$CAPTURE_PATH_PREFIX:$PATH"
   if TEST_OUTPUT="$(HOME="$home" PATH="$path_value" \
     DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$host" \
     GIT_USER_NAME="${TEST_GIT_USER_NAME:-Harness Test User}" \
     GIT_USER_EMAIL="${TEST_GIT_USER_EMAIL:-harness@example.com}" \
-    "$bootstrap" "$@" 2>&1)"; then
+    "$dotfiles" "$@" 2>&1)"; then
     TEST_RC=0
   else
     TEST_RC=$?

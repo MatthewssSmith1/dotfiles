@@ -127,6 +127,9 @@
             },
             {
               "$ref": "#/$defs/nvimOfflineBootstrapPolicyTransform"
+            },
+            {
+              "$ref": "#/$defs/ubuntuBashPortabilityPolicyTransform"
             }
           ]
         }
@@ -241,6 +244,23 @@
       "properties": {
         "type": {
           "const": "nvim-offline-bootstrap-policy"
+        },
+        "output_blob": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "ubuntuBashPortabilityPolicyTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "output_blob"
+      ],
+      "properties": {
+        "type": {
+          "const": "ubuntu-bash-portability-policy"
         },
         "output_blob": {
           "type": "string",

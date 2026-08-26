@@ -1,5 +1,0 @@
-# Explicit provisioning installs reviewed artifacts before linking them into mise.
-[settings]
-locked = true
-not_found_auto_install = false
-idiomatic_version_file_enable_tools = []

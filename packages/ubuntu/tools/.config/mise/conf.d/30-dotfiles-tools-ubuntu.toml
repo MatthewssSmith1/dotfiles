@@ -1,0 +1,3 @@
+# Global ad-hoc fallback only; project-local mise configuration has precedence.
+[tools]
+node = "lts"

@@ -13,19 +13,14 @@ _dotfiles_bash_trace() {
 }
 
 _dotfiles_bash_root="$HOME/.config/dotfiles/bash"
-_dotfiles_bash_generic="$_dotfiles_bash_root/generic.bash"
-_dotfiles_bash_wsl="$_dotfiles_bash_root/wsl.bash"
+_dotfiles_bash_ubuntu="$_dotfiles_bash_root/ubuntu.bash"
 if [[ ${DOTFILES_BASH_CONTROLLED_VALIDATION-} == 1 ]]; then
   _dotfiles_bash_root="${DOTFILES_BASH_VALIDATION_ROOT:?}"
-  _dotfiles_bash_generic="${DOTFILES_BASH_VALIDATION_GENERIC-}/generic.bash"
-  _dotfiles_bash_wsl="${DOTFILES_BASH_VALIDATION_WSL-}/wsl.bash"
+  _dotfiles_bash_ubuntu="${DOTFILES_BASH_VALIDATION_UBUNTU-}/ubuntu.bash"
 fi
 
-if [[ -r "$_dotfiles_bash_generic" ]]; then
-  source "$_dotfiles_bash_generic"
-fi
-if [[ -r "$_dotfiles_bash_wsl" ]]; then
-  source "$_dotfiles_bash_wsl"
+if [[ -r "$_dotfiles_bash_ubuntu" ]]; then
+  source "$_dotfiles_bash_ubuntu"
 fi
 source "$_dotfiles_bash_root/integrations.bash"
 source "$_dotfiles_bash_root/personal.bash"
@@ -37,4 +32,4 @@ if [[ ${DOTFILES_BASH_SKIP_HOST_LOCAL-} != 1 && -f "$_dotfiles_bash_local" &&
   source "$_dotfiles_bash_local"
 fi
 
-unset _dotfiles_bash_generic _dotfiles_bash_local _dotfiles_bash_root _dotfiles_bash_wsl
+unset _dotfiles_bash_local _dotfiles_bash_root _dotfiles_bash_ubuntu

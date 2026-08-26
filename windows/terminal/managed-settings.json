@@ -13,15 +13,15 @@
     "schemes": [
         {
             "background": "#1A1B26",
-            "black": "#32344A",
+            "black": "#1A1B26",
             "blue": "#7AA2F7",
-            "brightBlack": "#444B6A",
+            "brightBlack": "#414868",
             "brightBlue": "#7DA6FF",
             "brightCyan": "#0DB9D7",
             "brightGreen": "#B9F27C",
             "brightPurple": "#BB9AF7",
             "brightRed": "#FF7A93",
-            "brightWhite": "#ACB0D0",
+            "brightWhite": "#C0CAF5",
             "brightYellow": "#FF9E64",
             "cursorColor": "#C0CAF5",
             "cyan": "#449DAB",
@@ -30,8 +30,8 @@
             "name": "Omarchy Tokyo Night",
             "purple": "#AD8EE6",
             "red": "#F7768E",
-            "selectionBackground": "#7AA2F7",
-            "white": "#787C99",
+            "selectionBackground": "#292E42",
+            "white": "#A9B1D6",
             "yellow": "#E0AF68"
         }
     ]

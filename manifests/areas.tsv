@@ -1,8 +1,9 @@
 schema|1
 area|git|ready
+area|tools|ready
 area|bash|ready
 area|tmux|ready
 area|nvim|ready
-area|zsh|ready
 area|agents|ready
 area|herdr|ready
+area|desktop|ready

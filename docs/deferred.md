@@ -8,7 +8,7 @@ These improvements are intentionally outside the initial Omarchy alignment. This
 
 ### Intent
 
-Extend Omarchy's coordinated visual language to portable development tools so the same named theme produces a recognizably consistent terminal experience on Omarchy and generic systems.
+Extend Omarchy's coordinated visual language to portable development tools so the same named theme produces a recognizably consistent terminal experience on Omarchy and Ubuntu systems.
 
 The selected Omarchy baseline does not dynamically apply every selected palette to tmux or Starship. Coordinating those tools is a personal extension, not a claim about current upstream behavior.
 
@@ -60,27 +60,14 @@ A future implementation could update running applications where reload behavior 
 
 Selecting the same theme on an Omarchy desktop and an Ubuntu VPS should yield a consistent Neovim, tmux, Starship, fzf, and Lazygit experience while Omarchy continues to control its own system theme integrations.
 
-## Shell Convergence
-
-Bash with Starship is the primary configured shell, while the existing zsh configuration remains behaviorally frozen as an escape hatch (see [Shell](tools/shell.md)). Decide deliberately whether to converge the two setups or retire zsh. Until that decision, zsh receives no new features and no reconciliation with Bash.
-
 ## Fuller Windows Terminal Integration
 
 The managed-settings mechanism shipped for theming: `windows/terminal/managed-settings.json` plus `windows/terminal/apply.ps1` upsert shared defaults and the Omarchy color scheme (see [windows/README.md](../windows/README.md)). Still deferred:
 
 - Extending the managed surface to the unbind actions currently documented as
   manual steps (see [Windows Terminal](environments/windows-terminal.md)).
-- A checked-in WSL-side read-only verification script that asserts terminfo,
-  tmux version, and `$WT_SESSION`, then prints the manual checklist.
 
 Do not assume terminal or tmux upgrades restore extended keys before testing. Current protocol analysis predicts that the targeted versions will not negotiate them. Record tested versions and observed input, then revisit the affected bindings if either implementation changes.
 
-The bootstrap must never patch Windows Terminal `settings.json` automatically from WSL. Host-side settings remain an explicit user action.
-
-## Prune Kickstart Retirement Records
-
-`manifests/legacy-links.json` retains the reviewed `retire-kickstart-nvim-links` records, and `lib/areas/nvim.sh` its matching inventory, so unconverged hosts can still retire their old links. Once every known host (Omarchy, WSL, generic) has applied the post-migration Neovim area, delete those records and the inventory together.
-
-## tmux Baseline Guarding For Old Hosts
-
-The generic tmux owner is a distro package at 3.5 or newer, or the locked mise fallback (see [Deployment](deployment.md#executable-ownership)). Hosts that cannot take either see a documented, harmless startup notice for baseline options their tmux does not know (see [tmux](tools/tmux.md#runtime-and-terminals)). If that notice ever matters, a deferred option is version-guarding those lines in the deployed baseline copy as an explicit, manifest-recorded adapter transform. Not scheduled.
+Dotfiles never patches Windows Terminal `settings.json`; host-side settings
+remain an explicit user action.

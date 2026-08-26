@@ -1,16 +1,9 @@
 .gitconfig.local
 
-.zcompdump*
-.zsh_history
-.p10k-instant-prompt-*
-*.zwc
-
 .DS_Store
 
 .agents/*
 !.agents/skills/
-
-.zsh_aliases.local
 
 docs/todo.md
 

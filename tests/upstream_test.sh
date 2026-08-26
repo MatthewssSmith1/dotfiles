@@ -11,27 +11,27 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 readonly TEMP_ROOT="$TEST_ROOT"
 
 readonly UPSTREAM="$REPO_DIR/scripts/upstream"
-readonly EXPECTED_COMMIT='8fcc9d6048af4cb0e3af8512c78049857a3b53dd'
+readonly EXPECTED_COMMIT='13f18b2cb7286fb54f87daf571a031aa6af3d8f0'
 readonly EXPECTED_BLOB='0f8e979785bb2a451f42cd494517d12eabcd54bf'
-readonly NVIM_EVIDENCE_REL='docs/artifacts/omarchy-nvim-2026.7.17-1'
+readonly NVIM_EVIDENCE_REL='docs/artifacts/omarchy-nvim-2026.8.13-1'
 readonly NVIM_EVIDENCE="$REPO_DIR/$NVIM_EVIDENCE_REL"
-readonly STABLE_DB_SHA256='6a957256fc29395488276516c4fa977f34bd5746cb927bf9214ef613eb5d5e5a'
-readonly PACKAGE_SHA256='97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519'
-readonly SIGNATURE_SHA256='25aa5948f3377752876936debb8a6d2c1bd44a7b393ebe446b78a70be21e1ce7'
+readonly STABLE_DB_SHA256='343e0ad01825e9ef25b5def4dc5d0e10deb4ac50ffa38d28ad94f31eea23914d'
+readonly PACKAGE_SHA256='ff7cca4d58198ef6ea0c16ff93bd0369b307a40fae4ed300f6a2a75bb444fe1f'
+readonly SIGNATURE_SHA256='f369681f596df6107fc44d6c36cbfcb5228443ff4d001ef8d008320b8d8ea430'
 readonly BASH_REFERENCE_ROOT='packages/upstream/reference/omarchy/default/bash'
 readonly BASH_PAYLOAD_ROOT='packages/upstream/bash/.config/dotfiles/upstream/bash'
 readonly BASH_MAPPINGS=(
-  'shell|shell'
-  'aliases|aliases'
-  'fns/tmux|fns/tmux'
-  'inputrc|inputrc'
+  'shell|shell|none'
+  'aliases|aliases|ubuntu-bash-portability-policy'
+  'fns/tmux|fns/tmux|ubuntu-bash-portability-policy'
+  'inputrc|inputrc|none'
 )
 readonly LOCK_SOURCE="$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json"
-readonly LOCK_SHA256='1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601'
+readonly LOCK_SHA256='f8693f2607088055adef508221e288b378a8df97411e0d726cbdb672d963a8ca'
 
 # Local override: these tests exercise arbitrary commands (scripts/upstream,
 # sync_checkout) with a description argument, unlike the harness expect_failure
-# that drives bootstrap captures.
+# that drives dotfiles captures.
 expect_failure() {
   local description="$1"
   local expected="$2"
@@ -114,10 +114,13 @@ make_repositories() {
   write_file "$OMARCHY_REPO/config/git/config" $'[fixture]\n\tsource = omarchy\n'
   write_file "$OMARCHY_REPO/config/tmux/tmux.conf" $'set -g status off\n'
   write_file "$OMARCHY_REPO/config/starship.toml" $'format = "$directory"\n'
+  write_file "$OMARCHY_REPO/config/herdr/config.toml" $'[keys]\nprefix = "ctrl+space"\n'
+  write_file "$OMARCHY_REPO/default/themed/neovim.lua.tpl" $'return { accent = "{{ accent }}" }\n'
+  write_file "$OMARCHY_REPO/themes/tokyo-night/colors.toml" $'accent = "#7aa2f7"\n'
   write_file "$OMARCHY_REPO/themes/tokyo-night/neovim.lua" $'return { background = "dark" }\n'
   write_file "$OMARCHY_REPO/default/bash/shell" $'shopt -s histappend\n'
-  write_file "$OMARCHY_REPO/default/bash/aliases" $'alias g=git\n'
-  write_file "$OMARCHY_REPO/default/bash/fns/tmux" $'tdl() { :; }\n'
+  write_file "$OMARCHY_REPO/default/bash/aliases" $'alias a=\'omarchy-agent --inline\'\nalias g=git\n'
+  write_file "$OMARCHY_REPO/default/bash/fns/tmux" $'tdl() {\n  tmux select-pane -t "$opencode_pane"\n}\n\n# Create a Tmux Dev Square layout with editor, diff watch, terminal, and opencode\ntds() { hunk diff --watch; }\n\n# Create multiple tdl windows with one per subdirectory in the current directory\ntdlm() { :; }\n'
   write_file "$OMARCHY_REPO/default/bash/inputrc" $'set completion-ignore-case on\n'
   write_file "$OMARCHY_REPO/default/bash/env" $'export FIXTURE_ENV=1\n'
   write_file "$OMARCHY_REPO/default/bash/bin/fixture-tool" $'#!/usr/bin/env bash\nprintf "fixture\\n"\n' 0755
@@ -131,6 +134,7 @@ make_repositories() {
   STARTER_COMMIT="$(commit_repo "$STARTER_REPO" 'starter fixture')"
 
   write_file "$PKGS_REPO/pkgbuilds/omarchy-nvim/lua/config/keymaps.lua" $'vim.keymap.set("n", "x", "overlay")\n'
+  write_file "$PKGS_REPO/pkgbuilds/omarchy-nvim/lua/config/options.lua" $'vim.opt.number = false\n'
   write_file "$PKGS_REPO/pkgbuilds/omarchy-nvim/lua/config/remote_clipboard.lua" $'return { setup = function() end }\n'
   write_file "$PKGS_REPO/pkgbuilds/omarchy-nvim/plugin/overlay.lua" $'vim.g.overlay = true\n'
   write_file "$PKGS_REPO/pkgbuilds/omarchy-nvim/lazyvim.json" $'{"extras":[]}\n'
@@ -159,7 +163,7 @@ seed_active_checkout() {
        snapshot:"packages/upstream/git/.config/git/config",
        destination:{root:"home", path:".config/git/config", mode:"100644"}, transform:"none"
      }], artifacts:[{
-       id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.7.17-1",
+       id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.8.13-1",
        snapshot:"packages/upstream/nvim/.config/nvim/lazy-lock.json",
        destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"},
        sha256:$lock_hash, provenance:{artifact:"fixture package", artifact_sha256:("2"*64),
@@ -217,18 +221,18 @@ for evidence_file in README.md SHA256SUMS package.sig.b64 omarchy-signing-key.as
 done
 grep -Fx "$STABLE_DB_SHA256  omarchy.db" "$NVIM_EVIDENCE/SHA256SUMS" >/dev/null || \
   fail 'stable repository database checksum evidence drifted'
-grep -Fx "$PACKAGE_SHA256  omarchy-nvim-2026.7.17-1-any.pkg.tar.zst" \
+grep -Fx "$PACKAGE_SHA256  omarchy-nvim-2026.8.13-1-any.pkg.tar.zst" \
   "$NVIM_EVIDENCE/SHA256SUMS" >/dev/null || fail 'stable package checksum evidence drifted'
-grep -Fx "$SIGNATURE_SHA256  omarchy-nvim-2026.7.17-1-any.pkg.tar.zst.sig" \
+grep -Fx "$SIGNATURE_SHA256  omarchy-nvim-2026.8.13-1-any.pkg.tar.zst.sig" \
   "$NVIM_EVIDENCE/SHA256SUMS" >/dev/null || fail 'stable package signature checksum evidence drifted'
 [[ "$(base64 -d "$NVIM_EVIDENCE/package.sig.b64" | sha256sum | cut -d' ' -f1)" == \
   "$SIGNATURE_SHA256" ]] || fail 'preserved detached signature bytes drifted'
 [[ "$(sha256sum "$NVIM_EVIDENCE/omarchy-signing-key.asc" | cut -d' ' -f1)" == \
   '15d6aac44df688165b2ea35fe0b23af239bbc66a6909c10a5c219e8d94b707de' ]] || \
   fail 'preserved Omarchy signing key drifted'
-grep -Fx 'pkgver = 2026.7.17-1' "$NVIM_EVIDENCE/.PKGINFO" >/dev/null || \
+grep -Fx 'pkgver = 2026.8.13-1' "$NVIM_EVIDENCE/.PKGINFO" >/dev/null || \
   fail 'preserved package identity drifted'
-grep -Fx 'pkgbuild_sha256sum = 290ef38620d729cd2a72c0f20f77daf8271d8a489b1ef0336a1fb3878605b83b' \
+grep -Fx 'pkgbuild_sha256sum = c91107a63b402fd58c1a614fe67e2d9c8f9fe5da2638233b3eccbbd126c4b106' \
   "$NVIM_EVIDENCE/.BUILDINFO" >/dev/null || fail 'preserved PKGBUILD identity drifted'
 grep -Fx '%VERSION%' "$NVIM_EVIDENCE/repository.desc" >/dev/null || \
   fail 'stable repository package record is malformed'
@@ -256,27 +260,27 @@ cmp -s "$snapshot_hashes" "$NVIM_EVIDENCE/config.sha256" || \
 jq -e '
   .artifacts == [{
     id: "omarchy-nvim-lazy-lock",
-    release: "omarchy-nvim 2026.7.17-1",
+    release: "omarchy-nvim 2026.8.13-1",
     snapshot: "packages/upstream/nvim/.config/nvim/lazy-lock.json",
     destination: {root: "home", path: ".config/nvim/lazy-lock.json", mode: "100644"},
-    sha256: "1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601",
+    sha256: "f8693f2607088055adef508221e288b378a8df97411e0d726cbdb672d963a8ca",
     provenance: {
-      artifact: "omarchy-nvim-2026.7.17-1-any.pkg.tar.zst",
-      artifact_sha256: "97d54bd8a44e8f16672c100688e2e418a0efc0aa1e073eb54a7cc14efd93d519",
-      build_date: "2026-07-20T03:57:48Z",
-      extracted: "2026-07-29; full packaged config matched committed snapshot",
+      artifact: "omarchy-nvim-2026.8.13-1-any.pkg.tar.zst",
+      artifact_sha256: "ff7cca4d58198ef6ea0c16ff93bd0369b307a40fae4ed300f6a2a75bb444fe1f",
+      build_date: "2026-08-13T12:50:48Z",
+      extracted: "2026-08-26; full packaged config matched committed snapshot",
       trust: "verified signed stable package; archive omitted due size",
-      record: "docs/artifacts/omarchy-nvim-2026.7.17-1/README.md"
+      record: "docs/artifacts/omarchy-nvim-2026.8.13-1/README.md"
     }
   }]
 ' "$REPO_DIR/manifests/sources.json" >/dev/null || fail 'accepted stable artifact provenance drifted'
 jq -e '
   [.pins[] | [.id, .commit, (.package_identity // "-")]] == [
-    ["omarchy", "8fcc9d6048af4cb0e3af8512c78049857a3b53dd", "-"],
-    ["lazyvim-starter", "803bc181d7c0d6d5eeba9274d9be49b287294d99", "omarchy-nvim 2026.7.17-1"],
-    ["omarchy-pkgs", "2eb15bc7265c5293985f7e5f483e39df7be9c548", "omarchy-nvim 2026.7.17-1"]
+    ["omarchy", "13f18b2cb7286fb54f87daf571a031aa6af3d8f0", "-"],
+    ["lazyvim-starter", "803bc181d7c0d6d5eeba9274d9be49b287294d99", "omarchy-nvim 2026.8.13-1"],
+    ["omarchy-pkgs", "f20649b0a41ccc700e41d8a1d402b337a0f75cd4", "omarchy-nvim 2026.8.13-1"]
   ]
-' "$REPO_DIR/manifests/proposals/2026-07-28-omarchy-3.8.4-nvim-stable.json" >/dev/null || \
+' "$REPO_DIR/manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json" >/dev/null || \
   fail 'accepted stable pin proposal drifted'
 
 # Verification succeeds from a moved checkout with spaces and prints its pins.
@@ -286,26 +290,34 @@ success_output="$(HOME="$TEMP_ROOT/empty-home" "$moved_checkout/scripts/upstream
   fail 'verification failed from a moved checkout'
 [[ "$success_output" == *"$EXPECTED_COMMIT"* ]] || fail 'verification did not print the commit pin'
 [[ "$success_output" == *"$EXPECTED_BLOB"* ]] || fail 'verification did not print the blob pin'
-[[ "$success_output" == *'v3.8.4'* ]] || fail 'verification did not print the release pin'
+[[ "$success_output" == *'v4.0.1'* ]] || fail 'verification did not print the release pin'
 
 # The deployable Bash payload matches its pinned reference and manifest
 # mapping, and excluded sources are never materialized.
 for mapping in "${BASH_MAPPINGS[@]}"; do
-  IFS='|' read -r reference payload <<< "$mapping"
-  cmp -s "$moved_checkout/$BASH_REFERENCE_ROOT/$reference" \
-    "$moved_checkout/$BASH_PAYLOAD_ROOT/$payload" || \
-    fail "deployable Bash payload differs from its pinned reference: $payload"
+  IFS='|' read -r reference payload policy <<< "$mapping"
+  if [[ "$policy" == none ]]; then
+    cmp -s "$moved_checkout/$BASH_REFERENCE_ROOT/$reference" \
+      "$moved_checkout/$BASH_PAYLOAD_ROOT/$payload" || \
+      fail "deployable Bash payload differs from its pinned reference: $payload"
+  fi
 done
+grep -qF 'alias a=' "$moved_checkout/$BASH_REFERENCE_ROOT/aliases" || fail 'exact Bash reference lost the Omarchy-only alias'
+! grep -qF 'alias a=' "$moved_checkout/$BASH_PAYLOAD_ROOT/aliases" || fail 'Ubuntu Bash payload imported the Omarchy-only alias'
+grep -qF 'tmux select-pane -t "$opencode_pane"' "$moved_checkout/$BASH_REFERENCE_ROOT/fns/tmux" || fail 'exact Bash reference lost the upstream focus defect'
+grep -qF 'tmux select-pane -t "$editor_pane"' "$moved_checkout/$BASH_PAYLOAD_ROOT/fns/tmux" || fail 'Ubuntu Bash payload did not curate the focus defect'
+! grep -qF 'hunk diff --watch' "$moved_checkout/$BASH_PAYLOAD_ROOT/fns/tmux" || fail 'Ubuntu Bash payload imported the desktop-only square helper'
 jq -e '
   [
     .sources[] |
     select(.snapshot | startswith("packages/upstream/bash/")) |
-    [.source.path, .destination.path]
+    [.source.path, .destination.path,
+      (if .transform == "none" then "none" else .transform.type end)]
   ] == [
-    ["default/bash/shell", ".config/dotfiles/upstream/bash/shell"],
-    ["default/bash/aliases", ".config/dotfiles/upstream/bash/aliases"],
-    ["default/bash/fns/tmux", ".config/dotfiles/upstream/bash/fns/tmux"],
-    ["default/bash/inputrc", ".config/dotfiles/upstream/bash/inputrc"]
+    ["default/bash/shell", ".config/dotfiles/upstream/bash/shell", "none"],
+    ["default/bash/aliases", ".config/dotfiles/upstream/bash/aliases", "ubuntu-bash-portability-policy"],
+    ["default/bash/fns/tmux", ".config/dotfiles/upstream/bash/fns/tmux", "ubuntu-bash-portability-policy"],
+    ["default/bash/inputrc", ".config/dotfiles/upstream/bash/inputrc", "none"]
   ]
 ' "$moved_checkout/manifests/sources.json" >/dev/null || \
   fail 'deployable Bash manifest inventory is not the selected four-source mapping'
@@ -460,8 +472,8 @@ new_fixture 'artifact-hash'
 mkdir -p "$FIXTURE/packages/upstream/nvim/.config/nvim"
 cp -p "$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json" \
   "$FIXTURE/packages/upstream/nvim/.config/nvim/lazy-lock.json"
-rewrite_manifest "$FIXTURE" --arg hash '1a4bb48e02a0b26c87413e3f3c732d833dd8b41ddebe942c825d590222c3f601' '
-  .artifacts = [{id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.7.17-1",
+rewrite_manifest "$FIXTURE" --arg hash 'f8693f2607088055adef508221e288b378a8df97411e0d726cbdb672d963a8ca' '
+  .artifacts = [{id:"omarchy-nvim-lazy-lock", release:"omarchy-nvim 2026.8.13-1",
     snapshot:"packages/upstream/nvim/.config/nvim/lazy-lock.json",
     destination:{root:"home", path:".config/nvim/lazy-lock.json", mode:"100644"}, sha256:$hash,
     provenance:{artifact:"fixture", artifact_sha256:("2"*64), build_date:"2026-06-17",
@@ -521,11 +533,17 @@ assert_no_staging "$HAPPY"
 # unselected Bash sources, and records exact provenance and transforms.
 [[ -x "$HAPPY/packages/upstream/reference/omarchy/default/bash/bin/fixture-tool" ]] || fail 'executable tree mode was not preserved'
 [[ ! -x "$HAPPY/packages/upstream/reference/omarchy/default/bash/env" ]] || fail 'regular tree mode changed'
-for selected in shell aliases fns/tmux inputrc; do
+for selected in shell inputrc; do
   cmp -s "$HAPPY/packages/upstream/reference/omarchy/default/bash/$selected" \
     "$HAPPY/packages/upstream/bash/.config/dotfiles/upstream/bash/$selected" || \
     fail "sync did not update the selected Bash reference and payload together: $selected"
 done
+! grep -qF 'alias a=' "$HAPPY/packages/upstream/bash/.config/dotfiles/upstream/bash/aliases" || \
+  fail 'sync imported an Omarchy-only alias into the Ubuntu payload'
+grep -qF 'tmux select-pane -t "$editor_pane"' "$HAPPY/packages/upstream/bash/.config/dotfiles/upstream/bash/fns/tmux" || \
+  fail 'sync did not repair the upstream tmux helper focus target'
+! grep -qF 'hunk diff --watch' "$HAPPY/packages/upstream/bash/.config/dotfiles/upstream/bash/fns/tmux" || \
+  fail 'sync imported the desktop-only tmux square helper'
 for excluded in env bin/fixture-tool; do
   [[ ! -e "$HAPPY/packages/upstream/bash/.config/dotfiles/upstream/bash/$excluded" ]] || \
     fail "sync materialized excluded Bash payload: $excluded"
@@ -534,25 +552,26 @@ jq -e --arg commit "$OMARCHY_COMMIT" '
   [
     .sources[] |
     select(.snapshot | startswith("packages/upstream/bash/")) |
-    [.commit, .source.path, .destination.path]
+    [.commit, .source.path, .destination.path,
+      (if .transform == "none" then "none" else .transform.type end)]
   ] == [
-    [$commit, "default/bash/shell", ".config/dotfiles/upstream/bash/shell"],
-    [$commit, "default/bash/aliases", ".config/dotfiles/upstream/bash/aliases"],
-    [$commit, "default/bash/fns/tmux", ".config/dotfiles/upstream/bash/fns/tmux"],
-    [$commit, "default/bash/inputrc", ".config/dotfiles/upstream/bash/inputrc"]
+    [$commit, "default/bash/shell", ".config/dotfiles/upstream/bash/shell", "none"],
+    [$commit, "default/bash/aliases", ".config/dotfiles/upstream/bash/aliases", "ubuntu-bash-portability-policy"],
+    [$commit, "default/bash/fns/tmux", ".config/dotfiles/upstream/bash/fns/tmux", "ubuntu-bash-portability-policy"],
+    [$commit, "default/bash/inputrc", ".config/dotfiles/upstream/bash/inputrc", "none"]
   ]
 ' "$HAPPY/manifests/sources.json" >/dev/null || fail 'sync generated the wrong Bash payload provenance'
 [[ "$(cat "$HAPPY/packages/upstream/nvim/.config/nvim/lua/config/keymaps.lua")" == *overlay* ]] || fail 'overlay did not replace starter content'
 options="$HAPPY/packages/upstream/nvim/.config/nvim/lua/config/options.lua"
-printf '%s' $'vim.opt.number = true\nrequire(\'config.remote_clipboard\').setup()\nvim.opt.relativenumber = false\nvim.g.autoformat = false\n' \
-  > "$TEMP_ROOT/expected-options.lua"
-cmp -s "$TEMP_ROOT/expected-options.lua" "$options" || fail 'append content or ordering is wrong'
+[[ "$(< "$options")" == 'vim.opt.number = false' ]] || fail 'overlay options did not replace starter content'
 jq -e --arg starter "$STARTER_COMMIT" --arg pkgs "$PKGS_COMMIT" '
-  any(.sources[]; .source.path == "lua/config/options.lua" and .transform.type == "append") and
+  any(.sources[]; .source.path == "pkgbuilds/omarchy-nvim/lua/config/options.lua" and
+    .commit == $pkgs and .transform.type == "overwrite" and
+    .transform.replaces.commit == $starter and .transform.replaces.path == "lua/config/options.lua") and
   any(.sources[]; .source.path == "pkgbuilds/omarchy-nvim/lua/config/keymaps.lua" and
     .commit == $pkgs and .transform.type == "overwrite" and
     .transform.replaces.commit == $starter and .transform.replaces.path == "lua/config/keymaps.lua")
-' "$HAPPY/manifests/sources.json" >/dev/null || fail 'append/overwrite manifest records are wrong'
+' "$HAPPY/manifests/sources.json" >/dev/null || fail 'overwrite manifest records are wrong'
 cmp -s "$LOCK_SOURCE" "$HAPPY/packages/upstream/nvim/.config/nvim/lazy-lock.json" || fail 'lazy-lock was not preserved'
 git -C "$REPO_DIR" ls-files --error-unmatch packages/upstream/nvim/.config/nvim/lazy-lock.json >/dev/null || \
   fail 'relocated lazy-lock snapshot is not tracked'
@@ -620,10 +639,10 @@ for point in sync-proposal sync-fetch sync-enumerate sync-assemble sync-artifact
   assert_no_staging "$fixture"
 done
 
-# Bootstrap and library code can never invoke upstream sync.
+# Dotfiles and library code can never invoke upstream sync.
 if grep -Eq 'scripts/upstream[[:space:]]+sync|upstream[[:space:]]+sync' \
-  "$REPO_DIR/bootstrap.sh" "$REPO_DIR"/lib/*.sh "$REPO_DIR"/lib/areas/*.sh; then
-  fail 'bootstrap or library code can invoke upstream sync'
+  "$REPO_DIR/dotfiles.sh" "$REPO_DIR"/lib/*.sh "$REPO_DIR"/lib/areas/*.sh; then
+  fail 'dotfiles or library code can invoke upstream sync'
 fi
 
 printf 'PASS: offline upstream synchronization checks\n'

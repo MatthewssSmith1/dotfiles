@@ -1,9 +1,9 @@
 # Local Environment Bundles
 
-Generic Linux and WSL deploy `dotfiles-secret`, an offline launcher that passes
+Ubuntu Bash deploys `dotfiles-secret`, an offline launcher that passes
 one host-owned environment assignment file to one child process. The repository
 owns the launcher and format contract. The host owns every real bundle and any
-application wrapper; bootstrap never creates, reads, copies, backs up, or
+application wrapper; dotfiles never creates, reads, copies, backs up, or
 removes them.
 
 ## Interface

@@ -8,7 +8,7 @@ if vim.env.DOTFILES_NVIM_RESTORING == "1" then
 end
 
 require("lazy").setup({
-  lockfile = vim.env.DOTFILES_NVIM_RESTORE_LOCKFILE or (vim.fn.stdpath("config") .. "/lazy-lock.json"),
+  lockfile = vim.fn.stdpath("config") .. "/lazy-lock.json",
   spec = {
     -- add LazyVim and import its plugins
     { "LazyVim/LazyVim", import = "lazyvim.plugins" },

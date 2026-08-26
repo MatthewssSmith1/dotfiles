@@ -1,0 +1,121 @@
+_herdr_require() {
+  local command
+  for command in "$@"; do
+    command -v -- "$command" >/dev/null 2>&1 || {
+      printf 'Herdr helper requires %s; install it before retrying.\n' "$command" >&2
+      return 1
+    }
+  done
+}
+
+_herdr_require_session() {
+  [[ -n ${HERDR_PANE_ID:-} && -n ${HERDR_TAB_ID:-} ]] || {
+    printf 'You must start herdr to use this helper.\n' >&2
+    return 1
+  }
+}
+
+_herdr_editor() {
+  local editor=${EDITOR:-nvim} executable=${EDITOR:-nvim}
+  executable=${executable%% *}
+  _herdr_require "$executable" || return
+  printf '%s' "$editor"
+}
+
+_herdr_ratio() {
+  awk -v a="$1" -v b="$2" 'BEGIN { printf "%.4f", a / b }'
+}
+
+_herdr_split() {
+  herdr pane split "$1" --direction "$2" --ratio "$3" --cwd "$4" --no-focus |
+    jq -r '.result.pane.pane_id'
+}
+
+hdl() {
+  [[ $# -ge 1 && $# -le 2 ]] || { printf 'Usage: hdl <ai> [<second_ai>]\n' >&2; return 1; }
+  _herdr_require herdr jq || return
+  _herdr_require_session || return
+  local current_dir=$PWD editor_pane=$HERDR_PANE_ID ai_pane ai2_pane
+  local ai=$1 ai2=${2:-} editor
+  editor="$(_herdr_editor)" || return
+  _herdr_require "${ai%% *}" || return
+  [[ -z $ai2 ]] || _herdr_require "${ai2%% *}" || return
+  herdr tab rename "$HERDR_TAB_ID" "$(basename "$current_dir")" >/dev/null || return
+  _herdr_split "$editor_pane" down 0.85 "$current_dir" >/dev/null || return
+  ai_pane="$(_herdr_split "$editor_pane" right 0.7 "$current_dir")" || return
+  if [[ -n $ai2 ]]; then
+    ai2_pane="$(_herdr_split "$ai_pane" down 0.5 "$current_dir")" || return
+    herdr pane run "$ai2_pane" "$ai2" >/dev/null || return
+  fi
+  herdr pane run "$ai_pane" "$ai" >/dev/null || return
+  herdr pane run "$editor_pane" "$editor ." >/dev/null
+}
+
+hds() {
+  [[ $# -eq 0 ]] || { printf 'Usage: hds\n' >&2; return 1; }
+  _herdr_require herdr jq hunk opencode || return
+  _herdr_require_session || return
+  local current_dir=$PWD editor_pane=$HERDR_PANE_ID diff_pane terminal_pane opencode_pane editor
+  editor="$(_herdr_editor)" || return
+  herdr tab rename "$HERDR_TAB_ID" "$(basename "$current_dir")" >/dev/null || return
+  terminal_pane="$(_herdr_split "$editor_pane" down 0.5 "$current_dir")" || return
+  diff_pane="$(_herdr_split "$editor_pane" right 0.5 "$current_dir")" || return
+  opencode_pane="$(_herdr_split "$terminal_pane" right 0.5 "$current_dir")" || return
+  herdr pane run "$editor_pane" "$editor ." >/dev/null || return
+  herdr pane run "$diff_pane" 'hunk diff --watch' >/dev/null || return
+  herdr pane run "$opencode_pane" opencode >/dev/null
+}
+
+hdlm() {
+  [[ $# -ge 1 && $# -le 2 ]] || { printf 'Usage: hdlm <ai> [<second_ai>]\n' >&2; return 1; }
+  _herdr_require herdr jq || return
+  _herdr_require_session || return
+  local ai=$1 ai2=${2:-} base_dir=$PWD first=true dir dirpath pane_id hdl_command
+  _herdr_editor >/dev/null || return
+  _herdr_require "${ai%% *}" || return
+  [[ -z $ai2 ]] || _herdr_require "${ai2%% *}" || return
+  [[ -n ${HERDR_WORKSPACE_ID:-} ]] || { printf 'Herdr workspace identity is unavailable.\n' >&2; return 1; }
+  herdr workspace rename "$HERDR_WORKSPACE_ID" "$(basename "$base_dir")" >/dev/null || return
+  for dir in "$base_dir"/*/; do
+    [[ -d $dir ]] || continue
+    dirpath=${dir%/}
+    printf -v hdl_command 'hdl %q' "$ai"
+    [[ -z $ai2 ]] || printf -v hdl_command '%s %q' "$hdl_command" "$ai2"
+    if [[ $first == true ]]; then
+      printf -v hdl_command 'cd %q && %s' "$dirpath" "$hdl_command"
+      herdr pane run "$HERDR_PANE_ID" "$hdl_command" >/dev/null || return
+      first=false
+    else
+      pane_id="$(herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$dirpath" --no-focus |
+        jq -r '.result.root_pane.pane_id')" || return
+      herdr pane run "$pane_id" "$hdl_command" >/dev/null || return
+    fi
+  done
+}
+
+hsl() {
+  [[ $# -eq 2 && $1 =~ ^[1-9][0-9]*$ ]] || { printf 'Usage: hsl <pane_count> <command>\n' >&2; return 1; }
+  _herdr_require herdr jq awk || return
+  _herdr_require_session || return
+  local count=$1 cmd=$2 current_dir=$PWD cols=1 k col index rows j last pane
+  local -a columns panes
+  _herdr_require "${cmd%% *}" || return
+  herdr tab rename "$HERDR_TAB_ID" "$(basename "$current_dir")" >/dev/null || return
+  while ((cols * cols < count)); do ((cols += 1)); done
+  columns=("$HERDR_PANE_ID")
+  for ((k = 1; k < cols; k++)); do
+    columns+=("$(_herdr_split "${columns[-1]}" right "$(_herdr_ratio 1 $((cols - k + 1)))" "$current_dir")") || return
+  done
+  for ((index = 0; index < cols; index++)); do
+    col=${columns[index]}
+    rows=$((count / cols))
+    ((index >= count % cols)) || ((rows += 1))
+    panes+=("$col")
+    last=$col
+    for ((j = 1; j < rows; j++)); do
+      last="$(_herdr_split "$last" down "$(_herdr_ratio 1 $((rows - j + 1)))" "$current_dir")" || return
+      panes+=("$last")
+    done
+  done
+  for pane in "${panes[@]}"; do herdr pane run "$pane" "$cmd" >/dev/null || return; done
+}

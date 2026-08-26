@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # Canonical repository test runner. Suites run concurrently with buffered output.
-# Opt-in gates that need external fixtures, such as tests/tmux_parser_gate.sh,
-# are run manually; see README.md.
 
 set -Eeuo pipefail
 
 readonly TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 JOBS="${TEST_JOBS:-}"
+LIST_ONLY=false
 
 usage() {
-  printf 'usage: %s [--jobs COUNT]\n' "${0##*/}"
+  printf 'usage: %s [--jobs COUNT] [--list]\n' "${0##*/}"
 }
 
 fail() {
@@ -19,15 +18,20 @@ fail() {
 
 readonly TEST_FILES=(
   "$TEST_DIR/contract_test.sh"
+  "$TEST_DIR/cli_test.sh"
   "$TEST_DIR/upstream_test.sh"
-  "$TEST_DIR/engine_test.sh"
+  "$TEST_DIR/lean_engine_test.sh"
+  "$TEST_DIR/host_test.sh"
   "$TEST_DIR/git_test.sh"
-  "$TEST_DIR/provisioning_test.sh"
+  "$TEST_DIR/tools_test.sh"
   "$TEST_DIR/shell_test.sh"
   "$TEST_DIR/tmux_test.sh"
   "$TEST_DIR/nvim_test.sh"
   "$TEST_DIR/agents_test.sh"
   "$TEST_DIR/herdr_test.sh"
+  "$TEST_DIR/desktop_test.sh"
+  "$TEST_DIR/secrets_test.sh"
+  "$TEST_DIR/windows_terminal_test.sh"
 )
 
 # Start historically long suites first; reporting remains in canonical order.
@@ -35,14 +39,33 @@ readonly RUN_FILES=(
   "$TEST_DIR/shell_test.sh"
   "$TEST_DIR/nvim_test.sh"
   "$TEST_DIR/git_test.sh"
-  "$TEST_DIR/engine_test.sh"
+  "$TEST_DIR/tools_test.sh"
+  "$TEST_DIR/lean_engine_test.sh"
   "$TEST_DIR/agents_test.sh"
-  "$TEST_DIR/provisioning_test.sh"
   "$TEST_DIR/tmux_test.sh"
   "$TEST_DIR/upstream_test.sh"
   "$TEST_DIR/herdr_test.sh"
+  "$TEST_DIR/desktop_test.sh"
+  "$TEST_DIR/secrets_test.sh"
+  "$TEST_DIR/host_test.sh"
+  "$TEST_DIR/windows_terminal_test.sh"
   "$TEST_DIR/contract_test.sh"
+  "$TEST_DIR/cli_test.sh"
 )
+
+for test_file in "${TEST_FILES[@]}"; do
+  count=0
+  for run_file in "${RUN_FILES[@]}"; do
+    [[ "$run_file" != "$test_file" ]] || ((count += 1))
+  done
+  ((count == 1)) || fail "suite must appear exactly once in RUN_FILES: ${test_file##*/}"
+done
+for run_file in "${RUN_FILES[@]}"; do
+  for test_file in "${TEST_FILES[@]}"; do
+    [[ "$test_file" != "$run_file" ]] || continue 2
+  done
+  fail "RUN_FILES contains an unlisted suite: ${run_file##*/}"
+done
 
 while (($#)); do
   case "$1" in
@@ -55,6 +78,10 @@ while (($#)); do
       usage
       exit 0
       ;;
+    --list)
+      LIST_ONLY=true
+      shift
+      ;;
     *) fail "unknown argument: $1" ;;
   esac
 done
@@ -66,8 +93,15 @@ if [[ -z "$JOBS" ]]; then
 fi
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || fail '--jobs must be a positive integer'
 
-bash -n "$TEST_DIR/lib/harness.sh" "$TEST_DIR/tmux_parser_gate.sh" "${TEST_FILES[@]}" || \
+bash -n "$TEST_DIR/lib/harness.sh" "${TEST_FILES[@]}" || \
   fail 'a test file has invalid Bash syntax'
+
+if [[ "$LIST_ONLY" == true ]]; then
+  for test_file in "${TEST_FILES[@]}"; do
+    printf '%s\n' "${test_file##*/}"
+  done
+  exit 0
+fi
 
 RUN_ROOT="$(mktemp -d)"
 readonly RUN_ROOT

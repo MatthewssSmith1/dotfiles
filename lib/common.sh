@@ -1,14 +1,9 @@
-# Shared helpers and process lifecycle; sourced by bootstrap.sh exactly once.
+# Shared helpers and process lifecycle; sourced by dotfiles.sh exactly once.
 
 TEMP_PATHS=()
 TEMP_OBJECT_IDENTITIES=()
 TEMP_RECURSIVE=()
 RETAINED_TEMP_PATHS=()
-TRANSACTION_ACTIVE=false
-TRANSACTION_ROLLING_BACK=false
-ROLLBACK_FAILED=false
-TRANSACTION_RECOVERY_REQUIRED=false
-JOURNAL_DIR=""
 
 log() {
   printf '[%s] %s\n' "$SCRIPT_NAME" "$*"
@@ -23,15 +18,6 @@ cleanup() {
   local status=$?
   local path
 
-  if [[ "$TRANSACTION_ACTIVE" == true && "$TRANSACTION_ROLLING_BACK" == false ]]; then
-    rollback_transaction || true
-  fi
-  if declare -F cleanup_retained_provisioning_transaction >/dev/null; then
-    cleanup_retained_provisioning_transaction || ROLLBACK_FAILED=true
-  fi
-  if declare -F cleanup_retired_provisioning_transaction >/dev/null; then
-    cleanup_retired_provisioning_transaction || ROLLBACK_FAILED=true
-  fi
   if declare -F cleanup_before_temp_paths >/dev/null; then
     cleanup_before_temp_paths || true
   fi
@@ -39,21 +25,8 @@ cleanup() {
     if array_contains "$path" "${RETAINED_TEMP_PATHS[@]:-}"; then
       continue
     fi
-    [[ "$ROLLBACK_FAILED" != true || "$path" != "$JOURNAL_DIR" ]] || continue
-    if declare -p TX_RECOVERY_PATHS >/dev/null 2>&1 && \
-      array_contains "$path" "${TX_RECOVERY_PATHS[@]:-}"; then
-      continue
-    fi
-    if [[ "$ROLLBACK_FAILED" == true ]] && declare -p TX_QUARANTINE_PATHS >/dev/null 2>&1 && \
-      array_contains "$path" "${TX_QUARANTINE_PATHS[@]:-}"; then
-      continue
-    fi
     discard_tracked_temp_path "$path" cleanup || true
   done
-  # Reserved status 70 tells the caller to stop all further area mutation.
-  if [[ "$ROLLBACK_FAILED" == true ]]; then
-    exit 70
-  fi
   exit "$status"
 }
 
@@ -142,12 +115,6 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 validate_test_environment() {
-  if [[ -n "${DOTFILES_TEST_FAIL_AT:-}" && "${DOTFILES_TESTING:-}" != 1 ]]; then
-    die 'DOTFILES_TEST_FAIL_AT requires DOTFILES_TESTING=1'
-  fi
-  if [[ -n "${DOTFILES_TEST_SIGNAL_AT:-}" && "${DOTFILES_TESTING:-}" != 1 ]]; then
-    die 'DOTFILES_TEST_SIGNAL_AT requires DOTFILES_TESTING=1'
-  fi
   if [[ -n "${DOTFILES_TEST_HOLD_AT:-}${DOTFILES_TEST_HOLD_DIR:-}" && "${DOTFILES_TESTING:-}" != 1 ]]; then
     die 'DOTFILES_TEST_HOLD_* requires DOTFILES_TESTING=1'
   fi
@@ -168,19 +135,6 @@ validate_test_environment() {
   elif [[ -n "${DOTFILES_TEST_HOST_ROOT:-}${DOTFILES_TEST_UNAME:-}${DOTFILES_TEST_ARCH:-}" ]]; then
     die 'test host overrides require DOTFILES_TESTING=1'
   fi
-}
-
-fault() {
-  local point="$1"
-  if [[ "${DOTFILES_TESTING:-}" == 1 && "${DOTFILES_TEST_FAIL_AT:-}" == "$point" ]]; then
-    die "injected test failure at $point"
-  fi
-}
-
-test_signal() {
-  local point="$1"
-  [[ "${DOTFILES_TESTING:-}" == 1 && "${DOTFILES_TEST_SIGNAL_AT:-}" == "$point" ]] || return 0
-  kill -TERM "$$"
 }
 
 test_hold() {

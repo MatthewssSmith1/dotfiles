@@ -34,13 +34,13 @@ Expected effective order:
 repository .git/config
 ```
 
-On Omarchy, preserve the native XDG file as the untouched baseline. On generic systems, Stow the pinned synchronized XDG baseline.
+On Omarchy, preserve the native XDG file as the untouched baseline. On Ubuntu, Stow the pinned synchronized XDG baseline.
 
 Keep `~/.gitconfig` as a regular guarded include entrypoint. This allows native `git config --global` writes without mutating the checkout. Its managed include sequence loads the shared personal file, external identity file, and optional central host-local file in the order shown above.
 
 ## Omarchy Baseline Pin
 
-On the `omarchy` profile, apply and `--check` hard-fail during preflight unless the native `~/.config/git/config` matches all sixteen required baseline values exactly. A new Omarchy release that changes its Git configuration therefore blocks deployment until the pin is deliberately reviewed and updated. The contract is a hard refusal, not reconciliation; the separate non-blocking drift warnings layer on top of this same pin.
+On the `omarchy` profile, apply and check hard-fail during preflight unless the native `~/.config/git/config` matches all sixteen required baseline values exactly. A new Omarchy release that changes its Git configuration therefore blocks deployment until the pin is deliberately reviewed and updated. The contract is a hard refusal, not reconciliation; the separate non-blocking drift warnings layer on top of this same pin.
 
 ## Personal And Local Layers
 
@@ -51,25 +51,10 @@ On the `omarchy` profile, apply and `--check` hard-fail during preflight unless 
   `~/.config/dotfiles/local/git.conf`.
 - Let repository-local configuration retain final precedence.
 
-Migration must preserve effective credential helpers as host-local settings in `~/.config/dotfiles/local/git.conf`. The current hard-coded helper paths should not enter a shared layer, but they must not disappear silently: migration reports each effective helper and preserves it until the user explicitly replaces or removes it. `rebase.autostash` is not retained unless another host-local or repository layer supplies it.
-
-## Migration
-
-1. Inspect the current global and XDG configurations with origin information.
-2. Inspect `~/.gitconfig.local` with `lstat` semantics. Accept a symlink only
-   when its lexical and resolved targets match the known legacy checkout path.
-3. Copy its complete identity configuration into a temporary external
-   mode-`0600` regular file; never write or run `chmod` through the symlink.
-4. Preserve effective credential helpers and unrelated host values in the
-   central local file.
-5. Replace only known legacy links or managed include blocks.
-6. Install or preserve the profile baseline.
-7. Install the guarded regular global entrypoint.
-8. Atomically rename the external identity file over the validated legacy
-   symlink. The rename itself replaces the symlink; do not unlink afterward.
-9. Validate every required value and source.
-
-Migration must stop rather than overwrite an unrelated regular file or malformed managed block.
+Credential helpers remain host-local settings. Dotfiles does not migrate or
+rewrite historical helper paths; existing host-local files retain precedence.
+`rebase.autostash` is not supplied unless a host-local or repository layer sets
+it.
 
 ## Non-Goals
 
@@ -81,16 +66,15 @@ Migration must stop rather than overwrite an unrelated regular file or malformed
 
 ## Acceptance Criteria
 
-- Omarchy and generic profiles expose the same required baseline behavior.
+- Omarchy and Ubuntu profiles expose the same required baseline behavior.
 - `init.defaultBranch` resolves to `main` from the personal layer.
 - Identity resolves from the mode-`0600` external local file.
 - Optional host settings resolve from the central local file.
 - Repository settings can override all user-level layers.
-- Existing effective credential helpers remain available from the host-local
-  layer unless explicitly removed; `rebase.autostash` is absent unless another
-  layer supplies it.
+- Host-local credential helpers retain precedence; `rebase.autostash` is absent
+  unless another layer supplies it.
 - `git config --show-origin --show-scope --get-regexp '.*'` reports expected
   values and provenance.
 - Authenticated fetch through a fake host-local helper succeeds with terminal
-  prompts disabled, proving migration does not remove helper behavior.
-- Repeated bootstrap does not duplicate includes or mutate tracked files.
+  prompts disabled.
+- Repeated apply does not duplicate includes or mutate tracked files.

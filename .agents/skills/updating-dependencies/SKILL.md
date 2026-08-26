@@ -1,60 +1,129 @@
 ---
 name: updating-dependencies
-description: Update pinned upstream baselines (Omarchy core, omarchy-nvim overlay and package artifact, LazyVim starter) — use when refreshing manifests/sources.json pins, syncing packages/upstream snapshots, or re-verifying the lazy-lock.json artifact.
+description: Update pinned Omarchy core, omarchy-nvim package, and LazyVim starter inputs, including source snapshots and signed package evidence.
 ---
 
-Authoritative background: [upstream.md](../../../docs/upstream.md) (source model, sync guarantees) and [artifacts/README.md](../../../docs/artifacts/README.md) (package trust boundary). This file carries the operational walkthrough; keep it consistent with those contracts.
+Authoritative contracts: [upstream.md](../../../docs/upstream.md) and
+[artifacts/README.md](../../../docs/artifacts/README.md). Keep this operational
+workflow consistent with them.
 
-Work in a throwaway directory (e.g. `/tmp/omarchy-update-<date>/`). Everything before `scripts/upstream sync` is read-only research; sync is the only step that touches the checkout, and it only stages then atomically replaces `packages/upstream` + `manifests/sources.json`.
+Use a throwaway directory under `/tmp` for research and downloads. Research and
+artifact capture must not modify the checkout. `scripts/upstream sync` is the
+checkout-changing source synchronization operation; manual identity/evidence
+updates required by sync are made immediately before it.
 
-## 1. Discover latest stable versions
+## 1. Resolve independent stable streams
 
-- Omarchy core: `git ls-remote --tags https://github.com/basecamp/omarchy 'refs/tags/v*'` — take the highest tag. Tags are lightweight, so the listed hash is the commit ID (an annotated tag would show a separate `^{}` peel line; use that one).
-- omarchy-nvim: the authoritative channel is the stable package database, not git. `curl -fsSLO https://pkgs.omarchy.org/stable/x86_64/omarchy.db`, `tar -xf` it, and read `omarchy-nvim-<ver>/desc` for `%VERSION%`, `%SHA256SUM%`, and `%BUILDDATE%`. Git may carry newer pkgvers that never reached stable (2026.7.15, for example); never pin those.
-- Map the package version to its `omarchy-pkgs` commit: `git clone --filter=blob:none https://github.com/omacom-io/omarchy-pkgs`, then `git log -- pkgbuilds/omarchy-nvim/` and find the commit whose PKGBUILD sets the matching `pkgver=`. Sanity-check that `%BUILDDATE%` follows that commit's date by minutes, not days.
+- Omarchy core is selected from immutable upstream tags. Resolve the selected
+  tag to its full commit with `git ls-remote --tags`; use the peeled object for
+  an annotated tag. Omarchy v4 installs its runtime tree under
+  `/usr/share/omarchy`, but Git is authoritative when an installed tree omits a
+  tracked baseline such as Git configuration.
+- Resolve `omarchy-nvim` independently from the stable package database at
+  `https://pkgs.omarchy.org/stable/x86_64/omarchy.db`. Read `%VERSION%`,
+  `%SHA256SUM%`, and `%BUILDDATE%` from the package record. Do not describe the
+  package as matching the core release.
+- Map that package version to the immutable `omarchy-pkgs` commit whose
+  `pkgbuilds/omarchy-nvim/PKGBUILD` sets its `pkgver`. Confirm the package build
+  date is consistent with the commit date.
+- Resolve the LazyVim starter commit from the source archive and checksum in
+  that PKGBUILD. Prove the archive tree/checksum maps to the selected immutable
+  starter commit rather than carrying an earlier starter pin forward by
+  assumption.
 
-## 2. Review what actually changed
+## 2. Review source scope and portability
 
-- Core: `git diff --stat <old-tag> <new-tag> -- <every path in manifests/sources.json with repository basecamp/omarchy>`. An empty diff means a metadata-only pin refresh.
-- Overlay: `git diff <old-commit> <new-commit> -- pkgbuilds/omarchy-nvim/` in omarchy-pkgs. Three things matter:
-  - the `source=`/`sha256sums=` lines (a changed starter tarball checksum means the LazyVim starter pin moved and must be re-resolved to a commit);
-  - the lines the PKGBUILD appends to `lua/config/options.lua` (recorded as an append transform in the manifest — if these change, the transform bytes in the proposal review must match);
-  - the overlay file inventory under `lua/`, `plugin/`, `lazyvim.json` (added/removed files change the manifest inventory, not just blobs).
-- Read the content diffs of changed overlay files: they deploy into the generic/WSL Neovim profile, so judge portability impact before accepting.
+- Diff core and package commits independently. Review every tracked source
+  path, overlay inventory change, PKGBUILD append, and starter change.
+- The v4 contract records machine-verifiable provenance for Herdr config,
+  selected Herdr Bash helpers, tmux, Starship, Bash sources, Git baseline, and
+  the Tokyo Night palette/template. Source paths in the manifest must identify
+  immutable Git blobs even when live-host inspection begins under
+  `/usr/share/omarchy`.
+- Baseline/reference snapshots remain byte-exact. Ubuntu payload adapters may
+  select or curate reviewed helpers. Do not import an evident upstream defect,
+  a desktop-only command, or an Omarchy-only dependency into the portable
+  Ubuntu payload merely because it appears in the baseline.
+- Preserve repository-owned framework markers such as `.stow-local-ignore`
+  and `.empty-package` through generated tree replacement.
 
-## 3. Preserve the package artifact evidence
+## 3. Capture the signed package evidence
 
-`lazy-lock.json` exists only inside the built package. While the package is still on stable, immediately capture the full evidence set modeled on `docs/artifacts/omarchy-nvim-<ver>/`:
+While the selected package remains in stable, download its archive, detached
+signature, and current database into the throwaway directory.
 
-1. Download `omarchy-nvim-<ver>-any.pkg.tar.zst` and its `.sig` from `https://pkgs.omarchy.org/stable/x86_64/`; record SHA-256 of database, package, and signature (`SHA256SUMS`).
-2. Verify the package hash equals the database `%SHA256SUM%`.
-3. Verify the detached signature with the public key committed in the pinned `omarchy-pkgs` revision (`gpg --import` that key into a throwaway `GNUPGHOME`); record fingerprint and signature timestamp.
-4. Extract; preserve `.PKGINFO`/`.BUILDINFO` metadata, confirm `.BUILDINFO`'s PKGBUILD SHA-256 matches the PKGBUILD at the pinned overlay commit.
-5. Hash every regular member of `usr/share/omarchy-nvim/config` into `config.sha256` — one `<sha256>  <relative path>` line per file, sorted with `LC_ALL=C` (offline verify regenerates the expected list with jq's codepoint sort and `cmp`s it byte-for-byte; a locale-sorted file fails). Keep the base64 signature (`package.sig.b64`), key (`omarchy-signing-key.asc`), database record (`repository.desc`), and response metadata (`retrieval.txt`).
-6. Do not commit the ~177 MB archive; the member-hash record is the accepted trust-on-verification boundary. Delete the previous release's evidence directory — one active baseline; git history is the archive.
+1. Verify the archive SHA-256 equals stable metadata and record SHA-256 for the
+   database, archive, and signature.
+2. Import the public key from the pinned `omarchy-pkgs` commit into a temporary
+   `GNUPGHOME`; verify the detached signature and record fingerprint/timestamp.
+3. Extract the package. Preserve `.PKGINFO`, `.BUILDINFO`, stable package
+   record, retrieval metadata, signing key, base64 signature, and sorted
+   `config.sha256`. Verify `.BUILDINFO`'s PKGBUILD hash against the pinned
+   commit and verify every accepted packaged config member.
+4. Copy the extracted `lazy-lock.json`; it is package-only evidence and cannot
+   be reconstructed from Git.
+5. Keep exactly one active `docs/artifacts/omarchy-nvim-<version>/` evidence
+   set. Remove only the superseded active evidence directory; retain historical
+   proposal records and Git history. Do not commit the large package archive.
 
-## 4. Stage the repo-side identity swap (before sync)
+Never weaken signature, checksum, package-member, or provenance checks to make
+a refresh pass. Report any unavailable stable artifact or signature failure as
+a blocker.
 
-Sync does not take the artifact from the proposal — `preserve_artifacts` copies the *active* checkout's lockfile into the candidate and requires the *active* `manifests/sources.json` artifact record to match constants hardcoded in `scripts/upstream`. So before running sync:
+## 4. Stage identities and proposal
 
-1. Update the constants block near the top of `scripts/upstream`: `LAZY_LOCK_RELEASE`, `LAZY_LOCK_SHA256`, `NVIM_EVIDENCE_DIR`, `STABLE_DB_SHA256`, `PACKAGE_SHA256`, `SIGNATURE_SHA256` (`SIGNING_KEY_SHA256` only if the key rotated), plus the version-bearing literals inside `verify_nvim_artifact_evidence` (package filename greps, `pkgver = …`, `pkgbuild_sha256sum = …`). A global sed of old→new hash/version pairs covers all of it.
-2. Copy the newly extracted `lazy-lock.json` over `packages/upstream/nvim/.config/nvim/lazy-lock.json` (mode 0644).
-3. Hand-edit the `artifacts[0]` record in `manifests/sources.json` (release, sha256, provenance artifact/artifact_sha256/build_date/extracted/record).
-4. If the starter pin moved, also recompute the two `nvim-offline-bootstrap-policy` transform output blobs (`NVIM_INIT_POLICY_BLOB`, `NVIM_LAZY_POLICY_BLOB`).
+Before sync, update the accepted artifact identity consistently in
+`scripts/upstream`, `manifests/sources.json`, the package lockfile, evidence,
+and focused test constants. Update fixed transform output blobs when source or
+transform bytes changed.
 
-## 5. Propose and sync
+Create `manifests/proposals/<date>-<purpose>.json` with the exact independent
+pins `omarchy`, `lazyvim-starter`, and `omarchy-pkgs`. Each pin records its
+HTTPS repository, human version/package identity, and full 40-hex commit.
+Leave superseded proposals untouched.
 
-- Write `manifests/proposals/<date>-<purpose>.json` (schema v1: `pins` of `{id, repository, version, commit[, package_identity]}`; exactly the three ids `omarchy`, `lazyvim-starter`, `omarchy-pkgs`; commits must be full 40-hex — version-only pins are refused).
-- `scripts/upstream sync --proposal manifests/proposals/<file>` — the only networked baseline operation. It fetches the immutable commits, proves path/blob membership, replays transforms, assembles the candidate, runs offline verification, then atomically replaces the snapshot and manifest.
-- Review `git diff` of the resulting baseline change; confirm repo-owned framework markers (`packages/upstream/*/.stow-local-ignore`, `.empty-package`) survived the tree swap; then `scripts/upstream verify` must pass offline.
+## 5. Synchronize and inspect
 
-## 6. Propagate and validate
+Run the only networked baseline operation:
 
-- Grep the repo for the old identities (release tags, package versions, commits, artifact hashes). Expect hits in `tests/upstream_test.sh` (baseline-drift assertions mirror the script constants and expected pin/artifact records — the same sed mapping applies, plus the proposal path in the proposal-drift assertion), `docs/upstream.md` (Active Pins, narrative, references), `artifacts/README.md`, and prior proposal records. `check_omarchy_core_drift` and `check_omarchy_neovim_drift` read `manifests/sources.json`, so they self-update.
-- Leave superseded proposal files untouched; they are the decision record.
-- Run `tests/upstream_test.sh` while iterating, then `tests/run.sh`; a baseline refresh is cross-cutting under `tests/README.md`.
-- Live-validate affected areas separately from sync: per-area `--check`, apply where drift is expected (a changed deployed baseline needs reapply on generic/WSL hosts; native Omarchy areas only attach to native files, so usually just the drift warnings clear). On generic/WSL a changed `lazy-lock.json` makes Neovim `--check` report a stale restore marker until an explicit `nvim-restore` run with connectivity.
+```sh
+scripts/upstream sync --proposal manifests/proposals/<file>.json
+```
 
-## Update log
+Sync must fetch immutable commits, prove path/blob membership, replay recorded
+transforms, preserve the accepted package-only artifact, verify the candidate,
+and atomically replace the active manifest/snapshot. Review generated diffs,
+the complete source inventory, adapter curation, and framework markers.
 
-- 2026-07-28: v3.8.3 → v3.8.4 and omarchy-nvim 2026.6.17-1 → 2026.7.17-1. Core diff was empty for all tracked paths (pin-metadata-only). Overlay changed `remote_clipboard.lua` (OSC-52/tmux rewrite) and `omarchy-theme-hotreload.lua` (reload fix); PKGBUILD appended lines and starter checksum unchanged, so the starter commit pin carried over. Found and fixed a sync bug: `preserve_framework_markers` dropped `packages/upstream/nvim/.stow-local-ignore` because it only preserved markers for package roots absent from the candidate. Also retargeted `check_omarchy_neovim_drift` from the superseded `manifests/proposals/2026-07-20-neovim-stability.json` proposal to the manifest artifact release.
+Then verify offline:
+
+```sh
+scripts/upstream verify
+```
+
+## 6. Propagate and test
+
+Update `docs/upstream.md`, `docs/artifacts/README.md`, directly affected tool
+contracts, script/test constants, and stale active identity references. The
+active manifest is canonical for pins and source inventory. Do not rewrite area
+lifecycles as part of an accepted-input refresh, and do not add Neovim restore
+markers or state-convergence steps; package lock acceptance is verified by
+manifest/artifact checks.
+
+Run the focused gates while iterating:
+
+```sh
+scripts/upstream verify
+tests/upstream_test.sh
+tests/contract_test.sh
+tests/shell_test.sh
+tests/git_test.sh
+tests/herdr_test.sh
+tests/tmux_test.sh
+tests/nvim_test.sh
+```
+
+Run additional directly affected static suites when inventory or deployment
+contracts require them. Because an upstream refresh is cross-cutting, run
+`tests/run.sh` before committing. This workflow does not deploy or apply the
+accepted inputs to the live host.

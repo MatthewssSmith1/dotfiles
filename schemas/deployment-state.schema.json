@@ -1,82 +1,97 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dotfiles.local/schemas/deployment-state.schema.json",
-  "$comment": "Documentation only: the authoritative validator is the inline jq expression in validate_state_file (lib/engine.sh). Nothing executes this file; keep it aligned manually.",
-  "title": "Dotfiles deployment area state",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "profile",
-    "area",
-    "checkout_root",
-    "target_root",
-    "packages",
-    "targets",
-    "managed_directories",
-    "attachments",
-    "backups"
-  ],
-  "properties": {
-    "schema_version": { "const": 1 },
-    "profile": { "enum": ["omarchy", "generic", "wsl"] },
-    "area": { "enum": ["git", "bash", "tmux", "nvim", "zsh", "agents", "herdr"] },
-    "checkout_root": { "type": "string", "pattern": "^/" },
-    "target_root": { "type": "string", "pattern": "^/" },
-    "packages": {
-      "type": "array",
-      "items": { "type": "string", "pattern": "^[a-z0-9-]+/[a-z0-9-]+$" }
-    },
-    "targets": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["path", "source", "resolved_source"],
-        "properties": {
-          "path": { "$ref": "#/$defs/relativePath" },
-          "source": { "type": "string", "minLength": 1 },
-          "resolved_source": { "type": "string", "pattern": "^/" }
-        }
-      }
-    },
-    "managed_directories": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/relativePath" }
-    },
-    "attachments": {
-      "type": "array",
-      "description": "Attachment IDs and paths are each unique. Area-defined IDs encode the engine origin (created, existing-empty, existing-final-newline, or existing-no-final-newline) needed for exact removal.",
-      "uniqueItems": true,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["id", "path", "content_hash"],
-        "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
-          "path": { "$ref": "#/$defs/relativePath" },
-          "content_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
-        }
-      }
-    },
-    "backups": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": { "$ref": "#/$defs/relativePath" }
-    },
-    "restored_lock_sha256": {
-      "description": "Neovim-only identity written after a complete verified plugin restore.",
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
-    }
-  },
-  "allOf": [
-    {
-      "if": { "required": ["restored_lock_sha256"] },
-      "then": { "properties": { "area": { "const": "nvim" } } }
-    }
+  "$comment": "Documentation for the inline lean_validate_state_file validator in lib/lean_engine.sh.",
+  "title": "Lean ownership state",
+  "oneOf": [
+    { "$ref": "#/$defs/version1" },
+    { "$ref": "#/$defs/version2" }
   ],
   "$defs": {
+    "baseProperties": {
+      "profile": { "enum": ["omarchy", "ubuntu"] },
+      "area": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+      "attachments": { "$ref": "#/$defs/attachments" }
+    },
+    "version1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "profile", "area", "attachments"],
+      "properties": {
+        "version": { "const": 1 },
+        "profile": { "$ref": "#/$defs/baseProperties/profile" },
+        "area": { "$ref": "#/$defs/baseProperties/area" },
+        "attachments": { "$ref": "#/$defs/attachments", "minProperties": 1 }
+      }
+    },
+    "version2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "profile", "area", "attachments", "resources"],
+      "properties": {
+        "version": { "const": 2 },
+        "profile": { "$ref": "#/$defs/baseProperties/profile" },
+        "area": { "$ref": "#/$defs/baseProperties/area" },
+        "attachments": { "$ref": "#/$defs/attachments" },
+        "resources": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/relativePath" },
+          "additionalProperties": { "$ref": "#/$defs/jsonScalarResource" }
+        }
+      }
+    },
+    "attachments": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/relativePath" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "origin", "before_sha256"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+          "origin": {
+            "enum": ["created", "existing-empty", "existing-final-newline", "existing-no-final-newline"]
+          },
+          "before_sha256": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "jsonScalarResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "fields"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+        "kind": { "const": "json-scalar-fields" },
+        "fields": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$" },
+          "additionalProperties": { "$ref": "#/$defs/jsonScalarField" }
+        }
+      }
+    },
+    "jsonScalarField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "original", "managed"],
+      "properties": {
+        "type": { "enum": ["integer", "number", "string", "boolean", "null"] },
+        "original": { "type": ["number", "string", "boolean", "null"] },
+        "managed": { "type": ["number", "string", "boolean", "null"] }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "integer" } } }, "then": { "properties": { "original": { "type": "integer" }, "managed": { "type": "integer" } } } },
+        { "if": { "properties": { "type": { "const": "number" } } }, "then": { "properties": { "original": { "type": "number" }, "managed": { "type": "number" } } } },
+        { "if": { "properties": { "type": { "const": "string" } } }, "then": { "properties": { "original": { "type": "string" }, "managed": { "type": "string" } } } },
+        { "if": { "properties": { "type": { "const": "boolean" } } }, "then": { "properties": { "original": { "type": "boolean" }, "managed": { "type": "boolean" } } } },
+        { "if": { "properties": { "type": { "const": "null" } } }, "then": { "properties": { "original": { "type": "null" }, "managed": { "type": "null" } } } }
+      ]
+    },
     "relativePath": {
       "type": "string",
       "minLength": 1,

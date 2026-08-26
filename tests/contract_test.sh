@@ -1,51 +1,124 @@
 #!/usr/bin/env bash
 # Static repository contract checks: source integrity, schema and manifest
-# validity, tmux/zsh configuration contracts, and root-Stow inertness.
+# validity, focused configuration contracts, and root-Stow inertness.
 
 set -Eeuo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
-readonly TMUX_COMPATIBILITY_CONFIG="$REPO_DIR/.tmux.conf"
 readonly TMUX_BASELINE="$REPO_DIR/packages/upstream/tmux/.config/dotfiles/upstream/tmux/tmux.conf"
-readonly TMUX_DISPATCHER="$REPO_DIR/packages/generic/tmux/.config/tmux/tmux.conf"
-readonly TMUX_PERSISTENCE="$REPO_DIR/packages/common/tmux/.config/dotfiles/tmux/persistence.conf"
+readonly TMUX_DISPATCHER="$REPO_DIR/packages/ubuntu/tmux/.config/tmux/tmux.conf"
+readonly TMUX_ADAPTER="$REPO_DIR/packages/ubuntu/tmux/.config/dotfiles/tmux/ubuntu.conf"
 
-# Every bootstrap source exists, parses, and keeps strict mode.
-readonly BOOTSTRAP_SOURCES=(
-  "$BOOTSTRAP"
+# Every dotfiles source exists, parses, and keeps strict mode.
+readonly DOTFILES_SOURCES=(
+  "$DOTFILES"
   "$REPO_DIR/lib/common.sh"
   "$REPO_DIR/lib/host.sh"
-  "$REPO_DIR/lib/engine.sh"
-  "$REPO_DIR/lib/provisioning.sh"
+  "$REPO_DIR/lib/lean_engine.sh"
   "$REPO_DIR/lib/areas/git.sh"
+  "$REPO_DIR/lib/areas/tools.sh"
   "$REPO_DIR/lib/areas/bash.sh"
   "$REPO_DIR/lib/areas/tmux.sh"
   "$REPO_DIR/lib/areas/nvim.sh"
-  "$REPO_DIR/lib/areas/zsh.sh"
   "$REPO_DIR/lib/areas/agents.sh"
   "$REPO_DIR/lib/areas/herdr.sh"
-  "$REPO_DIR/lib/areas/generic.sh"
+  "$REPO_DIR/lib/areas/desktop.sh"
 )
-for source_file in "${BOOTSTRAP_SOURCES[@]}"; do
-  [[ -f "$source_file" ]] || fail "missing bootstrap source file: $source_file"
+for source_file in "${DOTFILES_SOURCES[@]}"; do
+  [[ -f "$source_file" ]] || fail "missing dotfiles source file: $source_file"
 done
-bash -n "${BOOTSTRAP_SOURCES[@]}" \
+bash -n "${DOTFILES_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
-  "$REPO_DIR/scripts/agent-skills" \
-  "$REPO_DIR/scripts/tmux-parser-fixtures" || fail 'a bootstrap Bash file has invalid syntax'
-grep -Fq 'set -Eeuo pipefail' "$BOOTSTRAP" || fail 'bootstrap strict mode is missing'
+  "$REPO_DIR/scripts/agent-skills" || fail 'a dotfiles Bash file has invalid syntax'
+grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missing'
+[[ -x "$DOTFILES" && ! -e "$REPO_DIR/bootstrap.sh" ]] || fail 'root command rename is incomplete'
+[[ -x "$REPO_DIR/packages/common/tools/.local/bin/dotfiles" ]] || fail 'dotfiles launcher is not executable'
+pass
+
+# Production topology has exactly the native Omarchy and supported Ubuntu
+# profiles.
+profile_names="$(printf '%s\n' "$REPO_DIR"/profiles/*.conf | xargs -n1 basename | LC_ALL=C sort | tr '\n' ' ')"
+[[ "$profile_names" == 'omarchy.conf ubuntu.conf ' ]] || fail "unexpected production profiles: $profile_names"
+for profile in omarchy ubuntu; do
+  [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 8 ]] || \
+    fail "profile $profile does not list exactly eight entries"
+done
+[[ "$(grep -hE '^[a-z0-9-]+[[:space:]]+validation-only$' "$REPO_DIR"/profiles/*.conf | sort)" == $'desktop validation-only\nherdr validation-only\ntmux validation-only' ]] ||
+  fail 'profile validation-only entries are not exact'
+pass
+
+# Desktop is native-only ownership with one minimal private payload. Ubuntu is
+# validation-only, and default removal can select desktop only from v2 state.
+desktop_fragment="$REPO_DIR/packages/omarchy/desktop/.config/dotfiles/omarchy/hypr/input.lua"
+grep -qxF 'desktop omarchy/desktop' "$REPO_DIR/profiles/omarchy.conf" || fail 'native desktop closure is not final'
+grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu desktop is not validation-only'
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 1 && -f "$desktop_fragment" ]] ||
+  fail 'desktop package payload inventory is not exact'
+grep -Fq '|| "$1" == desktop' "$DOTFILES" || fail 'desktop is absent from lean dispatch'
+grep -Fq 'for file in "$(lean_state_dir)"/*.json' "$DOTFILES" || fail 'default removal does not inspect ownership state'
+! grep -Eq 'add_area[[:space:]]+desktop' "$DOTFILES" || fail 'default removal selects desktop without ownership'
+! grep -Eq '(^|[;&|[:space:]])(omarchy-shell|hyprctl|omarchy[[:space:]]+restart|omarchy[[:space:]]+reload)([;&|[:space:]]|$)' \
+  "$REPO_DIR/lib/areas/desktop.sh" || fail 'desktop invokes shell restart/reload'
+pass
+
+# Herdr uses native validation-only ownership and one Ubuntu package-only
+# closure. The accepted config is exact.
+grep -Fq '|| "$1" == herdr' "$DOTFILES" ||
+  fail 'Herdr is absent from lean dispatch'
+grep -qxF 'herdr validation-only' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Herdr is not validation-only'
+grep -qxF 'herdr ubuntu/herdr' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Herdr closure is not final'
+cmp -s "$REPO_DIR/packages/ubuntu/herdr/.config/herdr/config.toml" \
+  "$REPO_DIR/packages/upstream/reference/omarchy/config/herdr/config.toml" || fail 'Ubuntu Herdr config differs from v4 evidence'
+grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' \
+  "$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml" ||
+  fail 'Ubuntu Herdr selector is not exact'
+[[ ! -e "$REPO_DIR/packages/common/herdr/.config/dotfiles/herdr/config.toml" ]] ||
+  fail 'retired common Herdr adapter remains'
+! grep -Eq 'require\|herdr\|[^|]*\|[^|]*\|unshare\|' "$REPO_DIR/manifests/dependencies.tsv" ||
+  fail 'Herdr retains the unshare requirement'
+pass
+
+# Converted Git/tools topology is lean and mise configuration no longer belongs
+# to Bash. Native tools do not select Node; Ubuntu carries the only fallback.
+grep -qxF 'git upstream/git,ubuntu/git,common/git' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Git closure is not final'
+grep -qxF 'tools common/tools' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tools closure is not final'
+grep -qxF 'tools common/tools,ubuntu/tools' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu tools closure is not final'
+[[ ! -e "$REPO_DIR/packages/generic/git/.empty-package" && ! -e "$REPO_DIR/packages/generic/git/.stow-local-ignore" ]] ||
+  fail 'retired generic Git adapter remains'
+[[ ! -e "$REPO_DIR/.gitconfig" ]] || fail 'retired root Git migration source remains'
+! grep -Rqs 'locked = true' "$REPO_DIR/packages/common/tools" "$REPO_DIR/packages/ubuntu/tools" || fail 'managed mise locked mode remains'
+! grep -Rqs '^node[[:space:]]*=' "$REPO_DIR/packages/common/tools" || fail 'native tools select Node'
+[[ ! -e "$REPO_DIR/packages/common/bash/.config/mise/conf.d/20-dotfiles-common.toml" &&
+  -z "$(find "$REPO_DIR/packages/generic/bash" -type f -print -quit 2>/dev/null)" ]] ||
+  fail 'mise configuration remains owned by Bash packages'
+pass
+
+# Bash is a lean area. Native owns only personal payload and one refreshable
+# source block; Ubuntu owns the portable closure and exact Starship selector.
+grep -qxF 'bash common/bash' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Bash closure is not personal-only'
+grep -qxF 'bash upstream/bash,upstream/starship,ubuntu/bash,common/bash' "$REPO_DIR/profiles/ubuntu.conf" ||
+  fail 'Ubuntu Bash closure is not final'
+grep -Fq '|| "$1" == bash' "$DOTFILES" ||
+  fail 'Bash is absent from lean dispatch'
+grep -qxF '"aqua:starship/starship" = "1.26.0"' \
+  "$REPO_DIR/packages/ubuntu/bash/.config/mise/conf.d/40-dotfiles-bash-ubuntu.toml" ||
+  fail 'Ubuntu Bash does not own the exact Starship selector'
+[[ -z "$(find "$REPO_DIR/packages/wsl" -type f -print -quit 2>/dev/null)" ]] || fail 'retired WSL payload remains'
+for path in lib/areas/zsh.sh .zshrc .zsh_aliases .p10k.zsh; do
+  [[ ! -e "$REPO_DIR/$path" && ! -L "$REPO_DIR/$path" ]] || fail "retired zsh path remains: $path"
+done
+[[ -z "$(find "$REPO_DIR/packages/common/zsh" -type f -print -quit 2>/dev/null)" ]] || fail 'retired zsh package payload remains'
+! grep -Eq '(^|[|,[:space:]])zsh([|,[:space:]]|$)' "$REPO_DIR/manifests/areas.tsv" \
+  "$REPO_DIR/manifests/dependencies.tsv" "$REPO_DIR/profiles/omarchy.conf" "$REPO_DIR/profiles/ubuntu.conf" ||
+  fail 'zsh remains in executable topology'
 pass
 
 # Every schema and committed manifest is well-formed JSON, and each manifest
 # with a schema validates against it (Draft 2020-12).
 jq empty "$REPO_DIR"/schemas/*.schema.json || fail 'a schema file is invalid JSON'
 jq empty "$REPO_DIR/manifests/sources.json" \
-  "$REPO_DIR/manifests/provisioning.json" \
-  "$REPO_DIR/manifests/legacy-links.json" \
-  "$REPO_DIR/manifests/agent-skills.lock.json" \
-  "$REPO_DIR/manifests/tmux-plugins.lock.json" \
-  "$REPO_DIR/manifests/tmux-parser-fixtures.lock.json" || fail 'a manifest file is invalid JSON'
+  "$REPO_DIR/manifests/agent-skills.lock.json" || fail 'a manifest file is invalid JSON'
 if schema_validator_available; then
   for schema_file in "$REPO_DIR"/schemas/*.schema.json; do
     python3 - "$schema_file" <<'PYTHON' || fail "schema is not a valid Draft 2020-12 schema: $schema_file"
@@ -59,89 +132,94 @@ else
   printf 'WARN: python3-jsonschema unavailable; skipped schema self-validation\n' >&2
 fi
 validate_json_schema "$REPO_DIR/schemas/source-manifest.schema.json" "$REPO_DIR/manifests/sources.json"
-validate_json_schema "$REPO_DIR/schemas/provisioning-manifest.schema.json" "$REPO_DIR/manifests/provisioning.json"
-validate_json_schema "$REPO_DIR/schemas/tmux-plugin-lock.schema.json" "$REPO_DIR/manifests/tmux-plugins.lock.json"
-validate_json_schema "$REPO_DIR/schemas/tmux-parser-fixture-lock.schema.json" \
-  "$REPO_DIR/manifests/tmux-parser-fixtures.lock.json"
 validate_json_schema "$REPO_DIR/schemas/agent-skills-lock.schema.json" \
   "$REPO_DIR/manifests/agent-skills.lock.json"
 shopt -s nullglob
 versioned_schema_names=("$REPO_DIR"/schemas/*-v[0-9]*.schema.json)
 shopt -u nullglob
 ((${#versioned_schema_names[@]} == 0)) || fail 'first-party schema filename contains a version suffix'
-tmux_lock_hash="$(sha256sum "$REPO_DIR/manifests/tmux-plugins.lock.json" | cut -d' ' -f1)"
-tmux_migration_hash="$(sed -n "s/^readonly TMUX_PLUGIN_LOCK_POINTER_MIGRATION_SHA='\([^']*\)'$/\1/p" \
-  "$REPO_DIR/lib/areas/tmux.sh")"
-[[ "$tmux_lock_hash" == "$tmux_migration_hash" ]] || fail 'tmux lock migration target does not match the active lock'
 pass
 
-# tmux configuration contract: prefixes, mouse, plugin dependency order,
-# Continuum cadence, guarded TPM last, and no startup mutation of checkouts.
-for file in "$TMUX_COMPATIBILITY_CONFIG" "$TMUX_BASELINE" "$TMUX_DISPATCHER" "$TMUX_PERSISTENCE"; do
+# tmux is native validation-only and an Ubuntu package-only baseline plus a
+# small portable help adapter. Retired plugin/parser machinery is absent.
+for file in "$TMUX_BASELINE" "$TMUX_DISPATCHER" "$TMUX_ADAPTER"; do
   [[ -f "$file" && ! -L "$file" ]] || fail "tmux contract file is missing or unsafe: $file"
 done
+grep -qxF 'tmux validation-only' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tmux is not validation-only'
+grep -qxF 'tmux upstream/tmux,ubuntu/tmux' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu tmux closure is not final'
+grep -Fq '|| "$1" == tmux' "$DOTFILES" ||
+  fail 'tmux is absent from lean dispatch'
 grep -Fq 'set -g prefix C-Space' "$TMUX_BASELINE" || fail 'relocated tmux baseline lost its primary prefix'
 grep -Fq 'set -g prefix2 C-b' "$TMUX_BASELINE" || fail 'relocated tmux baseline lost its fallback prefix'
 grep -Fq 'set -g mouse on' "$TMUX_BASELINE" || fail 'relocated tmux baseline lost mouse support'
 grep -Fq 'set -g default-terminal "tmux-256color"' "$TMUX_BASELINE" || fail 'relocated tmux baseline lost tmux-256color'
 grep -Fq 'source-file ~/.config/dotfiles/upstream/tmux/tmux.conf' "$TMUX_DISPATCHER" || \
   fail 'tmux dispatcher does not load the private upstream baseline first'
-grep -Fq 'source-file ~/.config/dotfiles/tmux/persistence.conf' "$TMUX_DISPATCHER" || \
-  fail 'tmux dispatcher does not load common persistence'
-grep -Fq "set -g @plugin 'tmux-plugins/tpm'" "$TMUX_PERSISTENCE" || fail 'TPM plugin is not configured'
-grep -Fq "set -g @plugin 'tmux-plugins/tmux-resurrect'" "$TMUX_PERSISTENCE" || fail 'tmux-resurrect is not configured'
-grep -Fq "set -g @plugin 'tmux-plugins/tmux-continuum'" "$TMUX_PERSISTENCE" || fail 'tmux-continuum is not configured'
-grep -Fq 'set -g @resurrect-hook-post-save-all "bash \"$HOME/.tmux/plugins/tmux-assistant-resurrect/scripts/save-assistant-sessions.sh\""' \
-  "$TMUX_PERSISTENCE" || fail 'Assistant Resurrect save hook is not managed directly'
-grep -Fq 'set -g @resurrect-hook-post-restore-all "bash \"$HOME/.tmux/plugins/tmux-assistant-resurrect/scripts/restore-assistant-sessions.sh\""' \
-  "$TMUX_PERSISTENCE" || fail 'Assistant Resurrect restore hook is not managed directly'
-for config in "$TMUX_PERSISTENCE" "$TMUX_COMPATIBILITY_CONFIG"; do
-  ! grep -Fq "set -g @plugin 'timvw/tmux-assistant-resurrect'" "$config" || \
-    fail "Assistant Resurrect entrypoint remains TPM-loaded in $config"
-  ! grep -Eq 'git[[:space:]]+clone|install_plugins' "$config" || \
-    fail "tmux startup can mutate plugin checkouts through $config"
+grep -Fq 'source-file ~/.config/dotfiles/tmux/ubuntu.conf' "$TMUX_DISPATCHER" || fail 'tmux dispatcher does not load the Ubuntu adapter'
+grep -Fq 'display-popup' "$TMUX_ADAPTER" || fail 'tmux adapter lost its portable popup'
+grep -Fq 'keybindings.txt' "$TMUX_ADAPTER" || fail 'tmux adapter lost static help'
+! grep -Fq 'omarchy-menu-tmux-keybindings' "$TMUX_ADAPTER" || fail 'tmux adapter invokes an Omarchy-only command'
+grep -qxF '"aqua:tmux/tmux-builds" = "3.7c"' \
+  "$REPO_DIR/packages/ubuntu/tmux/.config/mise/conf.d/50-dotfiles-tmux-ubuntu.toml" || fail 'tmux selector is not exact'
+for path in .tmux.conf packages/common/tmux packages/generic/tmux manifests/tmux-plugins.lock.json \
+  manifests/tmux-parser-fixtures.lock.json scripts/tmux-parser-fixtures tests/tmux_parser_gate.sh \
+  schemas/tmux-plugin-lock.schema.json schemas/tmux-plugin-receipt.schema.json schemas/tmux-parser-fixture-lock.schema.json; do
+  [[ ! -e "$REPO_DIR/$path" && ! -L "$REPO_DIR/$path" ]] || fail "retired tmux machinery remains: $path"
 done
-
-tpm_line="$(grep -nF "set -g @plugin 'tmux-plugins/tpm'" "$TMUX_PERSISTENCE" | cut -d: -f1)"
-resurrect_line="$(grep -nF "set -g @plugin 'tmux-plugins/tmux-resurrect'" "$TMUX_PERSISTENCE" | cut -d: -f1)"
-continuum_line="$(grep -nF "set -g @plugin 'tmux-plugins/tmux-continuum'" "$TMUX_PERSISTENCE" | cut -d: -f1)"
-((tpm_line < resurrect_line && resurrect_line < continuum_line)) || \
-  fail 'tmux plugins are not declared in dependency order with Continuum last'
-
-grep -Fq "set -g @continuum-save-interval '5'" "$TMUX_PERSISTENCE" || fail 'Continuum does not save every five minutes'
-grep -Fq "set -g @continuum-restore 'on'" "$TMUX_PERSISTENCE" || fail 'Continuum automatic restore is not enabled'
-last_tmux_command="$(grep -Ev '^[[:space:]]*(#|$)' "$TMUX_PERSISTENCE" | tail -n 1)"
-last_tmux_command="${last_tmux_command#"${last_tmux_command%%[![:space:]]*}"}"
-[[ "$last_tmux_command" == "'run-shell \"\$HOME/.tmux/plugins/tpm/tpm\"'" ]] || \
-  fail 'guarded TPM initialization is not the final tmux command'
 pass
 
-# zsh contract: mise activates before zoxide initializes.
-mise_line="$(grep -n 'mise activate zsh' "$REPO_DIR/.zshrc" | cut -d: -f1)"
-zoxide_line="$(grep -n 'zoxide init' "$REPO_DIR/.zshrc" | cut -d: -f1)"
-((mise_line < zoxide_line)) || fail 'zoxide initializes before mise activation'
+
+# Agents is the final package-only lean area. Legacy runtime, migration, and
+# deployment-state-v1 machinery are absent from the executable topology.
+grep -qxF 'agents common/agents' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Agents closure is not final'
+grep -qxF 'agents common/agents' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Agents closure is not final'
+grep -Fq '|| "$1" == agents' "$DOTFILES" || fail 'Agents is absent from lean dispatch'
+for path in lib/engine.sh lib/areas/generic.sh tests/engine_test.sh tests/engine_profile_test.sh manifests/legacy-links.json; do
+  [[ ! -e "$REPO_DIR/$path" && ! -L "$REPO_DIR/$path" ]] || fail "retired deployment machinery remains: $path"
+done
+! grep -Fq 'lib/engine.sh' "$DOTFILES" || fail 'dotfiles still sources the v1 engine'
+pass
+
+# Neovim is lean, Ubuntu-specific, and the last provisioning surface
+# has been removed completely.
+grep -qxF 'nvim upstream/nvim,ubuntu/nvim,common/nvim' "$REPO_DIR/profiles/ubuntu.conf" ||
+  fail 'Ubuntu Neovim closure is not final'
+grep -qxF 'nvim common/nvim' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Neovim closure is not personal-only'
+grep -Fq '|| "$1" == nvim' "$DOTFILES" || fail 'Neovim is absent from lean dispatch'
+for path in lib/provisioning.sh manifests/provisioning.json schemas/provisioning-manifest.schema.json \
+  schemas/provisioning-receipt.schema.json tests/provisioning_test.sh \
+  packages/ubuntu/nvim/.local/share/dotfiles/bin/nvim-record-restore; do
+  [[ ! -e "$REPO_DIR/$path" && ! -L "$REPO_DIR/$path" ]] || fail "retired provisioning/Neovim path remains: $path"
+done
+[[ -z "$(find "$REPO_DIR/packages/generic/nvim" -type f -print -quit 2>/dev/null)" ]] ||
+  fail 'retired generic Neovim adapter remains'
+! grep -Eq -- '--provision|--retire-provisioned' "$DOTFILES" || fail 'dotfiles still accepts provisioning flags'
 pass
 
 # The retired root Stow package stays unreachable and undeployable.
 if grep -Eq '(^|[[:space:]])stow([[:space:]]+[^-][^[:space:]]*)?[[:space:]]+\.' \
-  "${BOOTSTRAP_SOURCES[@]}"; then
-  fail 'bootstrap can invoke the retired root Stow package'
+  "${DOTFILES_SOURCES[@]}"; then
+  fail 'dotfiles can invoke the retired root Stow package'
 fi
 if grep -Eq '^[[:space:]]*stow[[:space:]]+(-[DR][[:space:]]+)?\.[[:space:]]*$' \
   "$REPO_DIR/README.md"; then
   fail 'durable documentation advertises the retired root Stow package'
 fi
 
-stow_target="$TEST_ROOT/root-stow-target"
-mkdir "$stow_target"
-root_stow_output="$(stow --dir="$REPO_DIR" --target="$stow_target" \
-  --simulate --verbose=2 --stow . 2>&1)" || fail 'inert root Stow simulation failed'
-if [[ "$root_stow_output" == *'LINK:'* || "$root_stow_output" == *'UNLINK:'* || \
-  "$root_stow_output" == *'MKDIR:'* ]]; then
-  fail 'the retired root Stow package still has a deployable payload'
+if command -v stow >/dev/null 2>&1; then
+  stow_target="$TEST_ROOT/root-stow-target"
+  mkdir "$stow_target"
+  root_stow_output="$(stow --dir="$REPO_DIR" --target="$stow_target" \
+    --simulate --verbose=2 --stow . 2>&1)" || fail 'inert root Stow simulation failed'
+  if [[ "$root_stow_output" == *'LINK:'* || "$root_stow_output" == *'UNLINK:'* || \
+    "$root_stow_output" == *'MKDIR:'* ]]; then
+    fail 'the retired root Stow package still has a deployable payload'
+  fi
+else
+  printf 'SKIP: real GNU Stow unavailable; skipped retired root-package integration simulation\n'
 fi
 [[ ! -e "$REPO_DIR/.config/nvim" && ! -L "$REPO_DIR/.config/nvim" ]] || \
-  fail 'retired repository-root Kickstart tree returned to current HEAD'
+  fail 'retired repository-root Neovim tree returned to current HEAD'
 pass
 
 # Numbered rollout terminology belongs only to Git history, not current paths

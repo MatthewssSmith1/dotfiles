@@ -1,229 +1,177 @@
-# Herdr area: private source plus reversible regular live configuration.
+# Herdr area: native validation or an Ubuntu lean package-only closure.
 
-readonly HERDR_CONFIG_PATH='.config/herdr/config.toml'
-readonly HERDR_SOURCE_PATH='.config/dotfiles/herdr/config.toml'
-readonly HERDR_PREDECESSOR_CONTENT='[ui]
-agent_panel_sort = "spaces"'
-readonly HERDR_PREDECESSOR_MODE='664'
+readonly HERDR_VERSION='0.8.2'
+readonly HERDR_NATIVE_PACKAGE='herdr 0.8.2-1'
+readonly HERDR_SELECTOR="aqua:herdrdev/herdr@$HERDR_VERSION"
+readonly HERDR_CONFIG='.config/herdr/config.toml'
+readonly HERDR_REFERENCE='packages/upstream/reference/omarchy/config/herdr/config.toml'
+readonly HERDR_UBUNTU_CONFIG='packages/ubuntu/herdr/.config/herdr/config.toml'
 
-HERDR_CONFIG_ACTION=none
-HERDR_CONFIG_ORIGIN=''
-HERDR_CONFIG_IDENTITY=''
-HERDR_CONFIG_HASH=''
-HERDR_BACKUP=''
-HERDR_BACKUP_IDENTITY=''
-HERDR_STAGED_COPY=''
-
-init_herdr_area() {
-  AREA=herdr
-  AREA_JOURNAL_PATHS=("$HOME/$HERDR_CONFIG_PATH")
-  AREA_ATTACHMENT_VALIDATOR=validate_herdr_state
-  HERDR_CONFIG_ACTION=none
-  HERDR_CONFIG_ORIGIN=''
-  HERDR_CONFIG_IDENTITY=''
-  HERDR_CONFIG_HASH=''
-  HERDR_BACKUP=''
-  HERDR_BACKUP_IDENTITY=''
+register_herdr_area() {
+  local package
+  load_profile_closure herdr
+  lean_begin_area herdr "$SELECTED_PROFILE" "$PROFILE_ENTRY_KIND"
+  for package in "${PACKAGES[@]}"; do lean_add_package "$package"; done
 }
 
-herdr_source() {
-  printf '%s/packages/common/herdr/%s' "$DOTFILES_DIR" "$HERDR_SOURCE_PATH"
+herdr_package_identity() {
+  local metadata owner='' recorded_path recorded_owner package
+  if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
+    metadata="$HOST_ROOT/var/lib/dotfiles-test/pacman-owners.tsv"
+    [[ -f "$metadata" ]] || return 1
+    while IFS=$'\t' read -r recorded_path recorded_owner; do
+      [[ "$recorded_path" == /usr/bin/herdr ]] || continue
+      [[ -z "$owner" ]] || return 1
+      owner="$recorded_owner"
+    done < "$metadata"
+    [[ -n "$owner" ]] || return 1
+    printf '%s' "$owner"
+    return
+  fi
+  [[ -x /usr/bin/pacman ]] || return 1
+  package="$(/usr/bin/pacman -Qqo -- /usr/bin/herdr 2>/dev/null)" || return 1
+  [[ "$package" == herdr ]] || return 1
+  /usr/bin/pacman -Q herdr 2>/dev/null
 }
 
-herdr_desired_hash() {
-  sha256_file "$(herdr_source)"
+herdr_resolved_binary() {
+  type -P herdr 2>/dev/null || true
 }
 
-herdr_predecessor_hash() {
-  sha256_string "$HERDR_PREDECESSOR_CONTENT"$'\n'
-}
-
-validate_herdr_payload() {
-  [[ "${PACKAGES[*]}" == 'common/herdr' ]] || die 'Herdr package closure must be exactly common/herdr'
-  [[ "${#TARGET_PATHS[@]}" == 1 && "${TARGET_PATHS[0]}" == "$HERDR_SOURCE_PATH" ]] || \
-    die 'Herdr package contains an unexpected target'
-  [[ -f "$(herdr_source)" && ! -L "$(herdr_source)" && "$(stat -c %a -- "$(herdr_source)")" == 644 ]] || \
-    die 'Herdr canonical config is missing or unsafe'
-  file_contains_nul "$(herdr_source)" && die 'Herdr canonical config contains NUL bytes'
-  return 0
+validate_herdr_runtime() {
+  local binary resolved version identity expected
+  resolved="$(herdr_resolved_binary)"
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    binary="${HOST_ROOT:-}/usr/bin/herdr"
+    expected='/usr/bin/herdr'
+    [[ "${DOTFILES_TESTING:-}" != 1 ]] || expected="$binary"
+    [[ "$resolved" == "$expected" ]] ||
+      die "native Herdr must resolve to package-owned /usr/bin/herdr, not '${resolved:-missing}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
+    identity="$(herdr_package_identity 2>/dev/null || true)"
+    [[ "$identity" == "$HERDR_NATIVE_PACKAGE" ]] ||
+      die "native /usr/bin/herdr must be owned by package '$HERDR_NATIVE_PACKAGE', found '${identity:-no package owner}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
+  else
+    [[ -n "$resolved" ]] || {
+      log "error: Herdr is absent; install it manually with: mise install $HERDR_SELECTOR"
+      return 1
+    }
+    binary="$(realpath -e -- "$resolved" 2>/dev/null || true)"
+  fi
+  [[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] ||
+    die "selected Herdr runtime is not a directly executable regular file: ${binary:-missing}"
+  version="$("$binary" --version 2>/dev/null || true)"
+  [[ "$version" == "herdr $HERDR_VERSION" ]] || {
+    if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+      die "native Herdr must report 'herdr $HERDR_VERSION', found '${version:-missing}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
+    fi
+    die "Ubuntu Herdr must report 'herdr $HERDR_VERSION', found '${version:-missing}'; install it with: mise install $HERDR_SELECTOR"
+  }
+  HERDR_BINARY="$binary"
 }
 
 validate_herdr_config_file() {
-  local path="$1" expected_hash="$2" description="$3"
-  validate_home_parent_chain "$path"
-  [[ -f "$path" && ! -L "$path" && "$(stat -c %u -- "$path")" == "$EUID" ]] || \
-    die "$description is missing or unsafe: $path"
-  [[ "$(sha256_file "$path")" == "$expected_hash" ]] || die "$description content has drifted: $path"
+  local path="$1" description="$2" mode
+  [[ -f "$path" && ! -L "$path" ]] || die "$description is missing or is not a regular file: $path"
+  [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "$description has an unsafe owner: $path"
+  mode="$(stat -c %a -- "$path")"
+  [[ "$mode" == 600 || "$mode" == 640 || "$mode" == 644 ]] || die "$description has an unsafe mode: $path"
+  cmp -s -- "$path" "$DOTFILES_DIR/$HERDR_REFERENCE" || {
+    if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+      die "native Herdr config has drifted: $path; omarchy refresh herdr or reinstall Herdr, then rerun validation"
+    fi
+    die "Ubuntu Herdr config differs from the accepted v4 snapshot: $path"
+  }
 }
 
-validate_herdr_backup() {
-  local path="$1"
-  validate_herdr_config_file "$path" "$(herdr_predecessor_hash)" 'Herdr predecessor backup'
-  [[ "$(stat -c %a -- "$path")" == 600 ]] || die "Herdr predecessor backup has an unsafe mode: $path"
+validate_herdr_config_syntax() {
+  local temporary status=0
+  temporary="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-herdr.XXXXXX")"
+  mkdir -p "$temporary/.config/herdr"
+  cp -- "$DOTFILES_DIR/$HERDR_REFERENCE" "$temporary/.config/herdr/config.toml"
+  HOME="$temporary" XDG_CONFIG_HOME="$temporary/.config" XDG_DATA_HOME="$temporary/.local/share" \
+    XDG_STATE_HOME="$temporary/.local/state" XDG_CACHE_HOME="$temporary/.cache" MISE_OFFLINE=1 \
+    "$HERDR_BINARY" config check >/dev/null 2>&1 || status=$?
+  rm -rf -- "$temporary"
+  ((status == 0)) || die 'accepted Herdr config failed offline herdr config check'
 }
 
-validate_herdr_state() {
-  local state="$1" id path hash origin backup count
-  [[ "$(jq '.attachments | length' "$state")" == 1 ]] || die 'Herdr state does not record exactly one config attachment'
-  IFS=$'\t' read -r id path hash < <(jq -r '.attachments[0] | [.id,.path,.content_hash] | @tsv' "$state")
-  [[ "$path" == "$HERDR_CONFIG_PATH" && "$id" =~ ^herdr-config-v1\.(created|predecessor-664)$ ]] || \
-    die 'Herdr state records an unknown attachment'
-  origin="${id#herdr-config-v1.}"
-  validate_herdr_config_file "$HOME/$path" "$hash" 'managed Herdr config'
-  count="$(jq '.backups | length' "$state")"
-  if [[ "$origin" == predecessor-664 ]]; then
-    [[ "$count" == 1 ]] || die 'Herdr predecessor state does not record exactly one backup'
-    backup="$(jq -r '.backups[0]' "$state")"
-    [[ "$backup" == ".local/state/dotfiles/v1/backups/herdr/config-$(herdr_predecessor_hash).bak" ]] || \
-      die 'Herdr state records an unknown predecessor backup'
-    validate_herdr_backup "$HOME/$backup"
-    HERDR_BACKUP="$backup"
-    capture_path_identity "$HOME/$backup" || die 'Herdr predecessor backup changed during preflight'
-    HERDR_BACKUP_IDENTITY="$PATH_IDENTITY"
+validate_herdr_closure() {
+  local expected index relative source
+  local selector="$DOTFILES_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml"
+  local -a expected_targets=(
+    .config/dotfiles/bash/fns/herdr
+    .config/herdr/config.toml
+    .config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml
+  )
+  [[ -f "$DOTFILES_DIR/$HERDR_REFERENCE" && ! -L "$DOTFILES_DIR/$HERDR_REFERENCE" ]] ||
+    die 'accepted Herdr v4 reference config is missing'
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    [[ "$PROFILE_ENTRY_KIND" == validation-only && ${#PACKAGES[@]} -eq 0 ]] ||
+      die 'native Herdr must be validation-only'
   else
-    [[ "$count" == 0 ]] || die 'created Herdr state records an unexpected backup'
+    [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == 'ubuntu/herdr' ]] ||
+      die 'Ubuntu Herdr closure must contain only ubuntu/herdr'
+    cmp -s -- "$DOTFILES_DIR/$HERDR_UBUNTU_CONFIG" "$DOTFILES_DIR/$HERDR_REFERENCE" ||
+      die 'Ubuntu Herdr config is not byte-identical to the accepted v4 snapshot'
+    grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' "$selector" ||
+      die 'Ubuntu Herdr mise selector is not the accepted 0.8.2 release'
+    lean_scan_packages
+    ((${#LEAN_TARGET_PATHS[@]} == ${#expected_targets[@]})) || die 'Ubuntu Herdr package target inventory is not exact'
+    for expected in "${expected_targets[@]}"; do
+      array_contains "$expected" "${LEAN_TARGET_PATHS[@]}" || die "Ubuntu Herdr package is missing expected target: $expected"
+    done
+    for index in "${!LEAN_TARGET_PATHS[@]}"; do
+      relative="${LEAN_TARGET_PATHS[index]}"
+      source="${LEAN_TARGET_SOURCES[index]}"
+      [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Ubuntu Herdr payload mode for $relative"
+    done
+    bash -n "$DOTFILES_DIR/packages/ubuntu/herdr/.config/dotfiles/bash/fns/herdr" || die 'Ubuntu Herdr helpers have invalid Bash syntax'
   fi
-  HERDR_CONFIG_ORIGIN="$origin"
-  HERDR_CONFIG_HASH="$hash"
-  capture_path_identity "$HOME/$path" || die 'managed Herdr config changed during preflight'
-  HERDR_CONFIG_IDENTITY="$PATH_IDENTITY"
-}
-
-preflight_new_herdr_config() {
-  local path="$HOME/$HERDR_CONFIG_PATH"
-  validate_home_parent_chain "$path"
-  capture_path_identity "$path" || die 'Herdr config changed during preflight'
-  HERDR_CONFIG_IDENTITY="$PATH_IDENTITY"
-  if [[ "$PATH_IDENTITY" == absent ]]; then
-    HERDR_CONFIG_ACTION=install
-    HERDR_CONFIG_ORIGIN=created
-    return
-  fi
-  validate_herdr_config_file "$path" "$(herdr_predecessor_hash)" 'reviewed Herdr predecessor config'
-  [[ "$(stat -c %a -- "$path")" == "$HERDR_PREDECESSOR_MODE" ]] || \
-    die "reviewed Herdr predecessor config has unexpected mode: $path"
-  HERDR_CONFIG_ACTION=migrate
-  HERDR_CONFIG_ORIGIN=predecessor-664
-  HERDR_BACKUP=".local/state/dotfiles/v1/backups/herdr/config-$(herdr_predecessor_hash).bak"
-  validate_home_parent_chain "$HOME/$HERDR_BACKUP"
-  [[ ! -e "$HOME/$HERDR_BACKUP" && ! -L "$HOME/$HERDR_BACKUP" ]] || \
-    die "Herdr predecessor backup destination already exists: $HOME/$HERDR_BACKUP"
-  AREA_JOURNAL_PATHS+=("$HOME/$HERDR_BACKUP")
-  record_managed_parents "$HERDR_BACKUP"
-}
-
-validate_herdr_syntax() {
-  local binary temp status
-  if [[ "${DOTFILES_TESTING:-}" == 1 && -n "${DOTFILES_TEST_HERDR_BIN:-}" ]]; then
-    binary="$DOTFILES_TEST_HERDR_BIN"
-  else
-    binary="$(type -P herdr 2>/dev/null || true)"
-  fi
-  [[ -n "$binary" && -f "$binary" && ! -L "$binary" && -x "$binary" ]] || \
-    die 'no directly executable Herdr runtime is available; run with --provision'
-  temp="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-herdr-config.XXXXXX")"
-  mkdir -p "$temp/.config/herdr"
-  cp -- "$(herdr_source)" "$temp/.config/herdr/config.toml"
-  set +e
-  unshare --user --map-root-user --net env -i HOME="$temp" PATH=/usr/bin:/bin \
-    XDG_CONFIG_HOME="$temp/.config" XDG_DATA_HOME="$temp/.local/share" \
-    XDG_STATE_HOME="$temp/.local/state" XDG_CACHE_HOME="$temp/.cache" MISE_OFFLINE=1 \
-    "$binary" config check >/dev/null 2>&1
-  status=$?
-  set -e
-  rm -rf -- "$temp"
-  ((status == 0)) || die 'managed Herdr config failed herdr config check'
 }
 
 preflight_herdr() {
-  init_herdr_area
-  load_profile_closure herdr
-  scan_packages
-  validate_herdr_payload
-  record_managed_parents '.local/state/dotfiles/v1/herdr.json'
-  preflight_existing_state
-  if [[ "$OLD_STATE" == false ]]; then
-    preflight_new_herdr_config
-  else
-    [[ -z "$HERDR_BACKUP" ]] || AREA_JOURNAL_PATHS+=("$HOME/$HERDR_BACKUP")
-    [[ "$HERDR_CONFIG_HASH" == "$(herdr_desired_hash)" ]] || HERDR_CONFIG_ACTION=install
+  register_herdr_area
+  validate_herdr_closure
+  if [[ "$MODE" == remove ]]; then
+    if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+      validate_herdr_runtime
+      validate_herdr_config_file "$HOME/$HERDR_CONFIG" 'native Herdr config'
+      validate_herdr_config_syntax
+    fi
+    lean_preflight_area remove
+    return
   fi
-  preflight_desired_targets
-  run_stow_preflight
-  validate_herdr_syntax
-}
-
-herdr_stage_copy() {
-  local source="$1" dir="$2" template="$3" mode="$4"
-  HERDR_STAGED_COPY="$(mktemp "$dir/$template")"
-  track_temp_path "$HERDR_STAGED_COPY"
-  cp -- "$source" "$HERDR_STAGED_COPY"
-  chmod "$mode" "$HERDR_STAGED_COPY"
-}
-
-herdr_copy_no_clobber() {
-  local source="$1" destination="$2" mode="$3" dir
-  dir="${destination%/*}"
-  ensure_directory "$dir"
-  herdr_stage_copy "$source" "$dir" ".${destination##*/}.herdr.XXXXXX" "$mode"
-  install_regular_no_clobber "$HERDR_STAGED_COPY" "$destination" 'Herdr predecessor backup'
-}
-
-install_herdr_config() {
-  local path="$HOME/$HERDR_CONFIG_PATH" desired source="$(herdr_source)"
-  desired="$(< "$source")"
-  if [[ "$HERDR_CONFIG_ACTION" == migrate ]]; then
-    herdr_copy_no_clobber "$path" "$HOME/$HERDR_BACKUP" 0600
-    validate_herdr_backup "$HOME/$HERDR_BACKUP"
-    fault herdr-after-backup
+  validate_herdr_runtime
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    validate_home_parent_chain "$HOME/$HERDR_CONFIG"
+    validate_herdr_config_file "$HOME/$HERDR_CONFIG" 'native Herdr config'
   fi
-  if [[ "$HERDR_CONFIG_ACTION" != none ]]; then
-    write_transaction_string_atomic "$desired" "$path" 0600
-    fault herdr-after-config
-  fi
-  HERDR_CONFIG_HASH="$(herdr_desired_hash)"
-  validate_herdr_config_file "$path" "$HERDR_CONFIG_HASH" 'managed Herdr config'
-}
-
-build_herdr_state_json() {
-  local backups='[]' attachment
-  [[ -z "$HERDR_BACKUP" ]] || backups="$(jq -cn --arg v "$HERDR_BACKUP" '[$v]')"
-  attachment="$(jq -cn --arg id "herdr-config-v1.$HERDR_CONFIG_ORIGIN" --arg path "$HERDR_CONFIG_PATH" \
-    --arg hash "$HERDR_CONFIG_HASH" '[{id:$id,path:$path,content_hash:$hash}]')"
-  build_area_state_json herdr "$attachment" "$backups"
+  validate_herdr_config_syntax
+  lean_preflight_area "$MODE"
 }
 
 apply_herdr() {
-  local state_json
-  begin_transaction
-  apply_area_stow
-  install_herdr_config
-  state_json="$(build_herdr_state_json)"
-  write_transaction_string_atomic "$state_json" "$AREA_STATE" 0600
-  fault herdr-after-state
-  TRANSACTION_ACTIVE=false
-  log "applied Herdr area for profile '$SELECTED_PROFILE'"
-}
-
-restore_herdr_predecessor() {
-  local path="$HOME/$HERDR_CONFIG_PATH" dir="${HOME}/${HERDR_CONFIG_PATH%/*}"
-  herdr_stage_copy "$HOME/$HERDR_BACKUP" "$dir" '.config.toml.herdr-restore.XXXXXX' "$HERDR_PREDECESSOR_MODE"
-  replace_with_staged_regular "$HERDR_STAGED_COPY" "$path" "$HERDR_CONFIG_IDENTITY" 'managed Herdr config'
-  remove_expected_path "$HOME/$HERDR_BACKUP" "$HERDR_BACKUP_IDENTITY" 'Herdr predecessor backup'
+  register_herdr_area
+  validate_herdr_closure
+  validate_herdr_runtime
+  [[ "$SELECTED_PROFILE" != omarchy ]] || validate_herdr_config_file "$HOME/$HERDR_CONFIG" 'native Herdr config'
+  validate_herdr_config_syntax
+  lean_apply_area
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    log 'validated package-owned native Herdr; no files or deployment state were written'
+  else
+    log "applied Ubuntu Herdr config, helpers, and selector; install the runtime manually with: mise install $HERDR_SELECTOR"
+  fi
 }
 
 remove_herdr() {
-  init_herdr_area
-  begin_area_removal herdr restore-profile || return 0
-  [[ -z "$HERDR_BACKUP" ]] || AREA_JOURNAL_PATHS+=("$HOME/$HERDR_BACKUP")
-  begin_transaction
-  if [[ "$HERDR_CONFIG_ORIGIN" == created ]]; then
-    remove_expected_path "$HOME/$HERDR_CONFIG_PATH" "$HERDR_CONFIG_IDENTITY" 'managed Herdr config'
-  else
-    restore_herdr_predecessor
+  register_herdr_area
+  validate_herdr_closure
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    validate_herdr_runtime
+    validate_herdr_config_file "$HOME/$HERDR_CONFIG" 'native Herdr config'
+    validate_herdr_config_syntax
   fi
-  fault herdr-remove-after-config
-  remove_recorded_area_targets
-  remove_area_state_and_dirs 'Herdr area state'
-  log 'removed managed Herdr config and state; restored the reviewed predecessor when present and retained runtime data'
+  lean_remove_area
+  log 'removed only exact managed Herdr package links; retained logs, sessions, sockets, and runtime data'
 }

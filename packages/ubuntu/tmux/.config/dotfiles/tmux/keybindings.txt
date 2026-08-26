@@ -1,0 +1,14 @@
+tmux keybindings
+
+Prefixes: C-Space, C-b
+?         Show this help
+q         Reload configuration
+h / v     Split vertically / horizontally
+x         Kill pane
+c / k     Create / kill window
+r         Rename window
+C / K     Create / kill session
+P / N     Previous / next session
+
+Alt+Arrow changes windows or sessions. Ctrl+Alt+Arrow focuses panes.
+Ctrl+Alt+Shift+Arrow resizes panes. Alt+1..9 selects a window.

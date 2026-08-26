@@ -1,5 +1,0 @@
-# Keep workstation defaults explicit; project mise files may override runtimes.
-[tools]
-node = "24.18.0"
-"aqua:pnpm/pnpm" = "11.13.1"
-"aqua:max-sixty/worktrunk" = "0.68.0"

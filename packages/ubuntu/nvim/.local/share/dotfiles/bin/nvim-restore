@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly SCRIPT_NAME="${0##*/}"
+readonly CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+readonly DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+readonly LOCKFILE="$CONFIG_HOME/nvim/lazy-lock.json"
+readonly LAZY_PATH="$DATA_HOME/nvim/lazy/lazy.nvim"
+readonly NVIM_EXECUTABLE="${DOTFILES_NVIM_EXECUTABLE:-nvim}"
+readonly LAZY_REPOSITORY="${DOTFILES_NVIM_LAZY_REPOSITORY:-https://github.com/folke/lazy.nvim.git}"
+SCRIPT_PATH="$(realpath -e -- "${BASH_SOURCE[0]}")"
+REPO_ROOT="$(realpath -e -- "$(dirname -- "$SCRIPT_PATH")/../../../../../../..")"
+readonly SCRIPT_PATH REPO_ROOT
+readonly COMMITTED_LOCKFILE="${DOTFILES_NVIM_COMMITTED_LOCKFILE:-$REPO_ROOT/packages/upstream/nvim/.config/nvim/lazy-lock.json}"
+
+[[ $# == 0 ]] || { printf 'usage: %s\n' "$SCRIPT_NAME" >&2; exit 64; }
+command -v git >/dev/null || { printf '%s: git is required\n' "$SCRIPT_NAME" >&2; exit 69; }
+command -v jq >/dev/null || { printf '%s: jq is required\n' "$SCRIPT_NAME" >&2; exit 69; }
+command -v "$NVIM_EXECUTABLE" >/dev/null || { printf '%s: Neovim is required\n' "$SCRIPT_NAME" >&2; exit 69; }
+[[ -z "${DOTFILES_NVIM_LAZY_REPOSITORY:-}" || "${DOTFILES_TESTING:-}" == 1 ]] || {
+  printf '%s: repository overrides require DOTFILES_TESTING=1\n' "$SCRIPT_NAME" >&2; exit 64;
+}
+[[ -z "${DOTFILES_NVIM_COMMITTED_LOCKFILE:-}" || "${DOTFILES_TESTING:-}" == 1 ]] || {
+  printf '%s: lockfile overrides require DOTFILES_TESTING=1\n' "$SCRIPT_NAME" >&2; exit 64;
+}
+[[ -f "$LOCKFILE" ]] || {
+  printf '%s: missing lockfile: %s\n' "$SCRIPT_NAME" "$LOCKFILE" >&2; exit 66;
+}
+[[ -f "$COMMITTED_LOCKFILE" ]] && cmp -s -- "$LOCKFILE" "$COMMITTED_LOCKFILE" || {
+  printf '%s: deployed lazy-lock.json differs from the committed lock\n' "$SCRIPT_NAME" >&2; exit 65;
+}
+jq -e 'type == "object" and length > 0 and all(to_entries[];
+  (.value | type == "object") and (.value.commit | type == "string" and test("^[0-9a-f]{40}$"))) and
+  (."lazy.nvim".commit | type == "string")' "$LOCKFILE" >/dev/null || {
+  printf '%s: malformed lazy-lock.json\n' "$SCRIPT_NAME" >&2; exit 65;
+}
+
+lock_before="$(sha256sum -- "$LOCKFILE")"; lock_before="${lock_before%% *}"
+lazy_commit="$(jq -r '."lazy.nvim".commit' "$LOCKFILE")"
+mkdir -p -- "$LAZY_PATH"
+if [[ ! -d "$LAZY_PATH/.git" ]]; then
+  [[ -z "$(find "$LAZY_PATH" -mindepth 1 -print -quit)" ]] || {
+    printf '%s: lazy.nvim path is not an empty directory or Git checkout: %s\n' "$SCRIPT_NAME" "$LAZY_PATH" >&2; exit 78;
+  }
+  git init -q -- "$LAZY_PATH"
+  git -C "$LAZY_PATH" remote add origin "$LAZY_REPOSITORY"
+fi
+GIT_TERMINAL_PROMPT=0 git -C "$LAZY_PATH" fetch -q --depth=1 origin "$lazy_commit"
+git -C "$LAZY_PATH" checkout -q --detach FETCH_HEAD
+[[ "$(git -C "$LAZY_PATH" rev-parse HEAD)" == "$lazy_commit" ]] || {
+  printf '%s: lazy.nvim did not reach locked commit %s\n' "$SCRIPT_NAME" "$lazy_commit" >&2; exit 1;
+}
+
+DOTFILES_NVIM_RESTORING=1 "$NVIM_EXECUTABLE" --headless '+Lazy! restore' +qa
+lock_after="$(sha256sum -- "$LOCKFILE")"; lock_after="${lock_after%% *}"
+[[ "$lock_after" == "$lock_before" ]] || {
+  printf '%s: lazy-lock.json changed during restore\n' "$SCRIPT_NAME" >&2; exit 1;
+}
+printf '%s: restored the committed Lazy lock with lazy.nvim %s\n' "$SCRIPT_NAME" "$lazy_commit"

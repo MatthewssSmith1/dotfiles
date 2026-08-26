@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+dir=""
+target=""
+action=""
+package=""
+simulate=false
+no_folding=false
+
+for argument in "$@"; do
+  case "$argument" in
+    --dir=*) dir="${argument#*=}" ;;
+    --target=*) target="${argument#*=}" ;;
+    --no-folding) no_folding=true ;;
+    --simulate) simulate=true ;;
+    --stow) action=stow ;;
+    --delete) action=delete ;;
+    --*) printf 'unsupported fake Stow option: %s\n' "$argument" >&2; exit 2 ;;
+    *) [[ -z "$package" ]] || { printf 'multiple fake Stow packages\n' >&2; exit 2; }; package="$argument" ;;
+  esac
+done
+
+[[ -n "$dir" && -d "$dir/$package" && -n "$target" && -d "$target" ]] || exit 2
+[[ "$action" == stow || "$action" == delete ]] || exit 2
+[[ "$no_folding" == true ]] || { printf 'fake Stow requires --no-folding\n' >&2; exit 2; }
+printf '%s|%s|%s\n' "$action" "$simulate" "$package" >> "${FAKE_STOW_TRACE:?}"
+
+if [[ "$simulate" == false && "$action" == stow && "${FAKE_STOW_FAIL_PACKAGE:-}" == "$package" ]]; then
+  exit 9
+fi
+
+root="$dir/$package"
+shopt -s dotglob nullglob globstar
+for source in "$root"/**/*; do
+  relative="${source#"$root"/}"
+  [[ "$relative" != .stow-local-ignore && "$relative" != .empty-package ]] || continue
+  [[ -f "$source" && ! -L "$source" ]] || continue
+  destination="$target/$relative"
+  lexical="$(realpath -m -s --relative-to="$(dirname -- "$destination")" -- "$source")"
+  if [[ "$action" == stow ]]; then
+    if [[ -e "$destination" || -L "$destination" ]]; then
+      [[ -L "$destination" && "$(readlink -- "$destination")" == "$lexical" ]] || exit 8
+    elif [[ "$simulate" == false ]]; then
+      mkdir -p -- "$(dirname -- "$destination")"
+      ln -s -- "$lexical" "$destination"
+    fi
+  elif [[ -e "$destination" || -L "$destination" ]]; then
+    [[ -L "$destination" && "$(readlink -- "$destination")" == "$lexical" ]] || exit 8
+    [[ "$simulate" == true ]] || rm -- "$destination"
+  fi
+done

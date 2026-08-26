@@ -1,0 +1,3 @@
+# Ubuntu shell prompt fallback; installation remains an explicit manual action.
+[tools]
+"aqua:starship/starship" = "1.26.0"

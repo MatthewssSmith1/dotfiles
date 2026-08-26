@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
-readonly HELPER="$REPO_DIR/packages/generic/bash/.local/share/dotfiles/bin/dotfiles-secret"
+readonly HELPER="$REPO_DIR/packages/ubuntu/bash/.local/share/dotfiles/bin/dotfiles-secret"
 readonly PLACEHOLDER='fixture-placeholder-value'
 
 make_fixture() {

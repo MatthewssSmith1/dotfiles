@@ -1,384 +1,76 @@
 # Deployment
 
-## Accepted Design
+Dotfiles deploys explicit qualified Stow packages and never treats the
+repository root as a package. Profiles define ordered baseline, adapter, and
+personal closures; `upstream/reference` is evidence, not deployable content.
 
-Retain GNU Stow, but permanently stop treating the repository root as one Stow package. Bootstrap deploys explicit packages for the selected profile and areas.
+| Area | Omarchy | Ubuntu |
+|---|---|---|
+| Git | `common/git` | `upstream/git`, `ubuntu/git`, `common/git` |
+| Tools | `common/tools` | `common/tools`, `ubuntu/tools` |
+| Bash | `common/bash` | `upstream/bash`, `upstream/starship`, `ubuntu/bash`, `common/bash` |
+| tmux | validation-only | `upstream/tmux`, `ubuntu/tmux` |
+| Neovim | `common/nvim` plus loader | `upstream/nvim`, `ubuntu/nvim`, `common/nvim` |
+| Agents | `common/agents` | `common/agents` |
+| Herdr | validation-only | `ubuntu/herdr` |
+| Desktop | `omarchy/desktop` plus guarded/structured ownership | validation-only |
 
-Conceptual layout:
+## Command Contract
 
-```text
-packages/
-  common/
-    git/
-    bash/
-    tmux/
-    nvim/
-    zsh/
-    agents/
-    herdr/
-  upstream/
-    git/
-    bash/
-    tmux/
-    starship/
-    nvim/
-    reference/
-      omarchy/
-  generic/
-    git/
-    bash/
-    tmux/
-    nvim/
-  wsl/
-    bash/
-    tmux/
-
-profiles/
-  omarchy.conf
-  generic.conf
-  wsl.conf
-```
-
-Every package listed in the profile closure must exist. All payloads are populated; payload presence still does not change area readiness in `manifests/areas.tsv`. Package IDs are stable, qualified paths such as `common/git`, `upstream/git`, and `generic/git`; state never records an unqualified name.
-
-`upstream/reference` is verified source material, not a Stow package. No profile closure names it, so deployment never scans or installs its Bash and theme inputs.
-
-Profiles expand areas into this ordered package closure:
-
-| Area | Omarchy | Generic | WSL |
-|------|---------|---------|-----|
-| Git | `common/git` | `upstream/git`, `generic/git`, `common/git` | Same as Generic |
-| Bash | `common/bash` | `upstream/bash`, `upstream/starship`, `generic/bash`, `common/bash` | `upstream/bash`, `upstream/starship`, `generic/bash`, `wsl/bash`, `common/bash` |
-| tmux | `common/tmux` | `upstream/tmux`, `generic/tmux`, `common/tmux` | `upstream/tmux`, `generic/tmux`, `wsl/tmux`, `common/tmux` |
-| Neovim | `common/nvim` | `upstream/nvim`, `generic/nvim`, `common/nvim` | Same as Generic |
-| zsh | `common/zsh` | `common/zsh` | `common/zsh` |
-| Agents | `common/agents` | `common/agents` | `common/agents` |
-| Herdr | `common/herdr` | `common/herdr` | `common/herdr` |
-
-Baseline packages deploy before adapters, which deploy before personal packages. Packages must use include/source boundaries rather than target the same path. Manifest expansion rejects duplicate payload destinations before Stow runs.
-
-The generic and WSL mappings are XDG-native. Starship links `~/.config/starship.toml` from `upstream/starship`. For tmux, `generic/tmux` owns the XDG dispatcher at `~/.config/tmux/tmux.conf`, while `upstream/tmux` owns the private byte-identical baseline at `~/.config/dotfiles/upstream/tmux/tmux.conf`. The generic, command-empty WSL, and common persistence fragments have distinct targets under `~/.config/dotfiles/tmux/`; runtime source order is defined by the dispatcher, not package order. tmux is ready after its automated gates passed.
-
-For Bash, package order is deployment order, not startup order. The stable common dispatcher owns runtime ordering: generic portable initialization, then the WSL adapter when selected, then common personal integrations and the host-local layer. Native Omarchy has no generic or WSL payload and reaches only the common layers after its native `.bashrc`. The exact runtime order and profile-specific attachment strategies are defined in [Shell](tools/shell.md#managed-bash-load-order).
-
-## Stow Rules
-
-- Invoke Stow for a qualified `<layer>/<area>` package as:
-
-  ```bash
-  stow --dir="$DOTFILES_DIR/packages/<layer>" --target="$HOME" \
-    --no-folding --stow <area>
-  ```
-
-  Use `--simulate` for preflight. Use `--delete` only when the exact recorded
-  package definition still exists; otherwise remove links directly from
-  recorded per-target ownership after the same lexical and resolved checks.
-- Use `--no-folding` so multiple packages can safely share
-  `~/.config/dotfiles/` and `~/.agents/`.
-- Keep docs, scripts, tests, metadata, ignored assets, deployment state, and
-  host-local files outside every Stow payload.
-- Preflight every operation for one selected area before changing that area.
-- Support independent installation and removal by area.
-- Do not let a conflict in one area block another selected area.
-- Never return to a repository-wide `stow .` operation.
-
-The per-area root-Stow cutover is complete: bootstrap cannot invoke root `stow .`, and every area deploys through its explicit packages. The durable rules that outlive the cutover:
-
-- Legacy links into this checkout are removed only when both their recorded
-  lexical target and normalized resolved destination match the reviewed old
-  path (`manifests/legacy-links.json`).
-- Tracked compatibility source paths are removed only after every known host
-  has migrated or remains pinned to an older checkout.
-- Moving an area's payload files before its known old links are removed is
-  forbidden because it would create broken links.
-
-## Bootstrap Contract
-
-Bootstrap must:
-
-- Resolve the repository from the script's own path rather than assuming
-  `~/dotfiles`.
-- Auto-detect the profile using the rules in [Architecture](architecture.md).
-- Support a validated `--profile` override.
-- Treat repeated `--area` options as the complete requested area set.
-- Use all default areas when no `--area` is supplied. `manifests/areas.tsv`
-  records each area as `ready` or `framework`; default apply and check select
-  only `ready` areas, and explicitly selecting a `framework` area is refused
-  because it has no deployable payload. Removal ignores readiness because it
-  is state-driven. Production areas are all ready; framework status remains
-  available for developing future areas safely.
-- Provide a non-mutating `--check` mode.
-- Support explicit `--provision` intent. Provisioning never follows merely from
-  omitting `--area`; ordinary apply remains configuration-only.
-- Support `--remove` with optional repeated `--area` arguments. `--profile` is
-  invalid with `--remove`; removal uses recorded state. With no areas,
-  `--remove` selects every recorded area.
-- Check and report missing system dependencies without invoking `sudo`.
-  Because bootstrap never installs distro packages, fresh generic and WSL
-  hosts have an explicit manual step. Area manifests generate the exact
-  package-manager command; documentation examples are illustrative until those
-  manifests exist.
-- On the Omarchy profile, compare `~/.local/share/omarchy/version` against the
-  recorded core pin and `pacman -Q omarchy-nvim` against the recorded Neovim
-  package identity in [Upstream](upstream.md). Missing native owners are
-  errors; parseable version mismatches produce separate non-blocking warnings.
-  Drift is expected, and updating a pin is a separate explicit operation.
-- Never change the login shell.
-- Do not install, pin, remove, upgrade, require, reconfigure, or inspect Claude
-  Code, OpenCode, or their application state except for explicit Claude Code
-  retirement and the agents area's instruction bridges. Unrelated operations
-  preserve executables, settings, credentials, plugins (including
-  `opencode-openai-codex-auth`), sessions, and provider state.
-- Be convergent and safe to run repeatedly.
-
-Accepted forms are:
+The public grammar is:
 
 ```text
-bootstrap.sh
-bootstrap.sh --check
-bootstrap.sh --provision
-bootstrap.sh --check --provision
-bootstrap.sh --retire-provisioned claude-code
-bootstrap.sh --check --retire-provisioned claude-code
-bootstrap.sh --area <area> [--area <area> ...]
-bootstrap.sh --check --area <area> [--area <area> ...]
-bootstrap.sh --provision --area <area> [--area <area> ...]
-bootstrap.sh --check --provision --area <area> [--area <area> ...]
-bootstrap.sh --remove [--area <area> ...]
+dotfiles.sh apply [--profile omarchy|ubuntu] [area ...]
+dotfiles.sh check [--profile omarchy|ubuntu] [area ...]
+dotfiles.sh remove [area ...]
+dotfiles.sh list
+dotfiles.sh help [command]
+dotfiles.sh --help
 ```
 
-Every ordinary non-remove form also accepts the existing validated `--profile` override in any parser-supported order. `--provision` without `--check` means configuration apply plus approved provisioning. `--check --provision` reports configuration and provisioning convergence but remains offline and non-mutating. `--provision` is invalid with `--remove`. Assistant retirement is a separate offline operation and is mutually exclusive with apply, removal, provisioning, profile overrides, and area selection.
-
-No-area `--provision` is the only full runtime-tool provisioning operation. It selects Node, pnpm, Worktrunk, Herdr, and platform foundations including tmux, Neovim, and Starship. An area-scoped run selects only dependencies assigned to explicit areas and never the core set. Provisioning does not change readiness; ordinary no-area runs select the currently `ready` configuration areas.
-
-tmux plugins are a separate lifecycle. No-area provisioning may provision the tmux executable foundation but never plugins. The only plugin provisioning apply interface is exactly `bootstrap.sh --provision --area tmux`; the corresponding check remains offline and non-mutating. See [tmux](tools/tmux.md#plugin-lifecycle).
-
-## Operation And Network Policy
-
-This table is canonical. Other documents link here rather than broadening its claims.
-
-| Operation | Mutation | Network policy |
-|-----------|----------|----------------|
-| `bootstrap.sh --check` | None | Forbidden |
-| `bootstrap.sh --check --provision` | None | Forbidden; reports the same locked provisioning set the corresponding provisioning apply would select |
-| Ordinary bootstrap apply | Selected configuration and deployment state files | Forbidden; configuration-only |
-| `bootstrap.sh --provision` apply | Selected configuration, deployment state, and retained provisioning roots | Allowed only for the printed, locked runtime-tool plan; no baseline, Neovim asset/plugin, OpenCode, Codex auth, or Vite+ operation |
-| `bootstrap.sh [--check] --retire-provisioned claude-code` | Check: none; apply: exact retired receipt and mise registration only | Forbidden |
-| Bootstrap `--remove` | Selected home and state files | Forbidden |
-| `scripts/upstream verify` | None | Forbidden |
-| `scripts/agent-skills verify` | None | Forbidden |
-| `scripts/upstream sync` | Resolved checkout manifest and snapshots plus same-filesystem staging | Allowed for pinned baseline inputs |
-| `scripts/tmux-parser-fixtures validate-lock` or `verify --root <cache-root>` | None | Forbidden |
-| `scripts/tmux-parser-fixtures sync --root <cache-root>` | Test-only archive cache, same-parent extraction staging, and the managed parser-fixture root under the caller-selected cache | Allowed only for the complete HTTPS package plan printed before download; never installs the package or changes deployment state |
-| Bash and tmux startup | Runtime process state only | Forbidden |
-| Transitional zsh first start with no readable Zinit entrypoint | Zinit runtime state | The only startup network exception: the existing Zinit clone is allowed |
-| Transitional zsh startup with an existing readable Zinit entrypoint | Runtime process state only | Forbidden; plugins load only from a complete local closure under local-only Git policy |
-| `bootstrap.sh --provision --area tmux` plugin provisioning | Locked plugin checkouts | Allowed only for the complete printed lock plan |
-| First explicit generic Neovim launch | Neovim plugin state | Locked plugin restoration allowed |
-| Explicit Neovim restore after a lock change | Neovim plugin state | Locked plugin restoration allowed |
-| Explicit Neovim runtime-asset provisioning | Declared Mason, Treesitter, rock, or build state | Allowed only under the accepted asset policy |
-| Explicit `dotfiles-secret exec-env` | Child process environment only; reads one persistent host-local bundle | Forbidden; no authentication or retrieval occurs |
-| User-invoked Claude Code or OpenCode runtime | Host-owned application state | Governed by the application's native lifecycle; outside bootstrap |
-
-Provisioning apply must print every planned networked action before the first network-capable command executes. Startup must never install or update tools implicitly except for the documented missing-Zinit first-start behavior. Neovim plugin installation occurs only during the first explicit launch or a later explicit restore after a lock change. Upstream sync never deploys configuration. Within `$HOME`, it may touch only the resolved checkout and a same-filesystem staging directory beside the content it will atomically replace; all unrelated home paths are forbidden.
-
-Ordinary tmux apply and both check forms verify the exact plugin closure offline and refuse incomplete or drifted state. Only the explicit area-scoped plugin provisioning apply may stage missing or clean-drift replacements. Dirty, ambiguous, non-owned, linked-worktree, and symlinked managed objects refuse without mutation. Eligible replacements are assembled and verified in same-filesystem staging and swapped transactionally rather than modified in place. The machine contract and exact pins are in `manifests/tmux-plugins.lock.json`.
-
-The plugin receipt is retained separately at `~/.local/state/dotfiles/provisioning/v1/tmux-plugins.json`. Its v1 schema records the active lock hash and the ordered repository, commit, tree, and directory identity of every checkout. The atomically compare-and-swapped full receipt is the plugin transaction's commit point; it is not incrementally updated and is not area-removal ownership. Runtime provisioning, plugin provisioning, tmux configuration preflight, and tmux configuration apply are ordered gates. A failure or terminal signal in either provisioning layer prevents both tmux configuration operations; statuses `70`, `130`, and `143` remain distinct rather than being collapsed into an aggregate failure. Provisioning never changes the readiness manifest.
-
-## Deployment State
-
-Record the applied profile, areas, and packages beneath:
-
-```text
-~/.local/state/dotfiles/
-```
-
-Use one versioned JSON state file per area plus a process lock:
-
-```text
-~/.local/state/dotfiles/
-  v1/
-    migrations.json
-    git.json
-    bash.json
-    tmux.json
-    nvim.json
-    zsh.json
-    agents.json
-    herdr.json
-```
-
-Schema filenames and `$id` values are stable and unversioned. Data carries its compatibility version in `schema_version`; validators must either continue accepting a recorded version or require an explicit migration before replacing its contract. Versioned state and receipt directories remain persisted compatibility namespaces.
-
-Each area state records schema version, profile, area, resolved checkout root, target root, ordered qualified package IDs, every deployed target path and its expected lexical source, every managed directory created by deployment, managed attachment IDs, destinations, and expected content hashes, and any backup paths created by that area. State exists only for exact cleanup and mismatch refusal; it never reconciles profiles or overrides detection. Neovim state may additionally contain `restored_lock_sha256`, exactly 64 lowercase hexadecimal characters. The field is absent after initial deployment and is written only after complete restore verification. Existing v1 state without it remains schema-valid, but Neovim `--check` reports a pending restore and fails convergence. A value different from the deployed lock reports stale restore and also fails convergence; no other area may record the field. State and migration-ledger files must be regular, non-symlink, EUID-owned files. Recorded, desired, and legacy package links are accepted or removed only while their symlink ownership is also EUID-safe, including a recheck at the mutation point.
-
-Concurrency protection covers normal cooperative edits by the same user. Every journaled mutation compares the current object with the transaction-start identity, or with this transaction's latest recorded post-state, and read-modify-write files require the identity of the exact version read. Temporary cleanup and quarantine discard likewise require the tracked object identity. Bootstrap does not claim to defend against a malicious same-UID process deliberately guessing and replacing private random quarantine names or swapping parent directories between individual system calls; that stronger boundary would require privileged or descriptor-relative filesystem mediation.
-
-Bash state also records the selected login path, whether bootstrap created its attachment-only file, and exact attachment identities and hashes. Generic and WSL select the first already-existing `.bash_profile`, `.bash_login`, or `.profile` once, in that order, and retain that choice across reapply. A newly created `.bash_profile` is removable only while state and exact content prove bootstrap created it. Existing startup files remain host-owned bytes around the reversible managed blocks.
-
-`migrations.json` is a retained host ledger for destructive one-time migrations: migration ID, source fingerprint, completion time, and backup paths. Removal never deletes it, so reapply cannot repeat a completed migration. Separate stable records cover the Neovim runtime-root renames (mechanics in [Neovim](tools/neovim.md#genericwsl-lifecycle-and-restore)), zsh local-alias relocation, and global Vite+ hook retirement. Retained zsh backups are no-clobber mode-`0600` files whose owner, mode, and content hash are verified against the recorded fingerprint on every check and reapply — and by the initial migration both immediately after creation and again before the original source is destructively rewritten or removed. A directory-move journal, rather than the file snapshot journal, reverses uncommitted renames on failure.
-
-All modes open the already-existing `$HOME` directory read-only and take an advisory `flock` on that file descriptor before reading state. `--check` uses a shared lock; apply and removal use an exclusive lock. This coordinates runs without creating a lock file, so `--check` remains non-mutating.
-
-For each selected area it:
-
-1. Expands and validates the package closure.
-2. Preflights the complete old and desired state, packages, legacy migration,
-   attachments, and rollback path without mutation.
-3. Starts a temporary operation journal.
-4. Removes obsolete or old-checkout links only when their current lexical and
-   resolved targets match recorded ownership.
-5. Applies desired packages and attachments.
-6. Atomically writes replacement state only after the area succeeds.
-7. Rolls back journaled changes if the area fails.
-
-Independent selected areas continue after an area failure; bootstrap returns a nonzero aggregate status. If rollback itself fails, bootstrap stops further mutation and reports the journal for manual recovery. Malformed, unknown, or newer-schema state causes refusal rather than speculative cleanup.
-
-Apply refuses before any mutation when any existing area state names a different profile from the detected or requested profile. The user must run `bootstrap.sh --remove` first. Omitting a deployed area during apply leaves its state and files untouched.
-
-Checkout moves and removed package definitions are handled from recorded link ownership, not by reconstructing an old package tree. Apply may replace an old checkout source with the current checkout only after every existing target matches state. Removal deletes each recorded link or attachment only after the same check, prunes only empty managed directories, and deletes the area state atomically after cleanup succeeds. A mismatch leaves state intact and refuses cleanup.
-
-`--remove` removes only deployed links, exact managed attachment content, empty managed directories, and successful area state. After every selected area is removed, it re-prunes the selected areas' recorded managed directories (a directory one area could not prune may only empty once a later area is removed), and once no recorded state or retained ledger remains it prunes the empty deployment state directory chain. It deliberately retains installed applications and mise tools, tmux plugin checkouts, Neovim runtime data and backups, migration backups, credentials, and every host-local file. It also retains `migrations.json`. Those resources may be reported but are never deleted by configuration removal.
-
-For tmux this retention is also declarative: removal keeps both `~/.tmux/plugins/` and `~/.tmux/resurrect/`. Plugin provisioning state is not area deployment state and is never inferred as removable ownership.
-
-For generic and WSL Bash, removal restores the bytes and mode of every pre-existing startup file and deletes a login file only when state proves it was created as an exact attachment-only file. Native removal deletes only its exact appended block. Shell removal retains `~/.config/dotfiles/local/bash.sh`, `~/.config/dotfiles/local/secrets/`, `~/.config/dotfiles/local/zsh_aliases.zsh`, Zinit data and plugins, shell history, migration backups and ledger entries, and the completed Vite+ retirement; it never recreates `.zsh_aliases.local` or changes the login shell.
-
-Retained provisioning is not recorded as removable area deployment state. Installed tools and their manifest-owned launchers survive `--remove`; checks derive expected resources from the active provisioning manifest and compare that contract with retained provisioning metadata and the actual installation.
-
-## Native Omarchy Attachments
-
-This section is canonical for the guarded-attachment contract. Per-tool documents state only tool-specific facts — which file, which block — and link here.
-
-Omarchy refresh or reinstall operations can replace Bash, tmux, Starship, and Neovim configuration. Do not symlink those refresh-managed destinations into the checkout.
-
-Attach shared behavior using small regular-file changes:
-
-- Bash: append a guarded source block to native `.bashrc`.
-- tmux: append a guarded source line to native tmux configuration.
-- Neovim: recreate the regular loader `~/.config/nvim/plugin/dotfiles-personal.lua` after refresh.
-- Git: preserve the native XDG baseline and use a regular `~/.gitconfig`
-  include entrypoint.
-- Starship: leave the native configuration unchanged initially.
-
-Attachment operations must:
-
-- Use clear begin and end markers where the file format permits.
-- Be idempotent.
-- Refuse malformed, nested, or duplicate marker blocks.
-- Remove only exact managed content.
-- Preserve unrelated user modifications.
-- Report drift instead of guessing how to repair it.
-- Reapply safely after supported native refresh operations.
-
-The native Bash block is additive and sources only the common dispatcher after the authoritative native baseline. It is not the generic/WSL bypass block. Generic and WSL prepend a block that returns immediately for non-interactive Bash and otherwise runs the managed dispatcher before returning past the preserved legacy remainder. Their separately selected login block is also prepended. See [Shell](tools/shell.md#generic-and-wsl-attachments).
-
-The native tmux block is also additive, but sources only the guarded common persistence path after the native baseline. It never sources or deploys the private generic baseline, generic adapter, command-empty WSL adapter, or a host-local file. The final command inside common persistence is guarded TPM initialization.
-
-## Legacy Migration Safety
-
-`manifests/legacy-links.json` is per-host by design: it records the reviewed legacy links of each known deployment under that host's home and checkout roots, and bootstrap acts only on a single exact host record. A new host with legacy links requires its own reviewed record.
-
-The current repository has root-package links and repo-backed local files. Migration must:
-
-- Convert `~/.gitconfig.local` to an external regular file with mode `0600`
-  without following the legacy symlink during writes or permission changes.
-- Relocate a recognized `.zsh_aliases.local` link transactionally to the real,
-  retained `~/.config/dotfiles/local/zsh_aliases.zsh`; reuse only a
-  byte-identical regular destination, never merge divergent content, and remove
-  the old link only after active `.zshrc` reads the new path.
-- Remove only the exact reviewed Vite+ block from host-owned `.zshenv`, preserve
-  Cargo, OpenCode, and unrelated bytes, and retain its rollback backup and
-  completed ledger record. Configuration removal does not reverse this
-  retirement, and the Vite+ installation remains untouched.
-- Leave `.zshrc.local` entirely unowned and untouched.
-- Remove a legacy symlink only when both its recorded lexical target and its
-  normalized resolved destination match the known old path in this checkout.
-  Broken links use a non-dereferencing normalized destination for the second
-  comparison.
-- Handle individually Stowed links in the current Neovim tree.
-- Prune only empty directories created by old deployment.
-- Refuse unrelated regular-file conflicts.
-- Preserve unrelated host settings and credentials.
-
-Neovim's accepted backup policy — git history for the configuration, timestamped renames for runtime state — is recorded in [Neovim](tools/neovim.md#reset-and-migration).
-
-## Executable Ownership
-
-| Tool category | Omarchy | Generic and WSL |
-|---------------|---------|-----------------|
-| Git, fzf, zoxide, eza, rg, jq | Native packages | Distro packages |
-| `bat` and `fd` command names | Native packages | Managed private wrappers selecting the distro-owned `bat`/`batcat` and `fd`/`fdfind` commands |
-| tmux | Native package | Distro package when 3.5 or newer, else locked `aqua:tmux/tmux-builds` via mise |
-| Neovim, Starship | Native packages | Suitable package or locked mise fallback |
-| mise | Native package | Pinned user-scoped install when absent |
-| Node and pnpm | Host-owned and retained; bootstrap does not replace them | Locked mise artifacts |
-| Claude Code | Omarchy/native owner | Vendor-native user install |
-| Worktrunk | Host-owned and retained; bootstrap does not replace it | Locked mise artifact |
-| Herdr | Locked mise artifact through native mise | Locked mise artifact |
-| OpenCode | Omarchy/native owner | Vendor-native user install |
-| Assistant plugins and application state | Host-owned and untouched | Host-owned and untouched |
-| Vite+ | Project-local mise files | Project-local mise files |
-
-On Omarchy, bootstrap must fail if a prohibited command such as Neovim resolves through a mise shim instead of the native package. Alignment does not require identical installation mechanisms, but it does require unambiguous owners and compatible behavior.
-
-Vite+ is intentionally project-owned. Projects declare and lock it in their own mise files; bootstrap never invokes the official installer, creates or updates a global executable, treats Vite+ as a protected profile command, or initializes it globally from managed Bash or zsh. The reviewed pre-existing global zsh hook is durably retired. Project precedence is expected for it. Claude Code, OpenCode, and assistant plugins remain outside repository provisioning and application-state ownership.
-
-The Omarchy tmux baseline is written for tmux 3.5. Ubuntu's distro packages lag (22.04 ships 3.2a, 24.04 ships 3.4), so the mise fallback is the expected owner on generic systems. Pin the fully qualified Aqua backend and lock its verified prebuilt artifact; do not rely on mise's shorthand registry order. This removes tmux source-build dependencies from the manual package step. Interim behavior on hosts that have not converged is defined in [tmux](tools/tmux.md#runtime-and-terminals).
-
-## Mise
-
-Use mise for approved repository-managed tools, not for host-owned assistants.
-
-On generic and WSL systems, only explicit provisioning apply may install a known, checksum-verified mise version when mise is absent. It must accept a newer compatible existing version and never downgrade it. Omarchy provisioning uses its native mise owner and may install only locked Herdr. `--check --provision` reports the missing tool and planned installation without network access or mutation; ordinary check and apply do not select optional core applications.
-
-Use additive fragments:
-
-```text
-~/.config/mise/conf.d/
-  20-dotfiles-common.toml
-  30-dotfiles-profile.toml
-```
-
-Loose selectors express maintenance intent. The committed `manifests/provisioning.json` lock holds the exact versions, backends, artifacts, inventory identities, hashes, and origins used by explicit provisioning. Managed fragments contain no Claude Code or OpenCode selector. Project mise files retain higher precedence for project runtimes, but may not silently shadow profile-owned commands such as tmux or native Omarchy Neovim. Bootstrap must not silently advance locked versions.
-
-The retained provisioning receipt is a regular non-symlinked EUID-owned mode-`0600` file. A retained tool root, its mise link, protected launcher, and both receipt rows are one transaction: every read-modify-write compares and swaps against the exact version it validated, and verified installation of the new combined receipt is the commit point. Initial mise installation and launcher-only repair use the same combined receipt boundary, so no stale receipt can survive without its binary. Failure or signal rolls back only unchanged transaction-created objects; changed or appeared same-UID objects are retained at the path named in the recovery diagnostic, and a post-commit cleanup failure never reverts the committed transaction. This remains subject to the malicious same-UID between-syscall boundary documented below.
-
-The Claude Code retirement tombstone accepts only the former locked identity. Its dedicated compare-and-swap operation removes that exact receipt row and mise registration while retaining the binary root; drift refuses before mutation and uncommitted failures restore both metadata objects.
-
-### Observable Ownership Boundary
-
-Bootstrap checks its inherited environment, including exported shell functions, and every executable candidate found through its effective `PATH`. It also checks mise resolution from a neutral directory and controlled project directories so intentional project runtime precedence can be distinguished from forbidden shadows of protected profile commands, and runs the same resolver in a controlled managed interactive shell that can additionally inspect aliases and non-exported functions without executing rejected shadows. Host-local Bash is inspected separately from a copied HOME inside a capability-free, denied-network namespace; apply and check fail closed when the required `util-linux` isolation contract is unavailable. The mechanics of the controlled shell and the namespace boundary are in [Shell](tools/shell.md#interactive-ownership-validation).
-
-An arbitrary unexported alias or function in an already-running parent shell is not inherited and cannot be inspected reliably. Bootstrap does not parse unrelated startup files to guess at those objects. Missing native owners and forbidden observable shadows are blocking; an otherwise valid native Omarchy owner whose parseable version differs from the recorded core or Neovim pin produces a separate non-blocking warning.
-
-## Accepted Pin Record
-
-The active ownership proposal is `manifests/proposals/2026-08-07-host-owned-assistant-clis.json`; it supersedes `manifests/proposals/2026-07-17-runtime-tool-provisioning.json`, retained as pin history. The active lock is `manifests/provisioning.json`. Bootstrap verifies each managed artifact before installing it into a retained root and registering that exact root through offline `mise link`; Mise/Aqua may not substitute an unchecked download.
-
-## Test Isolation
-
-Automated tests use a temporary `HOME`, temporary XDG roots, fixture host and mise roots, controlled `PATH`, and fixture checkouts when manifests or area readiness differ. They must not inspect or mutate the developer's real home, user executable directories, mise data, or active assistant installations and state. Provisioning applies use fake, local artifacts in fixtures; no real provisioning apply is part of the automated gate.
-
-## Acceptance Criteria
-
-- `--check` reports intended changes and missing dependencies without
-  mutation, including the exact manual package command when dependencies are
-  missing and a non-blocking Omarchy version-drift warning where applicable.
-- Apply and removal obey the canonical network policy.
-- Ordinary apply is configuration-only, and both check forms are offline and
-  non-mutating.
-- Every package for an area passes preflight before that area is changed.
-- Repeated bootstrap converges without adding duplicate attachments.
-- Root metadata, tests, scripts, and docs are never linked into `$HOME`.
-- A failed area does not block or alter another selected area.
-- Legacy links are removed only after exact ownership checks.
-- Local files, authentication, and unrelated regular files remain intact.
-- Omarchy commands resolve to approved native owners.
-- Repository-managed tools resolve to their locked approved owners; host-owned
-  assistants are optional and resolve ahead of stale inherited mise paths when
-  installed.
-- Profile mismatch is refused until explicit state-driven removal succeeds.
-- State updates are atomic, and concurrent bootstrap runs are refused.
-- Bootstrap does not use `sudo`, change the login shell, or update baselines.
+An operation is mandatory and must come first. Areas are positional; legacy
+operation flags, selector flags, comma lists, and options after an area are
+rejected. No areas selects ready defaults for apply/check and owned defaults
+for removal. `list` and help do not require a supported host. The executable
+`~/.local/bin/dotfiles` payload in `common/tools` locates exactly one checkout
+root and forwards this interface without a fixed checkout path.
+
+Dotfiles is non-root and user-scoped. It never invokes `sudo`, a distro
+package manager, an installer, or a network-capable command, and it never
+changes the login shell. Missing dependencies print exact manual guidance.
+
+Every selected area completes preflight before its first write. A
+shared/exclusive lock on `HOME` coordinates apply/remove and check respectively.
+Derivable package links can converge directly after an interrupted Stow run;
+dotfiles has no deployment transaction, journal, backup, or rollback layer.
+
+## Lean Ownership
+
+Lean package links are derived from the active profile and therefore need no
+state. Ownership records live under `~/.local/state/dotfiles/v2/`: record
+format 1 stores attachments, while format 2 adds fixed JSON scalar fields.
+Both formats may coexist for one profile and format-1 records are not rewritten
+merely because they were read. The retired `~/.local/state/dotfiles/v1/`
+namespace is refused with manual cleanup guidance. Native validation-only and
+package-only areas write no state.
+
+Native refresh-owned baselines remain regular files. Git, Bash, Neovim, and
+desktop use guarded attachments; desktop also owns only the two registered
+idle scalars in `shell.json`. tmux and Herdr are validation-only.
+Modified links or attachments refuse removal. Removal preserves application
+data, caches, sessions, credentials, and all Neovim runtime roots.
+
+## Network Boundaries
+
+| Operation | Network |
+|---|---|
+| Dotfiles apply/check/remove | Forbidden |
+| Shell, tmux, ordinary Neovim startup | Forbidden |
+| `scripts/upstream verify` | Forbidden |
+| `scripts/upstream sync --proposal ...` | Explicitly allowed for pinned source refresh |
+| `nvim-restore` | Explicitly allowed for locked plugin restoration |
+| Manual distro/mise installation | Outside dotfiles |
+
+Ubuntu selectors are ordinary mise configuration. Install them manually with
+the exact command printed by the relevant area; dotfiles writes selectors but
+never runs `mise install`.
