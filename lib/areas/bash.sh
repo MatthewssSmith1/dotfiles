@@ -79,6 +79,18 @@ bash_missing_guidance() {
   }
 }
 
+validate_ubuntu_bash_login_startup() {
+  [[ "$SELECTED_PROFILE" == ubuntu ]] || return 0
+  local account shell path
+  account="$(getent passwd "$(id -u)")" || die 'could not determine the account login shell'
+  shell="${account##*:}"
+  [[ "${shell##*/}" == bash ]] || return 0
+  for path in "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.bash_login"; do
+    [[ ! -e "$path" && ! -L "$path" ]] || return 0
+  done
+  die 'Ubuntu Bash login startup is missing: ~/.profile, ~/.bash_profile, and ~/.bash_login are absent; manually restore a host-owned ~/.profile that sources ~/.bashrc, then rerun'
+}
+
 preflight_bash() {
   register_bash_area
   validate_bash_closure
@@ -86,6 +98,7 @@ preflight_bash() {
     lean_preflight_area remove
     return
   fi
+  validate_ubuntu_bash_login_startup
   validate_bash_local_layer
   bash_missing_guidance || return 1
   lean_preflight_area "$MODE"

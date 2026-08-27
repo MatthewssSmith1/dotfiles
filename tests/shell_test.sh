@@ -16,6 +16,7 @@ run_bash_area() {
   local home="$1" profile="$2" operation="$3"
   HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=shell-test \
     SELECTED_PROFILE="$profile" MODE="$operation" PATH="$PATH" FAKE_STOW_TRACE="$FAKE_STOW_TRACE" \
+    FAKE_LOGIN_SHELL="${FAKE_LOGIN_SHELL:-/usr/bin/bash}" \
     DOTFILES_TESTING=1 DOTFILES_TEST_HIDE_COMMANDS="${DOTFILES_TEST_HIDE_COMMANDS:-}" bash -c '
       set -Eeuo pipefail
       source "$DOTFILES_DIR/lib/common.sh"
@@ -43,7 +44,8 @@ make_initializer zoxide 'init bash' zoxide-init
 make_initializer wt 'config shell init bash' worktrunk-init
 printf '#!/usr/bin/env bash\nexit 0\n' > "$fake_bin/fzf"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$fake_bin/eza"
-chmod 0755 "$fake_bin/fzf" "$fake_bin/eza"
+printf '#!/usr/bin/env bash\nprintf "test:x:1000:1000::/home/test:%%s\\n" "$FAKE_LOGIN_SHELL"\n' > "$fake_bin/getent"
+chmod 0755 "$fake_bin/fzf" "$fake_bin/eza" "$fake_bin/getent"
 
 # The repository contains only the native/common and Ubuntu Bash payloads.
 [[ -z "$(find "$REPO_DIR/packages/generic/bash" "$REPO_DIR/packages/wsl" "$REPO_DIR/packages/common/zsh" \
@@ -66,6 +68,33 @@ grep -qxF '"aqua:starship/starship" = "1.26.0"' "$selector" || fail 'Ubuntu Star
   fail 'common Bash duplicates a native v4 alias'
 pass
 
+# Ubuntu Bash login startup must remain a manually owned host prerequisite.
+home="$TEST_ROOT/home-login-missing"
+mkdir "$home"
+printf ':\n' > "$home/.bashrc"
+set +e
+output="$(run_bash_area "$home" ubuntu apply 2>&1)"
+status=$?
+set -e
+[[ "$status" != 0 && ! -e "$home/.local/state/dotfiles/v2/bash.json" ]] ||
+  fail 'missing Ubuntu login startup did not stop before mutation'
+assert_contains "$output" 'manually restore a host-owned ~/.profile that sources ~/.bashrc'
+for file in .profile .bash_profile .bash_login; do
+  [[ ! -e "$home/$file" && ! -L "$home/$file" ]] || fail "Bash preflight created $file"
+done
+for file in .profile .bash_profile .bash_login; do
+  candidate="$TEST_ROOT/home-login-${file#.}"
+  mkdir "$candidate"
+  printf ':\n' > "$candidate/.bashrc"
+  printf '. "$HOME/.bashrc"\n' > "$candidate/$file"
+  run_bash_area "$candidate" ubuntu apply
+done
+home="$TEST_ROOT/home-login-non-bash"
+mkdir "$home"
+printf ':\n' > "$home/.bashrc"
+FAKE_LOGIN_SHELL=/bin/sh run_bash_area "$home" ubuntu apply
+pass
+
 # Ubuntu deploys the reviewed portable closure, initializes each guarded tool
 # offline in order, and sources the host-local layer last exactly once.
 home="$TEST_ROOT/home-ubuntu"
@@ -73,6 +102,8 @@ mkdir -p "$home/.config/dotfiles/local"
 printf ': # host baseline without newline' > "$home/.bashrc"
 chmod 0640 "$home/.bashrc"
 cp -a "$home/.bashrc" "$TEST_ROOT/ubuntu.original"
+printf '. "$HOME/.bashrc"\n' > "$home/.profile"
+cp -a "$home/.profile" "$TEST_ROOT/ubuntu.profile.original"
 printf 'host_local_function() { :; }\n' > "$home/.config/dotfiles/local/bash.sh"
 run_bash_area "$home" ubuntu apply
 state="$home/.local/state/dotfiles/v2/bash.json"
@@ -125,6 +156,7 @@ pass
 # Removal restores the host file bytes/mode and removes only managed links and state.
 run_bash_area "$home" ubuntu remove
 assert_same "$home/.bashrc" "$TEST_ROOT/ubuntu.original"
+assert_same "$home/.profile" "$TEST_ROOT/ubuntu.profile.original"
 [[ "$(stat -c %a -- "$home/.bashrc")" == 640 && ! -e "$state" &&
   ! -e "$home/.config/dotfiles/bash/rc.bash" && -f "$home/.config/dotfiles/local/bash.sh" ]] ||
   fail 'Ubuntu Bash removal did not preserve host ownership'
@@ -154,6 +186,7 @@ pass
 home="$TEST_ROOT/home-malformed"
 mkdir "$home"
 printf '# >>> dotfiles managed bash >>>\npartial\n' > "$home/.bashrc"
+printf '. "$HOME/.bashrc"\n' > "$home/.profile"
 set +e
 output="$(run_bash_area "$home" ubuntu apply 2>&1)"
 status=$?
