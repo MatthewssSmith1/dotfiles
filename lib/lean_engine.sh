@@ -775,8 +775,10 @@ lean_write_state_atomic() {
   temporary_hash="$(sha256_file "$temporary")"
   test_hold lean-before-state-rename
   capture_path_object_identity "$temporary" || die "could not recheck lean state temporary file: $temporary"
-  [[ "$PATH_OBJECT_IDENTITY" == "$temporary_identity" && "$(sha256_file "$temporary")" == "$temporary_hash" ]] ||
+  if [[ "$PATH_OBJECT_IDENTITY" != "$temporary_identity" || "$(sha256_file "$temporary")" != "$temporary_hash" ]]; then
+    retain_tracked_temp_path "$temporary"
     die "lean state temporary file changed before publication: $temporary"
+  fi
   mv -fT -- "$temporary" "$LEAN_STATE"
 }
 
@@ -813,8 +815,10 @@ lean_replace_json_resource() {
   temporary_hash="$(sha256_file "$temporary")"
   test_hold lean-before-json-rename
   capture_path_object_identity "$temporary" || die "could not recheck JSON resource temporary file: $temporary"
-  [[ "$PATH_OBJECT_IDENTITY" == "$temporary_identity" && "$(sha256_file "$temporary")" == "$temporary_hash" ]] ||
+  if [[ "$PATH_OBJECT_IDENTITY" != "$temporary_identity" || "$(sha256_file "$temporary")" != "$temporary_hash" ]]; then
+    retain_tracked_temp_path "$temporary"
     die "JSON resource temporary file changed before publication: $temporary"
+  fi
   capture_path_object_identity "$path" || die "could not recheck JSON resource identity: $path"
   [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && "$(sha256_file "$path")" == "$source_hash" ]] ||
     die "JSON resource changed concurrently; refusing overwrite: $path"
