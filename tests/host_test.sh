@@ -166,7 +166,12 @@ expect_failure 'package authority' "$home" "$root" "$DOTFILES" check agents
 root="$(make_host owner-wrong linux omarchy 4)"
 home="$(new_home owner-wrong)"
 prepare_omarchy "$root" "$home" 4.0.0.alpha 'mise-bin 4.0.1-1'
-expect_failure 'exact v4 package authority' "$home" "$root" "$DOTFILES" check agents
+expect_failure 'package authority' "$home" "$root" "$DOTFILES" check agents
+
+root="$(make_host owner-malformed linux omarchy 4)"
+home="$(new_home owner-malformed)"
+prepare_omarchy "$root" "$home" 4.0.0.alpha 'omarchy 4.0.1-1 extra'
+expect_failure 'package authority' "$home" "$root" "$DOTFILES" check agents
 
 root="$(make_host owner-split linux omarchy 4)"
 home="$(new_home owner-split)"

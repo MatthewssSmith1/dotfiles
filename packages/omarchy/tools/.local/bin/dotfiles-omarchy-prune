@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly -a PACKAGES=(
+  moonlight-qt
+  localsend
+)
+
+readonly -a WEBAPPS=(
+  HEY
+  Basecamp
+  Zoom
+  'Google Messages'
+)
+
+if (($# != 0)); then
+  printf 'usage: dotfiles-omarchy-prune\n' >&2
+  exit 2
+fi
+
+if ((EUID == 0)); then
+  printf 'dotfiles-omarchy-prune must run as the desktop user, not root\n' >&2
+  exit 1
+fi
+
+if ! command -v omarchy >/dev/null 2>&1; then
+  printf 'dotfiles-omarchy-prune requires native Omarchy v4\n' >&2
+  exit 1
+fi
+
+version="$(omarchy version 2>/dev/null || true)"
+if [[ ! "$version" =~ ^4([.-]|$) ]]; then
+  printf 'dotfiles-omarchy-prune requires native Omarchy v4, found %s\n' "${version:-missing}" >&2
+  exit 1
+fi
+
+omarchy pkg drop "${PACKAGES[@]}"
+
+for webapp in "${WEBAPPS[@]}"; do
+  OMARCHY_REMOVE_NOTIFY=false omarchy webapp remove "$webapp"
+done
+
+printf 'Removed unwanted Omarchy defaults.\n'

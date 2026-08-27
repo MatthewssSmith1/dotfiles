@@ -4,25 +4,48 @@ Notes for native Omarchy machines. On this profile, installed Omarchy defaults a
 
 ## Refresh-Managed Files
 
-Omarchy refresh or reinstall operations can replace Bash, desktop input, and
-Neovim configuration. Those destinations stay regular Omarchy-owned files,
-never symlinks into this checkout. Shared behavior uses the guarded ownership
-contract in [Deployment](../deployment.md#lean-ownership); the Neovim refresh
-(`omarchy-nvim-setup`) can additionally clear Neovim data, state, and cache,
-and recovery recreates only the managed loader.
+Omarchy refresh or reinstall operations can replace Bash, desktop input,
+XCompose, and Neovim configuration. Those destinations remain regular
+Omarchy-owned files, never symlinks into this checkout. Shared behavior uses
+the guarded ownership contract in
+[Deployment](../deployment.md#lean-ownership); the Neovim refresh
+(`omarchy-nvim-setup`) can additionally clear Neovim data, state, and cache, and
+recovery recreates only the managed loader.
 
 For Bash specifically, dotfiles appends one additive source block after the native `.bashrc`; it does not replace the native Bash or Starship baseline and does not modify a login file.
 
 After a supported refresh, re-run the relevant apply command; attachments converge without duplication.
 
+## Default-App Pruning
+
+Applying the tools area installs `dotfiles-omarchy-prune` on `PATH`. Run it
+manually as the desktop user to immediately remove the HEY, Basecamp, Zoom, and
+Google Messages web-app launchers plus the `moonlight-qt` and `localsend`
+packages. It does not prompt for removal confirmation, although Omarchy may ask
+for sudo authentication while removing installed packages.
+
+The command uses supported Omarchy package and web-app operations. It preserves
+application configuration, data, caches, sessions, and credentials, and is safe
+to rerun when targets are already absent. It installs no hook or trigger and is
+never executed by dotfiles apply, check, or remove.
+
+Fresh installs, migrations, or `omarchy refresh applications` may restore these
+defaults. Rerun `dotfiles-omarchy-prune` explicitly when needed.
+
 ## Desktop
 
-The desktop area owns only natural touchpad scrolling in a private fragment and
-the `idle.screensaver=600` and `idle.lock=900` scalar values in the regular
-Omarchy `shell.json`. It leaves keyboard layout/options and every unrelated
-shell value, including Tailscale widgets, to Omarchy. It does not install,
-configure, authenticate, or validate Tailscale. It also does not restart or
-reload the shell; the shell file watcher consumes valid changes.
+The desktop area owns natural touchpad scrolling in a private fragment, the
+`idle.screensaver=600` and `idle.lock=900` scalar values in the regular Omarchy
+`shell.json`, and a package XCompose fragment with four personal aliases. A
+guarded include attaches that fragment to the regular Omarchy-owned
+`~/.XCompose`, preserving its default include, name, and email content. It
+leaves keyboard layout/options and every unrelated shell value, including
+Tailscale widgets, to Omarchy. It does not install, configure, authenticate, or
+validate Tailscale. Apply does not restart or reload desktop components; the
+shell file watcher consumes valid shell changes.
+
+If an Omarchy refresh replaces `~/.XCompose`, reapplying the desktop area
+restores the guarded include without duplication.
 
 First adoption requires separate explicit confirmation before the single-file
 native reset `omarchy refresh config hypr/input.lua`, followed by

@@ -9,6 +9,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 readonly TMUX_BASELINE="$REPO_DIR/packages/upstream/tmux/.config/dotfiles/upstream/tmux/tmux.conf"
 readonly TMUX_DISPATCHER="$REPO_DIR/packages/ubuntu/tmux/.config/tmux/tmux.conf"
 readonly TMUX_ADAPTER="$REPO_DIR/packages/ubuntu/tmux/.config/dotfiles/tmux/ubuntu.conf"
+readonly OMARCHY_PRUNE="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-prune"
 
 # Every dotfiles source exists, parses, and keeps strict mode.
 readonly DOTFILES_SOURCES=(
@@ -30,10 +31,13 @@ for source_file in "${DOTFILES_SOURCES[@]}"; do
 done
 bash -n "${DOTFILES_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
-  "$REPO_DIR/scripts/agent-skills" || fail 'a dotfiles Bash file has invalid syntax'
+  "$REPO_DIR/scripts/agent-skills" \
+  "$OMARCHY_PRUNE" || fail 'a dotfiles Bash file has invalid syntax'
 grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missing'
 [[ -x "$DOTFILES" && ! -e "$REPO_DIR/bootstrap.sh" ]] || fail 'root command rename is incomplete'
 [[ -x "$REPO_DIR/packages/common/tools/.local/bin/dotfiles" ]] || fail 'dotfiles launcher is not executable'
+[[ -f "$OMARCHY_PRUNE" && ! -L "$OMARCHY_PRUNE" && -x "$OMARCHY_PRUNE" ]] ||
+  fail 'Omarchy prune command is not a regular executable payload'
 pass
 
 # Production topology has exactly the native Omarchy and supported Ubuntu
@@ -48,13 +52,17 @@ done
   fail 'profile validation-only entries are not exact'
 pass
 
-# Desktop is native-only ownership with one minimal private payload. Ubuntu is
+# Desktop is native-only ownership with two exact private payloads. Ubuntu is
 # validation-only, and default removal can select desktop only from v2 state.
 desktop_fragment="$REPO_DIR/packages/omarchy/desktop/.config/dotfiles/omarchy/hypr/input.lua"
+desktop_aliases="$REPO_DIR/packages/omarchy/desktop/.config/dotfiles/omarchy/XCompose"
+expected_desktop_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p> <b> : "Continue discussing with me briefly."\n<Multi_key> <p> <d> : "Continue discussing with me, focussing on points we have yet to agree on."\n<Multi_key> <p> <t> : "What do you think/recommend? Discuss with me."'
 grep -qxF 'desktop omarchy/desktop' "$REPO_DIR/profiles/omarchy.conf" || fail 'native desktop closure is not final'
 grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu desktop is not validation-only'
-[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 1 && -f "$desktop_fragment" ]] ||
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f -printf '%P\n' | LC_ALL=C sort)" == \
+  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/input.lua' && -f "$desktop_fragment" ]] ||
   fail 'desktop package payload inventory is not exact'
+[[ "$(< "$desktop_aliases")" == "$expected_desktop_aliases" ]] || fail 'desktop Compose aliases are not exact'
 grep -Fq '|| "$1" == desktop' "$DOTFILES" || fail 'desktop is absent from lean dispatch'
 grep -Fq 'for file in "$(lean_state_dir)"/*.json' "$DOTFILES" || fail 'default removal does not inspect ownership state'
 ! grep -Eq 'add_area[[:space:]]+desktop' "$DOTFILES" || fail 'default removal selects desktop without ownership'
@@ -82,8 +90,19 @@ pass
 # Converted Git/tools topology is lean and mise configuration no longer belongs
 # to Bash. Native tools do not select Node; Ubuntu carries the only fallback.
 grep -qxF 'git upstream/git,ubuntu/git,common/git' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Git closure is not final'
-grep -qxF 'tools common/tools' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tools closure is not final'
+grep -qxF 'tools common/tools,omarchy/tools' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tools closure is not final'
 grep -qxF 'tools common/tools,ubuntu/tools' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu tools closure is not final'
+[[ "$(find "$REPO_DIR/packages/omarchy/tools" -type f | wc -l)" == 1 ]] || fail 'native tools package payload inventory is not exact'
+grep -qxF 'readonly -a PACKAGES=(' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not declared'
+grep -qxF 'omarchy pkg drop "${PACKAGES[@]}"' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not used safely'
+grep -qxF 'readonly -a WEBAPPS=(' "$OMARCHY_PRUNE" || fail 'Omarchy prune web-app inventory is not declared'
+grep -qxF 'for webapp in "${WEBAPPS[@]}"; do' "$OMARCHY_PRUNE" || fail 'Omarchy prune web-app inventory is not used safely'
+grep -qxF '  OMARCHY_REMOVE_NOTIFY=false omarchy webapp remove "$webapp"' "$OMARCHY_PRUNE" ||
+  fail 'Omarchy prune does not use supported web-app removal'
+! grep -Eq '(^|[;&|[:space:]])(sudo|pacman|yay|rm|read)([;&|[:space:]]|$)' "$OMARCHY_PRUNE" ||
+  fail 'Omarchy prune directly performs privileged, destructive, or interactive work'
+! grep -Eq 'omarchy[[:space:]]+(hook|refresh|restart|update)' "$OMARCHY_PRUNE" ||
+  fail 'Omarchy prune installs automation or invokes refresh/restart/update'
 [[ ! -e "$REPO_DIR/packages/generic/git/.empty-package" && ! -e "$REPO_DIR/packages/generic/git/.stow-local-ignore" ]] ||
   fail 'retired generic Git adapter remains'
 [[ ! -e "$REPO_DIR/.gitconfig" ]] || fail 'retired root Git migration source remains'

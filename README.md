@@ -15,7 +15,7 @@ Omarchy is the reference Linux environment; Ubuntu reproduces its pinned, review
 
 ## Areas
 
-Eight areas, ready by default: `git`, `tools`, `bash`, `tmux`, `nvim`, `agents`, `herdr`, `desktop`. `desktop` is native ownership (natural touchpad scrolling and shell idle thresholds) and validation-only on Ubuntu.
+Eight areas, ready by default: `git`, `tools`, `bash`, `tmux`, `nvim`, `agents`, `herdr`, `desktop`. `desktop` is native ownership (natural touchpad scrolling, shell idle thresholds, and four additive XCompose aliases) and validation-only on Ubuntu.
 
 ## Quick start
 
@@ -26,7 +26,7 @@ GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' ~/dotfiles/dotfiles.s
 GIT_USER_NAME='Your Name' GIT_USER_EMAIL='you@example.com' ~/dotfiles/dotfiles.sh apply git
 ```
 
-Provide identity via `GIT_USER_NAME`/`GIT_USER_EMAIL` or `~/.gitconfig.local` (see [Git](docs/tools/git.md)). Applying `tools` installs the relocatable `~/.local/bin/dotfiles` launcher with the same interface.
+Provide identity via `GIT_USER_NAME`/`GIT_USER_EMAIL` or `~/.gitconfig.local` (see [Git](docs/tools/git.md)). Applying `tools` installs the relocatable `~/.local/bin/dotfiles` launcher with the same interface. On Omarchy it also installs the separately invoked `dotfiles-omarchy-prune` host-administration command.
 
 ## Commands
 
@@ -43,7 +43,7 @@ An operation is mandatory and must come first; areas are positional. No areas me
 
 ## Safety
 
-Dotfiles never runs as root, never invokes `sudo` or a distro package manager, never installs mise/distro packages, never changes the login shell, and never uses the network during apply/check/remove. Missing dependencies print exact manual install commands.
+The `dotfiles.sh` deployment lifecycle never runs as root, invokes `sudo` or a distro package manager, installs mise/distro packages, changes the login shell, or uses the network during apply/check/remove. Missing dependencies print exact manual install commands. The separate, explicit `dotfiles-omarchy-prune` command delegates package removal to Omarchy and may request sudo authentication.
 
 ## Documentation
 

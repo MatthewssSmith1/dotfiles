@@ -28,9 +28,13 @@ done
 
 readonly INPUT_REL='.config/hypr/input.lua'
 readonly FRAGMENT_REL='.config/dotfiles/omarchy/hypr/input.lua'
+readonly XCOMPOSE_REL='.XCompose'
+readonly ALIASES_REL='.config/dotfiles/omarchy/XCompose'
 readonly SHELL_REL='.config/omarchy/shell.json'
 readonly BEGIN='-- >>> dotfiles desktop input >>>'
 readonly END='-- <<< dotfiles desktop input <<<'
+readonly XCOMPOSE_BEGIN='# >>> dotfiles desktop xcompose >>>'
+readonly XCOMPOSE_END='# <<< dotfiles desktop xcompose <<<'
 
 prepare_native_desktop() {
   local name="$1" root home stock
@@ -44,6 +48,15 @@ prepare_native_desktop() {
   printf '%s\n' '-- stock input' 'hl.config({ input = {} })' > "$stock"
   cp "$stock" "$home/$INPUT_REL"
   chmod 0640 "$home/$INPUT_REL"
+  cat > "$home/$XCOMPOSE_REL" <<'XCOMPOSE'
+# Include fast emoji access
+include "/usr/share/omarchy/default/xcompose"
+
+# Identification
+<Multi_key> <space> <n> : "Example User"
+<Multi_key> <space> <e> : "user@example.com"
+XCOMPOSE
+  chmod 0640 "$home/$XCOMPOSE_REL"
   cat > "$home/$SHELL_REL" <<'JSON'
 {
   "version": 1,
@@ -54,8 +67,8 @@ prepare_native_desktop() {
 }
 JSON
   chmod 0640 "$home/$SHELL_REL"
-  record_pacman_ownership "$root" 'omarchy 4.0.1-1' /usr/share/omarchy/version \
-    /usr/bin/omarchy /usr/share/omarchy/config/hypr/input.lua
+  record_pacman_ownership "$root" 'omarchy 4.0.1-1' /usr/share/omarchy/version /usr/bin/omarchy
+  record_pacman_ownership "$root" 'omarchy-settings 4.0.1-1' /usr/share/omarchy/config/hypr/input.lua
   printf '%s\t%s\n' "$root" "$home"
 }
 
@@ -63,14 +76,18 @@ read -r native home < <(prepare_native_desktop lifecycle)
 stock="$native/usr/share/omarchy/config/hypr/input.lua"
 stock_hash="$(sha256sum "$stock")"
 cp -a "$home/$INPUT_REL" "$TEST_ROOT/input.original"
+cp -a "$home/$XCOMPOSE_REL" "$TEST_ROOT/xcompose.original"
 cp -a "$home/$SHELL_REL" "$TEST_ROOT/shell.original"
 : > "$FAKE_STOW_TRACE"
 
-# The package is exactly the minimal natural-scroll fragment and nothing else.
+# The package is exactly the natural-scroll fragment and four Compose aliases.
 fragment="$REPO_DIR/packages/omarchy/desktop/$FRAGMENT_REL"
+aliases="$REPO_DIR/packages/omarchy/desktop/$ALIASES_REL"
 expected_fragment=$'hl.config({\n  input = {\n    touchpad = {\n      natural_scroll = true,\n    },\n  },\n})'
+expected_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p> <b> : "Continue discussing with me briefly."\n<Multi_key> <p> <d> : "Continue discussing with me, focussing on points we have yet to agree on."\n<Multi_key> <p> <t> : "What do you think/recommend? Discuss with me."'
 [[ "$(< "$fragment")" == "$expected_fragment" ]] || fail 'desktop fragment is not exact'
-[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 1 ]] || fail 'desktop package has extra payloads'
+[[ "$(< "$aliases")" == "$expected_aliases" ]] || fail 'desktop Compose aliases are not exact'
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 2 ]] || fail 'desktop package payload inventory is not exact'
 ! grep -Eq 'kb_(layout|variant|options)|sensitivity|accel_profile|repeat_|numlock|scroll_factor|drag_3fg|disable_while_typing' "$fragment" ||
   fail 'desktop fragment contains non-natural-scroll input behavior'
 if command -v luac >/dev/null 2>&1; then
@@ -78,6 +95,27 @@ if command -v luac >/dev/null 2>&1; then
 else
   printf 'SKIP: luac unavailable; exact Lua fragment structure was checked\n'
 fi
+if command -v xkbcli >/dev/null 2>&1; then
+  xkbcli compile-compose --locale en_US.UTF-8 --test "$aliases" || fail 'desktop Compose aliases have invalid syntax'
+else
+  printf 'SKIP: xkbcli unavailable; exact Compose aliases were checked\n'
+fi
+pass
+
+# Native XCompose with Omarchy's include/name/email must remain a regular host
+# baseline before adoption.
+for kind in missing symlink; do
+  read -r bad_host bad_home < <(prepare_native_desktop "xcompose-$kind")
+  if [[ "$kind" == missing ]]; then
+    rm "$bad_home/$XCOMPOSE_REL"
+  else
+    mv "$bad_home/$XCOMPOSE_REL" "$bad_home/xcompose-target"
+    ln -s xcompose-target "$bad_home/$XCOMPOSE_REL"
+  fi
+  expect_failure 'XCompose baseline is missing or not a regular file' "$bad_home" "$bad_host" "$DOTFILES" apply desktop
+  [[ ! -e "$bad_home/.local/state/dotfiles/v2/desktop.json" && ! -e "$bad_home/$ALIASES_REL" ]] ||
+    fail "$kind XCompose refusal wrote desktop ownership"
+done
 pass
 
 # Edited pre-adoption input is rejected by apply and check before any ownership,
@@ -95,6 +133,23 @@ for verb in apply check; do
 done
 pass
 
+# Stock input must belong to the same-version omarchy-settings package.
+for kind in wrong-owner mismatched-version; do
+  read -r bad_host bad_home < <(prepare_native_desktop "settings-$kind")
+  metadata="$bad_host/var/lib/dotfiles-test/pacman-owners.tsv"
+  if [[ "$kind" == wrong-owner ]]; then
+    sed -i '\#^/usr/share/omarchy/config/hypr/input.lua# s/omarchy-settings/omarchy/' "$metadata"
+    expected='not owned by omarchy-settings'
+  else
+    sed -i '\#^/usr/share/omarchy/config/hypr/input.lua# s/4.0.1-1/4.0.2-1/' "$metadata"
+    expected='does not exactly match authoritative Omarchy'
+  fi
+  expect_failure "$expected" "$bad_home" "$bad_host" "$DOTFILES" apply desktop
+  [[ ! -e "$bad_home/.local/state/dotfiles/v2/desktop.json" && ! -e "$bad_home/$ALIASES_REL" ]] ||
+    fail "$kind settings refusal wrote desktop ownership"
+done
+pass
+
 # First apply records both origins, updates JSON before package/attachment, keeps
 # native files regular and modes stable, and converges without shell commands.
 expect_success "$home" "$native" "$DOTFILES" apply desktop
@@ -102,25 +157,34 @@ state="$home/.local/state/dotfiles/v2/desktop.json"
 assert_file "$state"
 jq -e '
   .version == 2 and .area == "desktop" and .profile == "omarchy" and
-  (.attachments | keys) == [".config/hypr/input.lua"] and
+  (.attachments | keys) == [".XCompose", ".config/hypr/input.lua"] and
   .resources[".config/omarchy/shell.json"].fields["/idle/screensaver"].original == 150 and
   .resources[".config/omarchy/shell.json"].fields["/idle/lock"].original == 300
 ' "$state" >/dev/null || fail 'desktop state does not contain complete origins'
 assert_file "$home/$INPUT_REL"
 assert_file "$home/$SHELL_REL"
-[[ -L "$home/$FRAGMENT_REL" && "$(stat -c %a "$home/$INPUT_REL")" == 640 && "$(stat -c %a "$home/$SHELL_REL")" == 640 ]] ||
+[[ -L "$home/$FRAGMENT_REL" && -L "$home/$ALIASES_REL" && "$(stat -c %a "$home/$INPUT_REL")" == 640 &&
+  "$(stat -c %a "$home/$XCOMPOSE_REL")" == 640 && "$(stat -c %a "$home/$SHELL_REL")" == 640 ]] ||
   fail 'desktop apply changed regular-file or mode contracts'
 [[ "$(grep -cFx -- "$BEGIN" "$home/$INPUT_REL")" == 1 && "$(grep -cFx -- "$END" "$home/$INPUT_REL")" == 1 ]] ||
   fail 'desktop loader was not attached exactly once'
+[[ "$(grep -cFx -- "$XCOMPOSE_BEGIN" "$home/$XCOMPOSE_REL")" == 1 &&
+  "$(grep -cFx -- "$XCOMPOSE_END" "$home/$XCOMPOSE_REL")" == 1 ]] ||
+  fail 'desktop XCompose loader was not attached exactly once'
+xcompose_block_line="$(grep -nFx -- "$XCOMPOSE_BEGIN" "$home/$XCOMPOSE_REL" | cut -d: -f1)"
+sed -n "1,$((xcompose_block_line - 1))p" "$home/$XCOMPOSE_REL" > "$TEST_ROOT/xcompose-prefix"
+assert_same "$TEST_ROOT/xcompose-prefix" "$TEST_ROOT/xcompose.original"
 jq -e '.idle.screensaver == 600 and .idle.lock == 900 and .bar.layout.right[0].id == "omarchy.tailscale" and .plugins[0].options.nested == true and .unrelated.array == [3,1,2]' \
   "$home/$SHELL_REL" >/dev/null || fail 'desktop JSON update lost managed or unrelated semantics'
 [[ ! -e "$home/desktop-command.trace" && "$(sha256sum "$stock")" == "$stock_hash" ]] ||
   fail 'desktop apply invoked a shell/reload command or changed stock input'
 state_identity="$(stat -c '%d:%i' "$state")"
 input_hash="$(sha256sum "$home/$INPUT_REL")"
+xcompose_hash="$(sha256sum "$home/$XCOMPOSE_REL")"
 expect_success "$home" "$native" "$DOTFILES" apply desktop
 expect_success "$home" "$native" "$DOTFILES" check desktop
-[[ "$(stat -c '%d:%i' "$state")" == "$state_identity" && "$(sha256sum "$home/$INPUT_REL")" == "$input_hash" ]] ||
+[[ "$(stat -c '%d:%i' "$state")" == "$state_identity" && "$(sha256sum "$home/$INPUT_REL")" == "$input_hash" &&
+  "$(sha256sum "$home/$XCOMPOSE_REL")" == "$xcompose_hash" ]] ||
   fail 'desktop apply/check is not idempotent'
 pass
 
@@ -135,13 +199,20 @@ pass
 # the package-owned refreshed baseline, preserving those bytes and mode.
 cp "$stock" "$home/$INPUT_REL"
 chmod 0600 "$home/$INPUT_REL"
+printf '%s\n' '<Multi_key> <o> <r> : "Refreshed Omarchy"' > "$home/$XCOMPOSE_REL"
+chmod 0600 "$home/$XCOMPOSE_REL"
+cp -a "$home/$XCOMPOSE_REL" "$TEST_ROOT/xcompose.refreshed"
 expect_failure 'recorded guarded attachment is absent' "$home" "$native" "$DOTFILES" check desktop
 expect_success "$home" "$native" "$DOTFILES" apply desktop
-[[ "$(stat -c %a "$home/$INPUT_REL")" == 600 ]] || fail 'refresh reapply changed input mode'
+[[ "$(stat -c %a "$home/$INPUT_REL")" == 600 && "$(stat -c %a "$home/$XCOMPOSE_REL")" == 600 ]] ||
+  fail 'refresh reapply changed desktop attachment modes'
 block_line="$(grep -nFx -- "$BEGIN" "$home/$INPUT_REL" | cut -d: -f1)"
 ((block_line > 1)) || fail 'refresh loader is not an end attachment'
 sed -n "1,$((block_line - 1))p" "$home/$INPUT_REL" > "$TEST_ROOT/refreshed-prefix"
 assert_same "$TEST_ROOT/refreshed-prefix" "$stock"
+xcompose_block_line="$(grep -nFx -- "$XCOMPOSE_BEGIN" "$home/$XCOMPOSE_REL" | cut -d: -f1)"
+sed -n "1,$((xcompose_block_line - 1))p" "$home/$XCOMPOSE_REL" > "$TEST_ROOT/refreshed-xcompose-prefix"
+assert_same "$TEST_ROOT/refreshed-xcompose-prefix" "$TEST_ROOT/xcompose.refreshed"
 pass
 
 # A refresh to an unaccepted baseline and malformed/duplicate/modified blocks
@@ -153,13 +224,13 @@ expect_failure 'omarchy refresh config hypr/input.lua' "$home" "$native" "$DOTFI
 assert_same "$home/$INPUT_REL" "$TEST_ROOT/refresh-drift"
 cp "$stock" "$home/$INPUT_REL"
 expect_success "$home" "$native" "$DOTFILES" apply desktop
-cp "$home/$INPUT_REL" "$TEST_ROOT/exact-loader"
-printf '%s\n' "$BEGIN" 'modified' "$END" >> "$home/$INPUT_REL"
+cp "$home/$XCOMPOSE_REL" "$TEST_ROOT/exact-xcompose-loader"
+printf '%s\n' "$XCOMPOSE_BEGIN" 'include "%H/duplicate"' "$XCOMPOSE_END" >> "$home/$XCOMPOSE_REL"
 expect_failure 'partial, malformed, duplicate, or modified' "$home" "$native" "$DOTFILES" check desktop
-cp "$TEST_ROOT/exact-loader" "$home/$INPUT_REL"
-sed -i 's/local home = os.getenv("HOME")/local home = "unsafe"/' "$home/$INPUT_REL"
+cp "$TEST_ROOT/exact-xcompose-loader" "$home/$XCOMPOSE_REL"
+sed -i 's#%H/.config/dotfiles/omarchy/XCompose#%H/unsafe#' "$home/$XCOMPOSE_REL"
 expect_failure 'partial, malformed, duplicate, or modified' "$home" "$native" "$DOTFILES" remove desktop
-cp "$TEST_ROOT/exact-loader" "$home/$INPUT_REL"
+cp "$TEST_ROOT/exact-xcompose-loader" "$home/$XCOMPOSE_REL"
 pass
 
 # Shell schema, scalar types, symlinks, and field conflicts fail before mutation.
@@ -190,9 +261,12 @@ jq '.idle.lock = 900 | .unrelated.during_ownership = "keep"' "$home/$SHELL_REL" 
 mv -fT "$home/.config/omarchy/repaired.json" "$home/$SHELL_REL"
 chmod 0640 "$home/$SHELL_REL"
 expect_success "$home" "$native" "$DOTFILES" remove desktop
-[[ ! -e "$state" && ! -e "$home/$FRAGMENT_REL" ]] || fail 'desktop removal retained state or package link'
+[[ ! -e "$state" && ! -e "$home/$FRAGMENT_REL" && ! -e "$home/$ALIASES_REL" ]] ||
+  fail 'desktop removal retained state or package link'
 assert_file "$home/$INPUT_REL"
+assert_file "$home/$XCOMPOSE_REL"
 [[ "$(grep -cF -- "$BEGIN" "$home/$INPUT_REL" || true)" == 0 ]] || fail 'desktop removal retained loader'
+assert_same "$home/$XCOMPOSE_REL" "$TEST_ROOT/xcompose.refreshed"
 jq -e '.idle.screensaver == 150 and .idle.lock == 300 and .unrelated.during_ownership == "keep" and .bar.layout.right[0].id == "omarchy.tailscale"' \
   "$home/$SHELL_REL" >/dev/null || fail 'desktop removal changed unrelated shell semantics'
 [[ ! -e "$home/desktop-command.trace" ]] || fail 'desktop lifecycle invoked restart/reload commands'

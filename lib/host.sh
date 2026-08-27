@@ -110,7 +110,10 @@ detect_host() {
 }
 
 omarchy_package_identity() {
-  local path="$1" metadata owner="" recorded_path recorded_owner package
+  local path="${1:-}" expected="${2-omarchy}" metadata owner="" recorded_path recorded_owner
+  local package version extra identity
+  (($# >= 1 && $# <= 2)) || return 1
+  [[ "$path" == /* && "$path" != *$'\n'* && "$expected" =~ ^[a-z0-9][a-z0-9@._+-]*$ ]] || return 1
   if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
     metadata="$HOST_ROOT/var/lib/dotfiles-test/pacman-owners.tsv"
     [[ -n "$HOST_ROOT" && "$HOST_ROOT" != / && -f "$metadata" ]] || return 1
@@ -120,14 +123,20 @@ omarchy_package_identity() {
       owner="$recorded_owner"
     done < "$metadata"
     [[ -n "$owner" ]] || return 1
-    printf '%s' "$owner"
-    return 0
+    identity="$owner"
+  else
+    [[ -x /usr/bin/pacman ]] || return 1
+    package="$(/usr/bin/pacman -Qqo -- "$path" 2>/dev/null)" || return 1
+    [[ "$package" == "$expected" ]] || return 1
+    identity="$(/usr/bin/pacman -Q -- "$expected" 2>/dev/null)" || return 1
   fi
 
-  [[ -x /usr/bin/pacman ]] || return 1
-  package="$(/usr/bin/pacman -Qqo -- "$path" 2>/dev/null)" || return 1
-  [[ "$package" == omarchy ]] || return 1
-  /usr/bin/pacman -Q omarchy 2>/dev/null
+  package=""; version=""; extra=""
+  read -r package version extra <<< "$identity"
+  [[ "$package" == "$expected" && -n "$version" && -z "$extra" &&
+    "$identity" == "$package $version" && "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._+~:-]*$ ]] || return 1
+  printf '%s' "$identity"
+  return 0
 }
 
 select_profile() {
