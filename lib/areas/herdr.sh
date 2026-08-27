@@ -6,6 +6,7 @@ readonly HERDR_SELECTOR="aqua:herdrdev/herdr@$HERDR_VERSION"
 readonly HERDR_CONFIG='.config/herdr/config.toml'
 readonly HERDR_REFERENCE='packages/upstream/reference/omarchy/config/herdr/config.toml'
 readonly HERDR_UBUNTU_CONFIG='packages/ubuntu/herdr/.config/herdr/config.toml'
+readonly HERDR_UBUNTU_PREAMBLE=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
 
 register_herdr_area() {
   local package
@@ -83,16 +84,29 @@ validate_herdr_config_file() {
   }
 }
 
+validate_herdr_ubuntu_derivation() {
+  local reference="$DOTFILES_DIR/$HERDR_REFERENCE"
+  local ubuntu_config="$DOTFILES_DIR/$HERDR_UBUNTU_CONFIG"
+  [[ -f "$ubuntu_config" && ! -L "$ubuntu_config" ]] || die 'Ubuntu Herdr config is missing or unsafe'
+  cmp -s -- "$ubuntu_config" <(printf '%s' "$HERDR_UBUNTU_PREAMBLE"; cat -- "$reference") ||
+    die 'Ubuntu Herdr config is not the exact policy preamble plus accepted v4 snapshot'
+}
+
 validate_herdr_config_syntax() {
-  local temporary status=0
+  local source temporary status=0
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    source="$DOTFILES_DIR/$HERDR_REFERENCE"
+  else
+    source="$DOTFILES_DIR/$HERDR_UBUNTU_CONFIG"
+  fi
   temporary="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-herdr.XXXXXX")"
   mkdir -p "$temporary/.config/herdr"
-  cp -- "$DOTFILES_DIR/$HERDR_REFERENCE" "$temporary/.config/herdr/config.toml"
+  cp -- "$source" "$temporary/.config/herdr/config.toml"
   HOME="$temporary" XDG_CONFIG_HOME="$temporary/.config" XDG_DATA_HOME="$temporary/.local/share" \
     XDG_STATE_HOME="$temporary/.local/state" XDG_CACHE_HOME="$temporary/.cache" MISE_OFFLINE=1 \
     "$HERDR_BINARY" config check >/dev/null 2>&1 || status=$?
   rm -rf -- "$temporary"
-  ((status == 0)) || die 'accepted Herdr config failed offline herdr config check'
+  ((status == 0)) || die 'selected Herdr config failed offline herdr config check'
 }
 
 validate_herdr_closure() {
@@ -111,8 +125,7 @@ validate_herdr_closure() {
   else
     [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == 'ubuntu/herdr' ]] ||
       die 'Ubuntu Herdr closure must contain only ubuntu/herdr'
-    cmp -s -- "$DOTFILES_DIR/$HERDR_UBUNTU_CONFIG" "$DOTFILES_DIR/$HERDR_REFERENCE" ||
-      die 'Ubuntu Herdr config is not byte-identical to the accepted v4 snapshot'
+    validate_herdr_ubuntu_derivation
     grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' "$selector" ||
       die 'Ubuntu Herdr mise selector is not the accepted 0.8.2 release'
     lean_scan_packages

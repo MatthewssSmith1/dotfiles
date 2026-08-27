@@ -6,7 +6,7 @@ This document describes current Ubuntu-profile behavior. `manifests/areas.tsv` r
 
 Ubuntu 24.04 and newer, including remote VPSs, uses the `ubuntu` profile: pinned Omarchy baseline snapshots plus portability adapters. See [Architecture](../architecture.md).
 
-Dotfiles keeps `.bashrc` host-owned and appends one exact managed source block. It does not modify login files. Removal deletes only that block and managed links. The desktop area is validation-only and never reproduces or writes Omarchy desktop configuration. See [Shell](../tools/shell.md).
+Dotfiles keeps `.bashrc` host-owned and appends one exact managed source block. It does not modify login files. When the account login shell is Bash, the host must provide `~/.profile`, `~/.bash_profile`, or `~/.bash_login`; the recommended host-owned `~/.profile` sources `~/.bashrc`. Preflight reports a missing login file but never creates one. Removal deletes only the managed block and links. The desktop area is validation-only and never reproduces or writes Omarchy desktop configuration. See [Shell](../tools/shell.md).
 
 The tmux area uses `~/.config/tmux/tmux.conf` as an XDG dispatcher and keeps the byte-identical Omarchy baseline private at `~/.config/dotfiles/upstream/tmux/tmux.conf`. The Ubuntu adapter replaces only the Omarchy-specific help command with a portable static popup. The package-only area writes no ownership state.
 
@@ -32,7 +32,7 @@ Ubuntu accepts package-owned `/usr/bin/tmux` at version 3.5 or newer. Otherwise 
 
 ## Network Expectations
 
-Network behavior is defined by the canonical [operation matrix](../deployment.md#network-boundaries). Dotfiles and ordinary startup are offline. Exact mise fallbacks are installed manually, and Neovim plugin restoration is one explicit helper invocation.
+Network behavior is defined by the canonical [operation matrix](../deployment.md#network-boundaries). Dotfiles and shell, tmux, and ordinary Neovim startup are offline. Exact mise fallbacks are installed manually, Neovim plugin restoration is one explicit helper invocation, and Herdr may refresh its agent-detection manifest during application runtime while keeping version checks disabled.
 
 Managed Bash startup is always offline. Dotfiles never changes the login shell.
 

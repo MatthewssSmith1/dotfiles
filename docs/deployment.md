@@ -76,6 +76,7 @@ data, caches, sessions, credentials, and all Neovim runtime roots.
 | Dotfiles apply/check/remove | Forbidden |
 | `dotfiles-omarchy-prune` | No fetch; privileged local package mutation |
 | Shell, tmux, ordinary Neovim startup | Forbidden |
+| Herdr runtime manifest refresh | Explicitly allowed for agent detection |
 | `scripts/upstream verify` | Forbidden |
 | `scripts/upstream sync --proposal ...` | Explicitly allowed for pinned source refresh |
 | `nvim-restore` | Explicitly allowed for locked plugin restoration |
@@ -84,3 +85,8 @@ data, caches, sessions, credentials, and all Neovim runtime roots.
 Ubuntu selectors are ordinary mise configuration. Install them manually with
 the exact command printed by the relevant area; dotfiles writes selectors but
 never runs `mise install`.
+
+Application runtime networking is allowed only when documented in this matrix.
+Herdr's agent-detection manifest refresh is the current managed exception; its
+version checks remain disabled. This does not alter the offline dotfiles
+apply/check/remove guarantee.

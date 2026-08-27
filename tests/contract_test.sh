@@ -71,13 +71,23 @@ grep -Fq 'for file in "$(lean_state_dir)"/*.json' "$DOTFILES" || fail 'default r
 pass
 
 # Herdr uses native validation-only ownership and one Ubuntu package-only
-# closure. The accepted config is exact.
+# closure. Ubuntu adds one exact policy preamble to the accepted config.
 grep -Fq '|| "$1" == herdr' "$DOTFILES" ||
   fail 'Herdr is absent from lean dispatch'
 grep -qxF 'herdr validation-only' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Herdr is not validation-only'
 grep -qxF 'herdr ubuntu/herdr' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Herdr closure is not final'
-cmp -s "$REPO_DIR/packages/ubuntu/herdr/.config/herdr/config.toml" \
-  "$REPO_DIR/packages/upstream/reference/omarchy/config/herdr/config.toml" || fail 'Ubuntu Herdr config differs from v4 evidence'
+herdr_reference="$REPO_DIR/packages/upstream/reference/omarchy/config/herdr/config.toml"
+herdr_ubuntu="$REPO_DIR/packages/ubuntu/herdr/.config/herdr/config.toml"
+herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
+herdr_expected="$TEST_ROOT/herdr-ubuntu-expected.toml"
+{ printf '%s' "$herdr_preamble"; cat "$herdr_reference"; } > "$herdr_expected"
+cmp -s "$herdr_ubuntu" "$herdr_expected" || fail 'Ubuntu Herdr config is not the exact policy derivation'
+! grep -qE '^(\[update\]|(onboarding|version_check|manifest_check)[[:space:]]*=)' "$herdr_reference" ||
+  fail 'immutable Herdr reference contains Ubuntu policy'
+[[ "$(grep -c '^onboarding = false$' "$herdr_ubuntu")" == 1 &&
+  "$(grep -c '^version_check = false$' "$herdr_ubuntu")" == 1 &&
+  "$(grep -c '^manifest_check = true$' "$herdr_ubuntu")" == 1 ]] ||
+  fail 'Ubuntu Herdr policy values are not exact'
 grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' \
   "$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml" ||
   fail 'Ubuntu Herdr selector is not exact'

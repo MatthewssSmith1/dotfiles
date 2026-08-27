@@ -21,7 +21,8 @@ case "\${1:-}" in
   config)
     [[ "\${2:-}" == check ]] || exit 2
     config="\${XDG_CONFIG_HOME:-\$HOME/.config}/herdr/config.toml"
-    [[ -f "\$config" ]] && grep -qxF 'prefix = "ctrl+space"' "\$config"
+    [[ -f "\$config" ]] && grep -qxF 'prefix = "ctrl+space"' "\$config" || exit 1
+    [[ -z "\${HERDR_CONFIG_TRACE:-}" ]] || sha256sum "\$config" | cut -d ' ' -f1 >> "\$HERDR_CONFIG_TRACE"
     ;;
   *) exit 2 ;;
 esac
@@ -30,8 +31,8 @@ SCRIPT
 }
 
 run_herdr_area() {
-  local home="$1" host="$2" profile="$3" operation="$4" path_prefix="$5"
-  HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=herdr-test \
+  local home="$1" host="$2" profile="$3" operation="$4" path_prefix="$5" repo="${6:-$REPO_DIR}"
+  HOME="$home" TARGET_ROOT="$home" DOTFILES_DIR="$repo" SCRIPT_NAME=herdr-test \
     SELECTED_PROFILE="$profile" MODE="$operation" HOST_ROOT="$host" \
     PATH="$path_prefix:$fake_bin:/usr/bin:/bin" DOTFILES_TESTING=1 bash -c '
       set -Eeuo pipefail
@@ -48,11 +49,23 @@ run_herdr_area() {
     '
 }
 
+make_herdr_repo_fixture() {
+  local fixture="$1"
+  mkdir -p "$fixture"
+  ln -s "$REPO_DIR/lib" "$fixture/lib"
+  ln -s "$REPO_DIR/manifests" "$fixture/manifests"
+  ln -s "$REPO_DIR/profiles" "$fixture/profiles"
+  cp -a "$REPO_DIR/packages" "$fixture/packages"
+}
+
 reference="$REPO_DIR/packages/upstream/reference/omarchy/config/herdr/config.toml"
 ubuntu_config="$REPO_DIR/packages/ubuntu/herdr/.config/herdr/config.toml"
 helper="$REPO_DIR/packages/ubuntu/herdr/.config/dotfiles/bash/fns/herdr"
 selector="$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml"
-cmp -s "$reference" "$ubuntu_config" || fail 'Ubuntu config is not the accepted v4 snapshot'
+herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
+expected_config="$TEST_ROOT/herdr-ubuntu-expected.toml"
+{ printf '%s' "$herdr_preamble"; cat "$reference"; } > "$expected_config"
+cmp -s "$expected_config" "$ubuntu_config" || fail 'Ubuntu config is not the exact policy derivation'
 grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' "$selector" || fail 'Herdr selector is not exact'
 bash -n "$helper" || fail 'Herdr helpers have invalid Bash syntax'
 for function_name in hdl hds hdlm hsl; do
@@ -60,6 +73,32 @@ for function_name in hdl hds hdlm hsl; do
 done
 grep -qxF 'herdr validation-only' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Herdr is not validation-only'
 grep -qxF 'herdr ubuntu/herdr' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Herdr closure is not final'
+pass
+
+# Every malformed policy derivation is rejected before mutation.
+for mutation in missing altered duplicated reordered extra; do
+  fixture="$TEST_ROOT/repo-$mutation"
+  make_herdr_repo_fixture "$fixture"
+  malformed="$fixture/packages/ubuntu/herdr/.config/herdr/config.toml"
+  case "$mutation" in
+    missing) cp "$reference" "$malformed" ;;
+    altered) { printf '%s' "${herdr_preamble/version_check = false/version_check = true}"; cat "$reference"; } > "$malformed" ;;
+    duplicated) { printf '%s%s' "$herdr_preamble" "$herdr_preamble"; cat "$reference"; } > "$malformed" ;;
+    reordered) { printf 'onboarding = false\n\n[update]\nmanifest_check = true\nversion_check = false\n\n'; cat "$reference"; } > "$malformed" ;;
+    extra) { printf '%s' "$herdr_preamble"; printf '# extra policy bytes\n'; cat "$reference"; } > "$malformed" ;;
+  esac
+  malformed_home="$(new_home "malformed-$mutation")"
+  mkdir -p "$malformed_home/.config/herdr"
+  printf 'session\n' > "$malformed_home/.config/herdr/session.json"
+  set +e
+  output="$(run_herdr_area "$malformed_home" '' ubuntu apply "$TEST_ROOT/runtime-absent" "$fixture" 2>&1)"
+  status=$?
+  set -e
+  ((status != 0)) || fail "$mutation Herdr policy derivation was accepted"
+  assert_contains "$output" 'exact policy preamble plus accepted v4 snapshot'
+  [[ "$(< "$malformed_home/.config/herdr/session.json")" == session ]] || fail "$mutation derivation refusal mutated HOME"
+  [[ ! -e "$malformed_home/.local/state/dotfiles/v2/herdr.json" ]] || fail "$mutation derivation refusal wrote state"
+done
 pass
 
 # Native apply, check, and remove validate exact package-owned stock behavior
@@ -73,6 +112,8 @@ cp "$reference" "$native_home/.config/herdr/config.toml"
 chmod 0644 "$native_home/.config/herdr/config.toml"
 printf 'session\n' > "$native_home/.config/herdr/session.json"
 cp -a "$native_home" "$TEST_ROOT/native-before"
+export HERDR_CONFIG_TRACE="$TEST_ROOT/native-config.trace"
+: > "$HERDR_CONFIG_TRACE"
 for operation in apply check remove; do
   trace_before="$(sha256sum "$FAKE_STOW_TRACE")"
   run_herdr_area "$native_home" "$native_host" omarchy "$operation" "$native_host/usr/bin" >/dev/null
@@ -80,6 +121,9 @@ for operation in apply check remove; do
     fail "native Herdr $operation mutated HOME"
   [[ "$trace_before" == "$(sha256sum "$FAKE_STOW_TRACE")" ]] || fail "native Herdr $operation invoked Stow"
 done
+native_hash="$(sha256sum "$reference" | cut -d ' ' -f1)"
+[[ "$(sort -u "$HERDR_CONFIG_TRACE")" == "$native_hash" ]] || fail 'native syntax check did not use the immutable reference'
+unset HERDR_CONFIG_TRACE
 [[ ! -e "$native_home/.local/state/dotfiles/v1/herdr.json" &&
   ! -e "$native_home/.local/state/dotfiles/v2/herdr.json" ]] || fail 'native Herdr created deployment state'
 pass
@@ -117,8 +161,11 @@ make_herdr_runtime "$ubuntu_runtime/herdr"
 ubuntu_home="$(new_home ubuntu)"
 mkdir -p "$ubuntu_home/.config/herdr" "$ubuntu_home/.local/share/herdr"
 printf 'session\n' > "$ubuntu_home/.config/herdr/session.json"
+printf 'log\n' > "$ubuntu_home/.local/share/herdr/herdr.log"
 printf 'socket\n' > "$ubuntu_home/.local/share/herdr/socket"
 cp -a "$ubuntu_home" "$TEST_ROOT/ubuntu-check-before"
+export HERDR_CONFIG_TRACE="$TEST_ROOT/ubuntu-config.trace"
+: > "$HERDR_CONFIG_TRACE"
 set +e
 run_herdr_area "$ubuntu_home" '' ubuntu check "$ubuntu_runtime" >/dev/null 2>&1
 status=$?
@@ -129,15 +176,19 @@ run_herdr_area "$ubuntu_home" '' ubuntu apply "$ubuntu_runtime" >/dev/null
 for path in .config/herdr/config.toml .config/dotfiles/bash/fns/herdr .config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml; do
   [[ -L "$ubuntu_home/$path" ]] || fail "Ubuntu Herdr omitted package link: $path"
 done
-cmp -s "$ubuntu_home/.config/herdr/config.toml" "$reference" || fail 'deployed Herdr config bytes changed'
+cmp -s "$ubuntu_home/.config/herdr/config.toml" "$ubuntu_config" || fail 'deployed Herdr config bytes changed'
 [[ ! -e "$ubuntu_home/.local/state/dotfiles/v2/herdr.json" ]] || fail 'package-only Herdr wrote v2 state'
 cp -a "$ubuntu_home" "$TEST_ROOT/ubuntu-applied"
 run_herdr_area "$ubuntu_home" '' ubuntu check "$ubuntu_runtime" >/dev/null
+ubuntu_hash="$(sha256sum "$ubuntu_config" | cut -d ' ' -f1)"
+[[ "$(sort -u "$HERDR_CONFIG_TRACE")" == "$ubuntu_hash" ]] || fail 'Ubuntu syntax check did not use the derived payload'
+unset HERDR_CONFIG_TRACE
 diff --no-dereference -r "$ubuntu_home" "$TEST_ROOT/ubuntu-applied" >/dev/null || fail 'converged Herdr check mutated HOME'
 run_herdr_area "$ubuntu_home" '' ubuntu remove "$ubuntu_runtime" >/dev/null
 [[ ! -e "$ubuntu_home/.config/herdr/config.toml" && ! -e "$ubuntu_home/.config/dotfiles/bash/fns/herdr" &&
   ! -e "$ubuntu_home/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml" ]] || fail 'Herdr removal retained managed links'
 [[ "$(< "$ubuntu_home/.config/herdr/session.json")" == session &&
+  "$(< "$ubuntu_home/.local/share/herdr/herdr.log")" == log &&
   "$(< "$ubuntu_home/.local/share/herdr/socket")" == socket ]] || fail 'Herdr lifecycle changed runtime siblings'
 run_herdr_area "$ubuntu_home" '' ubuntu remove "$TEST_ROOT/runtime-absent" >/dev/null
 pass
