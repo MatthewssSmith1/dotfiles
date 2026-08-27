@@ -2,20 +2,20 @@
 
 ## Ownership
 
-The `agents` area deploys one shared personal package on every profile. It owns the pinned files beneath `~/.agents/skills/`, the canonical `~/.agents/AGENTS.md` link, and only these harness bridges:
+The `agents` area deploys one shared personal package on every profile. It owns its Git-versioned files beneath `~/.agents/skills/`, the canonical `~/.agents/AGENTS.md` link, and only these harness bridges:
 
 ```text
 ~/.config/opencode/AGENTS.md -> ../../.agents/AGENTS.md
 ~/.claude/CLAUDE.md          -> ../.agents/AGENTS.md
 ```
 
-OpenCode and Claude configuration, plugins, credentials, sessions, generated state, and unrelated skills remain host-owned. Managed skill names are whole-directory boundaries: an unrecorded same-name directory or an extra entry refuses before mutation. Other skill names coexist as real external directories and survive removal.
+OpenCode and Claude configuration, plugins, credentials, sessions, generated state, and unrelated skills remain host-owned. Managed skill names are whole-directory boundaries: an unmanaged same-name directory or an extra entry refuses before mutation. Other skill names coexist as external directories or symlinks and survive apply, check, reapply, and removal. In particular, the Omarchy-native `omarchy` and `diagnose-crash` skill symlinks remain native-owned.
 
-## Provenance
+## Personal Skills
 
-[`manifests/agent-skills.lock.json`](../../manifests/agent-skills.lock.json) records the reviewed Matt Pocock repository commit and the source tree, file blob, mode, size, and destination of every vendored skill. [`scripts/agent-skills`](../../scripts/agent-skills) proves the local package matches those recorded object identities and exact closure offline; review of a lock update establishes their upstream commit reachability. Dotfiles never fetches or updates skills.
+The globally deployed personal inventory is `grilling`, `handoff`, `writing-for-agents`, and `setup-domain-modeling`. Their complete contents live in [`packages/common/agents`](../../packages/common/agents) and change through normal Git review. The repository-local `applying-dotfiles` and `updating-dependencies` skills remain project-scoped.
 
-The globally deployed inventory contains `grilling`, `handoff`, `teach`, `writing-great-skills`, `domain-modeling`, `research`, and `setup-matt-pocock-skills`. The repository-local `applying-dotfiles` and `updating-dependencies` skills remain project-scoped shared personal files. Tool-generated `~/.agents/.skill-lock.json` is not deployed; managed skills are updated through a reviewed lock and package change rather than a live installer.
+[`scripts/agent-skills`](../../scripts/agent-skills) verifies the package inventory, skill frontmatter, regular-file structure, and file modes offline. It does not use a separate lock or schema and does not fetch or update skills.
 
 ## Lifecycle
 

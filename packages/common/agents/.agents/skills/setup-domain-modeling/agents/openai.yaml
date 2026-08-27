@@ -1,0 +1,5 @@
+interface:
+  display_name: "Setup Domain Modeling"
+  short_description: "Bootstrap repository-owned domain modeling"
+policy:
+  allow_implicit_invocation: false

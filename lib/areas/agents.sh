@@ -1,4 +1,4 @@
-# Agents area: canonical shared instructions, pinned skills, and exact tool bridges.
+# Agents area: canonical shared instructions, managed skills, and exact tool bridges.
 
 readonly AGENTS_BRIDGE_PATHS=(
   '.config/opencode/AGENTS.md'
@@ -29,19 +29,24 @@ agents_target_is_exact() {
   return 1
 }
 
+agents_managed_skill_destinations() {
+  local target relative
+  declare -A destinations=()
+  for target in "${LEAN_TARGET_PATHS[@]}"; do
+    [[ "$target" == .agents/skills/*/* ]] || continue
+    relative="${target#.agents/skills/}"
+    destinations[".agents/skills/${relative%%/*}"]=1
+  done
+  printf '%s\n' "${!destinations[@]}"
+}
+
 validate_agents_closure() {
-  local destination expected relative source index
+  local relative source index
   [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == common/agents ]] ||
     die 'Agents closure must contain only common/agents'
   if [[ "$MODE" != remove ]]; then
-    "$DOTFILES_DIR/scripts/agent-skills" verify >/dev/null || die 'pinned agent skills verification failed'
+    "$DOTFILES_DIR/scripts/agent-skills" verify >/dev/null || die 'managed agent skills verification failed'
   fi
-  while IFS= read -r destination; do
-    array_contains "$destination" "${LEAN_TARGET_PATHS[@]}" ||
-      die "Agents package is missing locked skill target: $destination"
-  done < <(jq -r '.skills[].files[].destination' "$DOTFILES_DIR/manifests/agent-skills.lock.json")
-  ((${#LEAN_TARGET_PATHS[@]} == 1 + $(jq '[.skills[].files[]] | length' "$DOTFILES_DIR/manifests/agent-skills.lock.json"))) ||
-    die 'Agents package target inventory is not exact'
   array_contains '.agents/AGENTS.md' "${LEAN_TARGET_PATHS[@]}" || die 'Agents package is missing canonical instructions'
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     relative="${LEAN_TARGET_PATHS[index]}"; source="${LEAN_TARGET_SOURCES[index]}"
@@ -60,14 +65,13 @@ preflight_agents_skill_boundaries() {
     [[ -e "$path" || -L "$path" ]] || continue
     [[ -d "$path" && ! -L "$path" ]] || die "managed skill is not a directory: $path"
     expected_paths=(); expected_dirs=(); exact_count=0
-    while IFS= read -r expected; do
+    for expected in "${LEAN_TARGET_PATHS[@]}"; do
+      [[ "$expected" == "$destination"/* ]] || continue
       relative="${expected#"$destination"/}"
       expected_paths["$relative"]=1
       while [[ "$relative" == */* ]]; do relative="${relative%/*}"; expected_dirs["$relative"]=1; done
       agents_target_is_exact "$expected" && ((exact_count += 1))
-    done < <(jq -r --arg destination "$destination" \
-      '.skills[] | select(.destination == $destination) | .files[].destination' \
-      "$DOTFILES_DIR/manifests/agent-skills.lock.json")
+    done
     shopt -s dotglob nullglob globstar
     for entry in "$path"/**; do
       relative="${entry#"$path"/}"
@@ -82,9 +86,26 @@ preflight_agents_skill_boundaries() {
     done
     shopt -u dotglob nullglob globstar
     if [[ "$mode" == apply && "$exact_count" == 0 ]]; then
-      die "unmanaged managed-skill directory conflict: $path"
+      die "personal directory conflicts with managed skill: $path"
     fi
-  done < <(jq -r '.skills[].destination' "$DOTFILES_DIR/manifests/agent-skills.lock.json")
+  done < <(agents_managed_skill_destinations)
+}
+
+remove_empty_agents_skill_directories() {
+  local destination path index
+  local directories=()
+  while IFS= read -r destination; do
+    path="$HOME/$destination"
+    [[ -d "$path" && ! -L "$path" ]] || continue
+    directories=()
+    shopt -s dotglob nullglob globstar
+    directories=("$path"/**/)
+    shopt -u dotglob nullglob globstar
+    for ((index=${#directories[@]}-1; index>=0; index--)); do
+      rmdir -- "${directories[index]}" 2>/dev/null || true
+    done
+    rmdir -- "$path" 2>/dev/null || true
+  done < <(agents_managed_skill_destinations)
 }
 
 agents_bridge_is_exact() {
@@ -136,7 +157,7 @@ apply_agents() {
   preflight_agents_skill_boundaries apply
   lean_apply_area
   apply_agents_bridges
-  "$DOTFILES_DIR/scripts/agent-skills" verify >/dev/null || die 'pinned agent skills changed during apply'
+  "$DOTFILES_DIR/scripts/agent-skills" verify >/dev/null || die 'managed agent skills changed during apply'
   log "applied Agents area for profile '$SELECTED_PROFILE'"
 }
 
@@ -152,5 +173,6 @@ remove_agents() {
     agents_bridge_is_exact "$index" && rm -- "$path"
   done
   lean_remove_stow
+  remove_empty_agents_skill_directories
   log 'removed exact managed Agents links and bridges'
 }

@@ -7,188 +7,84 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly SCRIPT_DIR
 REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 readonly REPO_DIR
-readonly LOCK="$REPO_DIR/manifests/agent-skills.lock.json"
-readonly SCHEMA="$REPO_DIR/schemas/agent-skills-lock.schema.json"
-readonly EXPECTED_REPOSITORY='https://github.com/mattpocock/skills'
+readonly PACKAGE_ROOT="$REPO_DIR/packages/common/agents"
 
 die() {
   printf '[%s] error: %s\n' "$SCRIPT_NAME" "$*" >&2
   exit 1
 }
 
-safe_relative_path() {
-  local value="$1" segment
-  local parts=()
-  [[ -n "$value" && "$value" != /* && "$value" != */ && "$value" != *'//'* &&
-    "$value" != *[[:cntrl:]]* ]] || return 1
-  IFS='/' read -r -a parts <<< "$value"
-  for segment in "${parts[@]}"; do
-    [[ -n "$segment" && "$segment" != . && "$segment" != .. ]] || return 1
-  done
-}
-
-git_quiet() {
-  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git "$@"
-}
-
-validate_schema() {
-  [[ -f "$SCHEMA" && ! -L "$SCHEMA" ]] || die 'schema is missing or not a regular file'
-  jq -e '
-    .["$schema"] == "https://json-schema.org/draft/2020-12/schema" and
-    .["$id"] == "https://github.com/MatthewssSmith1/dotfiles/blob/main/schemas/agent-skills-lock.schema.json" and
-    .type == "object" and .additionalProperties == false and
-    .properties["$schema"].const == "../schemas/agent-skills-lock.schema.json" and
-    .properties.schema_version.const == 1 and
-    .properties.package_root.const == "packages/common/agents"
-  ' "$SCHEMA" >/dev/null 2>&1 || die 'schema is malformed or unsupported'
-}
-
-validate_lock() {
-  validate_schema
-  [[ -f "$LOCK" && ! -L "$LOCK" ]] || die 'lock is missing or not a regular file'
-  jq -e --arg repository "$EXPECTED_REPOSITORY" '
-    def keys_are($values): (keys | sort) == ($values | sort);
-    def clean: type == "string" and length > 0 and (test("[[:cntrl:]]") | not);
-    def path: clean and (startswith("/") | not) and (endswith("/") | not) and
-      (contains("//") | not) and (split("/") | all(. != "." and . != ".." and length > 0));
-    def blob: type == "string" and test("^[0-9a-f]{40}$");
-    def file: type == "object" and
-      keys_are(["blob","destination","mode","size"]) and
-      (.destination | path) and (.blob | blob) and .mode == "100644" and
-      (.size | type == "number" and . >= 0 and floor == .);
-    def source_file: type == "object" and
-      keys_are(["blob","destination","mode","size","source_path"]) and
-      (.source_path | path) and (.destination | path) and (.blob | blob) and
-      .mode == "100644" and (.size | type == "number" and . >= 0 and floor == .);
-    type == "object" and
-    keys_are(["$schema","commit","instructions","package_root","repository","schema_version","skills"]) and
-    .["$schema"] == "../schemas/agent-skills-lock.schema.json" and .schema_version == 1 and
-    .repository == $repository and (.commit | blob) and .package_root == "packages/common/agents" and
-    (.instructions | file) and .instructions.destination == ".agents/AGENTS.md" and
-    (.skills | type == "array" and length > 0 and all(.[];
-      type == "object" and keys_are(["destination","files","name","source_path","tree"]) and
-      (.name | type == "string" and test("^[a-z0-9]+(-[a-z0-9]+)*$")) and
-      (.source_path | path) and (.destination | path) and (.tree | blob) and
-      (.files | type == "array" and length > 0 and all(.[]; source_file)))) and
-    ([.skills[].name] | unique | length) == (.skills | length) and
-    ([.skills[].source_path] | unique | length) == (.skills | length) and
-    ([.skills[].destination] | unique | length) == (.skills | length) and
-    ([.skills[].files[].source_path] | unique | length) == ([.skills[].files[]] | length) and
-    ([.instructions.destination] + [.skills[].files[].destination] | unique | length) ==
-      (1 + ([.skills[].files[]] | length)) and
-    ([.skills[] | [.name, .destination, (.files | map(.destination))]] | all(.[];
-      .[1] == (".agents/skills/" + .[0]) and
-      (.[1] as $destination | .[2] | all(.[]; startswith($destination + "/"))))) and
-    (.skills | all(.[]; . as $skill | all(.files[];
-      (.source_path | startswith($skill.source_path + "/")) and
-      .destination == ($skill.destination + "/" + (.source_path | ltrimstr($skill.source_path + "/"))))))
-  ' "$LOCK" >/dev/null 2>&1 || die 'lock does not conform to schema version 1'
-
-  local value
-  while IFS= read -r value; do
-    safe_relative_path "$value" || die "unsafe path in lock: $value"
-  done < <(jq -r '.instructions.destination, .skills[].source_path, .skills[].destination, .skills[].files[].source_path, .skills[].files[].destination' "$LOCK")
-}
-
 frontmatter_name() {
-  local file="$1" line first=true inside=false name="" count=0
+  local file="$1" line='' name='' count=0 first=true closed=false
   while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$first" == true ]]; then
       [[ "$line" == '---' ]] || return 1
       first=false
-      inside=true
       continue
     fi
     if [[ "$line" == '---' ]]; then
-      [[ "$inside" == true ]] || return 1
+      closed=true
       break
     fi
-    [[ "$inside" == true ]] || return 1
     if [[ "$line" == name:* ]]; then
       name="${line#name:}"
       name="${name# }"
       ((count += 1))
     fi
   done < "$file"
-  [[ "$inside" == true && "$line" == '---' && "$count" == 1 ]] || return 1
+  [[ "$closed" == true && "$count" == 1 && "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || return 1
   printf '%s' "$name"
 }
 
-verify_file() {
-  local root="$1" destination="$2" expected_blob="$3" expected_mode="$4" expected_size="$5"
-  local file="$root/$destination" actual
-  [[ -f "$file" && ! -L "$file" ]] || die "missing or non-regular package file: $destination"
-  [[ "$(stat -c '%a' -- "$file")" == "${expected_mode#100}" ]] || die "mode drift: $destination"
-  [[ "$(stat -c '%s' -- "$file")" == "$expected_size" ]] || die "size drift: $destination"
-  actual="$(git_quiet hash-object --no-filters -- "$file")"
-  [[ "$actual" == "$expected_blob" ]] || die "Git blob drift: $destination"
-}
-
 verify() {
-  validate_lock
-  local package_rel package root destination blob mode size name source tree skill_file actual_name
-  local temporary index actual_tree entry relative parent
-  package_rel="$(jq -r .package_root "$LOCK")"
-  root="$REPO_DIR/$package_rel"
-  [[ -d "$root" && ! -L "$root" ]] || die 'package root is missing or not a directory'
+  local agents_root="$PACKAGE_ROOT/.agents" skills_root="$PACKAGE_ROOT/.agents/skills"
+  local entry relative skill name file_count=0 skill_count=0
 
-  declare -A expected_files=() expected_dirs=()
-  while IFS=$'\t' read -r destination blob mode size; do
-    expected_files["$destination"]=1
-    parent="${destination%/*}"
-    while [[ "$parent" != "$destination" && -n "$parent" ]]; do
-      expected_dirs["$parent"]=1
-      [[ "$parent" == */* ]] || break
-      parent="${parent%/*}"
-    done
-    verify_file "$root" "$destination" "$blob" "$mode" "$size"
-  done < <(jq -r '[.instructions] + [.skills[].files[]] | .[] | [.destination,.blob,.mode,.size] | @tsv' "$LOCK")
+  [[ -d "$PACKAGE_ROOT" && ! -L "$PACKAGE_ROOT" ]] || die 'package root is missing or not a directory'
+  [[ -d "$agents_root" && ! -L "$agents_root" ]] || die 'package .agents is missing or not a directory'
+  [[ -d "$skills_root" && ! -L "$skills_root" ]] || die 'package .agents/skills is missing or not a directory'
+  [[ -f "$agents_root/AGENTS.md" && ! -L "$agents_root/AGENTS.md" ]] ||
+    die 'canonical .agents/AGENTS.md is missing or not a regular file'
 
-  shopt -s dotglob nullglob globstar
-  for entry in "$root"/**; do
-    relative="${entry#"$root"/}"
+  shopt -s dotglob nullglob
+  for entry in "$skills_root"/*; do
+    [[ -d "$entry" && ! -L "$entry" ]] || die "direct skill entry is not a directory: ${entry#"$PACKAGE_ROOT"/}"
+    skill="${entry##*/}"
+    [[ "$skill" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "invalid skill directory name: $skill"
+    [[ -f "$entry/SKILL.md" && ! -L "$entry/SKILL.md" ]] || die "missing or non-regular skill file: .agents/skills/$skill/SKILL.md"
+    name="$(frontmatter_name "$entry/SKILL.md")" || die "invalid SKILL.md frontmatter: .agents/skills/$skill/SKILL.md"
+    [[ "$name" == "$skill" ]] || die "frontmatter name does not match skill directory: $skill"
+    ((skill_count += 1))
+  done
+  ((skill_count > 0)) || die 'package must contain at least one direct skill directory'
+
+  shopt -s globstar
+  for entry in "$PACKAGE_ROOT"/**; do
+    relative="${entry#"$PACKAGE_ROOT"/}"
     [[ -n "$relative" ]] || continue
     if [[ -L "$entry" ]]; then
       die "package payload symlink is forbidden: $relative"
-    elif [[ -f "$entry" ]]; then
-      [[ -n "${expected_files[$relative]+x}" ]] || die "undeclared package file: $relative"
     elif [[ -d "$entry" ]]; then
-      [[ -n "${expected_dirs[$relative]+x}" ]] || die "undeclared package directory: $relative"
+      [[ "$relative" == .agents || "$relative" == .agents/skills || "$relative" == .agents/skills/* ]] ||
+        die "package payload is outside .agents: $relative"
+    elif [[ -f "$entry" ]]; then
+      [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/*/* ]] ||
+        die "package file is outside managed Agents payload: $relative"
+      [[ "$(stat -c '%a' -- "$entry")" == 644 ]] || die "unexpected package file mode: $relative"
+      ((file_count += 1))
     else
       die "unsupported package object: $relative"
     fi
   done
   shopt -u dotglob nullglob globstar
 
-  temporary="$(mktemp -d "${TMPDIR:-/tmp}/agent-skills-verify.XXXXXX")"
-  trap 'rm -rf -- "$temporary"' EXIT
-  git_quiet init --quiet --bare "$temporary/repo.git"
-  while IFS=$'\t' read -r name source destination tree; do
-    skill_file="$root/$destination/SKILL.md"
-    actual_name="$(frontmatter_name "$skill_file")" || die "invalid SKILL.md frontmatter: $destination/SKILL.md"
-    [[ "$actual_name" == "$name" ]] || die "frontmatter name mismatch for $destination: $actual_name"
-    index="$temporary/$name.index"
-    GIT_INDEX_FILE="$index" GIT_WORK_TREE="$root/$destination" \
-      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
-      git --git-dir="$temporary/repo.git" add -f -A -- .
-    actual_tree="$(GIT_INDEX_FILE="$index" git_quiet --git-dir="$temporary/repo.git" write-tree)"
-    [[ "$actual_tree" == "$tree" ]] || die "Git tree drift: $destination"
-  done < <(jq -r '.skills[] | [.name,.source_path,.destination,.tree] | @tsv' "$LOCK")
-  rm -rf -- "$temporary"
-  trap - EXIT
-  printf '[%s] verified %s pinned skills and %s package files\n' "$SCRIPT_NAME" \
-    "$(jq '.skills | length' "$LOCK")" "${#expected_files[@]}"
+  printf '[%s] verified %s managed skills and %s package files\n' "$SCRIPT_NAME" "$skill_count" "$file_count"
 }
 
 case "${1:-}" in
-  validate-lock)
-    (($# == 1)) || die "usage: $SCRIPT_NAME validate-lock | verify"
-    validate_lock
-    printf '[%s] lock is valid\n' "$SCRIPT_NAME"
-    ;;
   verify)
-    (($# == 1)) || die "usage: $SCRIPT_NAME validate-lock | verify"
+    (($# == 1)) || die "usage: $SCRIPT_NAME verify"
     verify
     ;;
-  *) die "usage: $SCRIPT_NAME validate-lock | verify" ;;
+  *) die "usage: $SCRIPT_NAME verify" ;;
 esac

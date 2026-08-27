@@ -1,0 +1,1 @@
+Domain model: before work involving domain concepts, read `GLOSSARY.md`; use the project `domain-modeling` skill when discussing or changing domain language or recording architecture or business decisions.

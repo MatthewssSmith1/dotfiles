@@ -7,7 +7,5 @@ require|git,tools,bash,tmux,nvim,agents,herdr,desktop|apply,check,remove|all|flo
 require|git,tools,bash,tmux,nvim,agents,herdr,desktop|apply,check,remove|all|realpath|apt-package|coreutils|bootstrap-critical
 require|git|apply,check|ubuntu|git|apt-package|git|area
 require|git|apply,check|omarchy|git|omarchy-native|-|area
-require|agents|apply,check|ubuntu|git|apt-package|git|area
-require|agents|apply,check|omarchy|git|omarchy-native|-|area
 require|git,tools,bash,nvim,agents|apply,check,remove|omarchy|stow|omarchy-native|-|area
 require|desktop|apply,check,remove|omarchy|stow|omarchy-native|-|area

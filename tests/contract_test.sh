@@ -117,8 +117,7 @@ pass
 # Every schema and committed manifest is well-formed JSON, and each manifest
 # with a schema validates against it (Draft 2020-12).
 jq empty "$REPO_DIR"/schemas/*.schema.json || fail 'a schema file is invalid JSON'
-jq empty "$REPO_DIR/manifests/sources.json" \
-  "$REPO_DIR/manifests/agent-skills.lock.json" || fail 'a manifest file is invalid JSON'
+jq empty "$REPO_DIR/manifests/sources.json" || fail 'a manifest file is invalid JSON'
 if schema_validator_available; then
   for schema_file in "$REPO_DIR"/schemas/*.schema.json; do
     python3 - "$schema_file" <<'PYTHON' || fail "schema is not a valid Draft 2020-12 schema: $schema_file"
@@ -132,8 +131,6 @@ else
   printf 'WARN: python3-jsonschema unavailable; skipped schema self-validation\n' >&2
 fi
 validate_json_schema "$REPO_DIR/schemas/source-manifest.schema.json" "$REPO_DIR/manifests/sources.json"
-validate_json_schema "$REPO_DIR/schemas/agent-skills-lock.schema.json" \
-  "$REPO_DIR/manifests/agent-skills.lock.json"
 shopt -s nullglob
 versioned_schema_names=("$REPO_DIR"/schemas/*-v[0-9]*.schema.json)
 shopt -u nullglob
