@@ -23,7 +23,8 @@ record_pacman_ownership "$native" 'omarchy 4.0.0-1' /usr/share/omarchy/version /
 for profile_host in "$ubuntu" "$native"; do
   home="$(new_home "apply-${profile_host##*/}")"
   expect_success "$home" "$profile_host" "$DOTFILES" apply opencode
-  [[ -L "$home/.config/opencode/base.jsonc" && -L "$home/.config/opencode/profiles/work.jsonc" &&
+  [[ -L "$home/.config/opencode/base.jsonc" && -L "$home/.config/opencode/dotfiles-tui.jsonc" &&
+    -L "$home/.config/opencode/profiles/work.jsonc" &&
     -L "$home/.local/bin/opencode" && -L "$home/.config/opencode/opencode.jsonc" ]] ||
     fail 'OpenCode managed links were not deployed'
   [[ "$(readlink -- "$home/.config/opencode/opencode.jsonc")" == base.jsonc ]] ||
@@ -62,6 +63,7 @@ mkdir "$real_bin"
 cat > "$real_bin/opencode" <<'SCRIPT'
 #!/usr/bin/env bash
 printf '%s\n' "$OPENCODE_CONFIG"
+printf '%s\n' "$OPENCODE_TUI_CONFIG"
 printf '<%s>\n' "$@"
 exit 37
 SCRIPT
@@ -72,7 +74,7 @@ output="$(HOME="$home" PATH="$launcher_path" "$home/.local/bin/opencode" 'two wo
 status=$?
 set -e
 ((status == 37)) || fail "OpenCode launcher changed status: $status"
-[[ "$output" == "$home/.config/opencode/profiles/work.jsonc"$'\n<two words>' ]] ||
+[[ "$output" == "$home/.config/opencode/profiles/work.jsonc"$'\n'"$home/.config/opencode/dotfiles-tui.jsonc"$'\n<two words>' ]] ||
   fail 'default OpenCode launcher changed work overlay or arguments'
 HOME="$home" PATH="$launcher_path" "$home/.local/bin/dotfiles-opencode-profile" personal
 [[ "$(HOME="$home" PATH="$launcher_path" "$home/.local/bin/dotfiles-opencode-profile" show)" == personal ]] ||
@@ -82,18 +84,31 @@ output="$(HOME="$home" PATH="$launcher_path" "$home/.local/bin/opencode-personal
 status=$?
 set -e
 ((status == 37)) || fail 'named OpenCode launcher changed status'
-[[ "$output" == "$home/.config/opencode/profiles/personal.jsonc"$'\n<literal>' ]] ||
+[[ "$output" == "$home/.config/opencode/profiles/personal.jsonc"$'\n'"$home/.config/opencode/dotfiles-tui.jsonc"$'\n<literal>' ]] ||
   fail 'personal OpenCode launcher selected the wrong overlay'
 pass
 
 # Removal is exact, preserves host-owned content and selector, and converges.
+printf '{"plugin":["./herdr-tui-session.js"]}\n' > "$home/.config/opencode/tui.jsonc"
 expect_success "$home" "$ubuntu" "$DOTFILES" remove opencode
-[[ ! -e "$home/.config/opencode/base.jsonc" && ! -e "$home/.local/bin/opencode" ]] ||
+[[ ! -e "$home/.config/opencode/base.jsonc" && ! -e "$home/.config/opencode/dotfiles-tui.jsonc" &&
+  ! -e "$home/.local/bin/opencode" ]] ||
   fail 'OpenCode removal retained managed links'
 [[ "$(< "$home/.config/dotfiles/local/opencode-profile")" == personal &&
-  "$(< "$home/.config/opencode/AGENTS.md")" == instructions ]] ||
+  "$(< "$home/.config/opencode/AGENTS.md")" == instructions &&
+  "$(< "$home/.config/opencode/tui.jsonc")" == '{"plugin":["./herdr-tui-session.js"]}' ]] ||
   fail 'OpenCode removal changed host-owned files'
 expect_success "$home" "$ubuntu" "$DOTFILES" remove opencode
+pass
+
+# A host-owned managed-overlay destination refuses before mutation.
+overlay_conflict="$(new_home overlay-conflict)"
+mkdir -p "$overlay_conflict/.config/opencode"
+printf '{"host_owned":true}\n' > "$overlay_conflict/.config/opencode/dotfiles-tui.jsonc"
+expect_failure 'conflict' "$overlay_conflict" "$ubuntu" "$DOTFILES" apply opencode
+[[ ! -e "$overlay_conflict/.config/opencode/base.jsonc" &&
+  "$(< "$overlay_conflict/.config/opencode/dotfiles-tui.jsonc")" == '{"host_owned":true}' ]] ||
+  fail 'OpenCode TUI conflict mutated the home'
 pass
 
 # Argumentless removal includes deployed optional package-only ownership.

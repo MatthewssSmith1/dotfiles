@@ -10,6 +10,23 @@ Dotfiles never patches Windows Terminal settings. Theming is repo-managed from
 the Windows side via [windows/terminal/apply.ps1](../../windows/README.md); the
 keybinding unbinds below are still a manual step.
 
+Modified Enter also needs manual mappings. Without distinct escape sequences,
+Windows Terminal and SSH can deliver `Shift+Enter` or `Ctrl+Enter` as plain
+Enter. Add these actions to the `actions` array:
+
+```json
+"actions": [
+  {
+    "command": { "action": "sendInput", "input": "\u001b[13;2u" },
+    "id": "User.opencodeShiftEnter"
+  },
+  {
+    "command": { "action": "sendInput", "input": "\u001b[13;5u" },
+    "id": "User.opencodeCtrlEnter"
+  }
+]
+```
+
 ## Required Settings
 
 Windows Terminal shortcuts can consume the Herdr map before the terminal sends
@@ -20,6 +37,8 @@ stores assignments separately from actions, so add these entries to the
 
 ```json
 "keybindings": [
+  { "id": "User.opencodeShiftEnter", "keys": "shift+enter" },
+  { "id": "User.opencodeCtrlEnter", "keys": "ctrl+enter" },
   { "id": "unbound", "keys": "alt+enter" },
   { "id": "unbound", "keys": "alt+left" },
   { "id": "unbound", "keys": "alt+right" },
@@ -42,9 +61,9 @@ stores assignments separately from actions, so add these entries to the
 ]
 ```
 
-Manual checklist: Alt+Left/Right/Up/Down, Alt+Shift+Left/Right/Up/Down,
-Alt+Enter, Alt+Shift+Enter, Alt+Escape, Ctrl+Alt+Left/Right/Up/Down, and
-Ctrl+Alt+Shift+Left/Right/Up/Down.
+Manual checklist: Shift+Enter, Ctrl+Enter, Alt+Left/Right/Up/Down,
+Alt+Shift+Left/Right/Up/Down, Alt+Enter, Alt+Shift+Enter, Alt+Escape,
+Ctrl+Alt+Left/Right/Up/Down, and Ctrl+Alt+Shift+Left/Right/Up/Down.
 
 ## Known Limitations
 
@@ -100,3 +119,5 @@ required unbinds:
    the Windows clipboard.
 9. If the protocol analysis is confirmed, `prefix + h` and `prefix + x` cover
    the two unavailable Alt bindings.
+10. After restarting OpenCode, Enter submits while Shift+Enter and Ctrl+Enter
+    insert newlines; Alt+Enter and Ctrl+J remain newline alternatives.

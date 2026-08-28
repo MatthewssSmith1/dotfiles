@@ -19,7 +19,7 @@ validate_opencode_payload() {
   local expected actual source
   [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == common/opencode ]] ||
     die 'OpenCode closure must contain only common/opencode'
-  expected=$'.config/opencode/base.jsonc\n.config/opencode/profiles/personal.jsonc\n.config/opencode/profiles/work.jsonc\n.local/bin/dotfiles-opencode-profile\n.local/bin/opencode\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch'
+  expected=$'.config/opencode/base.jsonc\n.config/opencode/dotfiles-tui.jsonc\n.config/opencode/profiles/personal.jsonc\n.config/opencode/profiles/work.jsonc\n.local/bin/dotfiles-opencode-profile\n.local/bin/opencode\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch'
   actual="$(printf '%s\n' "${LEAN_TARGET_PATHS[@]}" | LC_ALL=C sort)"
   [[ "$actual" == "$expected" ]] || die 'OpenCode package payload inventory is not exact'
   for source in "${LEAN_TARGET_SOURCES[@]}"; do
@@ -29,7 +29,7 @@ validate_opencode_payload() {
       [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected OpenCode config mode: $source"
     fi
   done
-  jq empty "$(opencode_source base.jsonc)" "$(opencode_source profiles/work.jsonc)" \
+  jq empty "$(opencode_source base.jsonc)" "$(opencode_source dotfiles-tui.jsonc)" "$(opencode_source profiles/work.jsonc)" \
     "$(opencode_source profiles/personal.jsonc)" >/dev/null || die 'managed OpenCode config is invalid JSON'
 }
 

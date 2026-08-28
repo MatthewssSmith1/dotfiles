@@ -6,6 +6,7 @@
 
 ```text
 ~/.config/opencode/base.jsonc
+~/.config/opencode/dotfiles-tui.jsonc
 ~/.config/opencode/profiles/work.jsonc
 ~/.config/opencode/profiles/personal.jsonc
 ~/.config/opencode/opencode.jsonc -> base.jsonc
@@ -22,8 +23,12 @@ contains gateway/model metadata but reads its credential from `TFY_API_KEY`.
 The personal overlay is intentionally empty except for its schema declaration.
 
 OpenCode's executable, `AGENTS.md` bridge, plugins, credentials, sessions,
-package metadata, backups, TUI settings, and generated state have separate
-owners. The `agents` area continues to own only the `AGENTS.md` bridge.
+package metadata, backups, other TUI settings, and generated state have
+separate owners. The `agents` area continues to own only the `AGENTS.md` bridge.
+The launchers also set `OPENCODE_TUI_CONFIG` to the managed TUI overlay. OpenCode
+merges it after the separately owned `~/.config/opencode/tui.jsonc`, preserving
+host integrations such as Herdr's plugin. The overlay maps `Ctrl+Enter`,
+`Shift+Enter`, `Alt+Enter`, and `Ctrl+J` to newline input; plain `Enter` submits.
 
 ## Selection
 
@@ -44,8 +49,9 @@ opencode-personal
 ```
 
 Selection is independent of the `omarchy`/`ubuntu` host profile. The launcher
-finds the first other `opencode` executable on `PATH`, injects only
-`OPENCODE_CONFIG`, and preserves arguments and exit status.
+finds the first other `opencode` executable on `PATH`, injects
+`OPENCODE_CONFIG` and the shared `OPENCODE_TUI_CONFIG`, and preserves arguments
+and exit status.
 
 ## Lifecycle
 

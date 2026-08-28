@@ -62,10 +62,14 @@ done
 grep -Fq '|| "$1" == opencode' "$DOTFILES" || fail 'OpenCode is absent from lean dispatch'
 opencode_package="$REPO_DIR/packages/common/opencode"
 opencode_inventory="$(find "$opencode_package" -type f -printf '%P\n' | LC_ALL=C sort)"
-[[ "$opencode_inventory" == $'.config/opencode/base.jsonc\n.config/opencode/profiles/personal.jsonc\n.config/opencode/profiles/work.jsonc\n.local/bin/dotfiles-opencode-profile\n.local/bin/opencode\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
+[[ "$opencode_inventory" == $'.config/opencode/base.jsonc\n.config/opencode/dotfiles-tui.jsonc\n.config/opencode/profiles/personal.jsonc\n.config/opencode/profiles/work.jsonc\n.local/bin/dotfiles-opencode-profile\n.local/bin/opencode\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
   fail 'OpenCode payload inventory is not exact'
 jq empty "$opencode_package/.config/opencode/"*.jsonc "$opencode_package/.config/opencode/profiles/"*.jsonc ||
   fail 'managed OpenCode config is invalid JSON'
+tui_config="$opencode_package/.config/opencode/dotfiles-tui.jsonc"
+[[ "$(jq -r '."$schema"' "$tui_config")" == 'https://opencode.ai/tui.json' &&
+  "$(jq -r '.keybinds.input_newline' "$tui_config")" == 'ctrl+return,shift+return,alt+return,ctrl+j' ]] ||
+  fail 'managed OpenCode TUI config is not exact'
 for executable in "$opencode_package/.local/bin/"* "$opencode_package/.local/share/dotfiles/bin/opencode-launch"; do
   [[ -f "$executable" && ! -L "$executable" && -x "$executable" ]] || fail "OpenCode launcher is not executable: $executable"
 done

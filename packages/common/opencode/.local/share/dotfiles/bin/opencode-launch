@@ -11,6 +11,8 @@ esac
 
 config="$HOME/.config/opencode/profiles/$profile.jsonc"
 [[ -f "$config" ]] || { printf 'opencode-launch: managed profile is absent: %s\n' "$config" >&2; exit 1; }
+tui_config="$HOME/.config/opencode/dotfiles-tui.jsonc"
+[[ -f "$tui_config" ]] || { printf 'opencode-launch: managed TUI config is absent: %s\n' "$tui_config" >&2; exit 1; }
 
 managed="$(readlink -f -- "$HOME/.local/bin/opencode" 2>/dev/null || true)"
 IFS=: read -r -a path_entries <<< "${PATH:-}"
@@ -20,7 +22,7 @@ for directory in "${path_entries[@]}"; do
   [[ -f "$candidate" && -x "$candidate" ]] || continue
   resolved="$(readlink -f -- "$candidate" 2>/dev/null || true)"
   [[ -n "$resolved" && "$resolved" != "$managed" ]] || continue
-  OPENCODE_CONFIG="$config" exec "$candidate" "$@"
+  OPENCODE_CONFIG="$config" OPENCODE_TUI_CONFIG="$tui_config" exec "$candidate" "$@"
 done
 
 printf 'opencode-launch: no unmanaged opencode executable found on PATH\n' >&2
