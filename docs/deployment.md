@@ -14,6 +14,7 @@ personal closures; `upstream/reference` is evidence, not deployable content.
 | Agents | `common/agents` | `common/agents` |
 | Herdr | validation-only | `ubuntu/herdr` |
 | Desktop | `omarchy/desktop` plus guarded/structured ownership | validation-only |
+| OpenCode (optional) | `common/opencode` | `common/opencode` |
 
 ## Command Contract
 
@@ -28,10 +29,11 @@ dotfiles.sh help [command]
 dotfiles.sh --help
 ```
 
-An operation is mandatory and must come first. Areas are positional; legacy
-operation flags, selector flags, comma lists, and options after an area are
-rejected. No areas selects ready defaults for apply/check and owned defaults
-for removal. `list` and help do not require a supported host. The executable
+An operation is mandatory and must come first. Areas are positional; optional
+areas require explicit selection for apply/check. Legacy operation flags,
+selector flags, comma lists, and options after an area are rejected. No areas
+selects ready defaults for apply/check and owned defaults for removal. `list`
+and help do not require a supported host. The executable
 `~/.local/bin/dotfiles` payload in `common/tools` locates exactly one checkout
 root and forwards this interface without a fixed checkout path.
 
@@ -58,7 +60,9 @@ format 1 stores attachments, while format 2 adds fixed JSON scalar fields.
 Both formats may coexist for one profile and format-1 records are not rewritten
 merely because they were read. The retired `~/.local/state/dotfiles/v1/`
 namespace is refused with manual cleanup guidance. Native validation-only and
-package-only areas write no state.
+package-only areas write no state. Default removal still derives optional
+package-only ownership, so an omitted area list removes deployed OpenCode links
+without selector state.
 
 Native refresh-owned baselines remain regular files. Git, Bash, Neovim, and
 desktop use guarded attachments; desktop also owns only the two registered

@@ -30,6 +30,7 @@ readonly TEST_FILES=(
   "$TEST_DIR/agents_test.sh"
   "$TEST_DIR/herdr_test.sh"
   "$TEST_DIR/desktop_test.sh"
+  "$TEST_DIR/opencode_test.sh"
   "$TEST_DIR/secrets_test.sh"
   "$TEST_DIR/windows_terminal_test.sh"
 )
@@ -46,6 +47,7 @@ readonly RUN_FILES=(
   "$TEST_DIR/upstream_test.sh"
   "$TEST_DIR/herdr_test.sh"
   "$TEST_DIR/desktop_test.sh"
+  "$TEST_DIR/opencode_test.sh"
   "$TEST_DIR/secrets_test.sh"
   "$TEST_DIR/host_test.sh"
   "$TEST_DIR/windows_terminal_test.sh"

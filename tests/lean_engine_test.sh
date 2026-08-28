@@ -528,6 +528,16 @@ for record in \
 done
 pass
 
+# Area manifests accept explicit optional ownership but reject unknown statuses.
+mkdir -p "$DOTFILES_DIR/manifests"
+printf 'schema|1\narea|fixture|ready\narea|opencode|optional\n' > "$DOTFILES_DIR/manifests/areas.tsv"
+validate_area_manifest
+[[ "${AREA_ORDER[*]}" == 'fixture opencode' && "${AREA_STATUS[opencode]}" == optional ]] ||
+  fail 'optional area status was not parsed'
+printf 'schema|1\narea|fixture|disabled\n' > "$DOTFILES_DIR/manifests/areas.tsv"
+expect_direct_failure 'invalid area manifest' validate_area_manifest
+pass
+
 # Validation-only entries validate lifecycle wiring without package or state
 # ownership. All verbs remain state-free.
 reset_lean_home validation-only

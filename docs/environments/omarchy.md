@@ -63,7 +63,7 @@ Herdr resolves exactly to package-owned `/usr/bin/herdr`; dotfiles validates
 its accepted version and stock config without changing it. See the
 [Herdr contract](../tools/herdr.md).
 
-Claude Code, Codex, and OpenCode retain their Omarchy or native host owners. This repository adds no assistant mise selector, does not require an assistant executable, and leaves assistant application state untouched.
+Claude Code, Codex, and the OpenCode executable retain their Omarchy or native host owners. The optional OpenCode area manages configuration only; it adds no assistant mise selector, does not require an assistant executable, and leaves assistant application state untouched.
 
 Bash is ready; native attachment and refresh behavior is covered by isolated fixtures.
 

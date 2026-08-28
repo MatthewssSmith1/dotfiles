@@ -25,6 +25,7 @@ readonly DOTFILES_SOURCES=(
   "$REPO_DIR/lib/areas/agents.sh"
   "$REPO_DIR/lib/areas/herdr.sh"
   "$REPO_DIR/lib/areas/desktop.sh"
+  "$REPO_DIR/lib/areas/opencode.sh"
 )
 for source_file in "${DOTFILES_SOURCES[@]}"; do
   [[ -f "$source_file" ]] || fail "missing dotfiles source file: $source_file"
@@ -45,11 +46,29 @@ pass
 profile_names="$(printf '%s\n' "$REPO_DIR"/profiles/*.conf | xargs -n1 basename | LC_ALL=C sort | tr '\n' ' ')"
 [[ "$profile_names" == 'omarchy.conf ubuntu.conf ' ]] || fail "unexpected production profiles: $profile_names"
 for profile in omarchy ubuntu; do
-  [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 8 ]] || \
-    fail "profile $profile does not list exactly eight entries"
+  [[ "$(grep -cve '^#' -e '^$' "$REPO_DIR/profiles/$profile.conf")" == 9 ]] || \
+    fail "profile $profile does not list exactly nine entries"
 done
 [[ "$(grep -hE '^[a-z0-9-]+[[:space:]]+validation-only$' "$REPO_DIR"/profiles/*.conf | sort)" == $'desktop validation-only\nherdr validation-only\ntmux validation-only' ]] ||
   fail 'profile validation-only entries are not exact'
+pass
+
+# OpenCode is an optional, package-only area with parallel non-secret configs.
+grep -qxF 'area|opencode|optional' "$REPO_DIR/manifests/areas.tsv" || fail 'OpenCode area is not optional'
+for profile in omarchy ubuntu; do
+  grep -qxF 'opencode common/opencode' "$REPO_DIR/profiles/$profile.conf" ||
+    fail "$profile OpenCode closure is not final"
+done
+grep -Fq '|| "$1" == opencode' "$DOTFILES" || fail 'OpenCode is absent from lean dispatch'
+opencode_package="$REPO_DIR/packages/common/opencode"
+opencode_inventory="$(find "$opencode_package" -type f -printf '%P\n' | LC_ALL=C sort)"
+[[ "$opencode_inventory" == $'.config/opencode/base.jsonc\n.config/opencode/profiles/personal.jsonc\n.config/opencode/profiles/work.jsonc\n.local/bin/dotfiles-opencode-profile\n.local/bin/opencode\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
+  fail 'OpenCode payload inventory is not exact'
+jq empty "$opencode_package/.config/opencode/"*.jsonc "$opencode_package/.config/opencode/profiles/"*.jsonc ||
+  fail 'managed OpenCode config is invalid JSON'
+for executable in "$opencode_package/.local/bin/"* "$opencode_package/.local/share/dotfiles/bin/opencode-launch"; do
+  [[ -f "$executable" && ! -L "$executable" && -x "$executable" ]] || fail "OpenCode launcher is not executable: $executable"
+done
 pass
 
 # Desktop is native-only ownership with two exact private payloads. Ubuntu is

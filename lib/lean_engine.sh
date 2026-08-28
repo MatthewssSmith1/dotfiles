@@ -60,7 +60,7 @@ validate_area_manifest() {
       area)
         ((${#fields[@]} == 3)) || die 'invalid area manifest'
         area="${fields[1]}"; status="${fields[2]}"
-        [[ "$area" =~ ^[a-z0-9-]+$ && "$status" == ready ]] || die 'invalid area manifest'
+        [[ "$area" =~ ^[a-z0-9-]+$ && ( "$status" == ready || "$status" == optional ) ]] || die 'invalid area manifest'
         [[ -z "${AREA_STATUS[$area]+x}" ]] || die "duplicate area '$area' in area manifest"
         AREA_ORDER+=("$area"); AREA_STATUS["$area"]="$status"
         ;;

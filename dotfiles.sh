@@ -16,6 +16,7 @@ source "$SCRIPT_DIR/lib/areas/nvim.sh"
 source "$SCRIPT_DIR/lib/areas/agents.sh"
 source "$SCRIPT_DIR/lib/areas/herdr.sh"
 source "$SCRIPT_DIR/lib/areas/desktop.sh"
+source "$SCRIPT_DIR/lib/areas/opencode.sh"
 
 MODE=""
 PROFILE_OVERRIDE=""
@@ -123,7 +124,7 @@ select_default_areas() {
 }
 
 lean_area() {
-  [[ "$1" == git || "$1" == tools || "$1" == bash || "$1" == tmux || "$1" == nvim || "$1" == agents || "$1" == herdr || "$1" == desktop ]]
+  [[ "$1" == git || "$1" == tools || "$1" == bash || "$1" == tmux || "$1" == nvim || "$1" == agents || "$1" == herdr || "$1" == desktop || "$1" == opencode ]]
 }
 
 prepare_selected_lean_state() {
@@ -148,6 +149,7 @@ select_lean_remove_areas() {
     add_area agents
     [[ "$SELECTED_PROFILE" != ubuntu ]] || add_area nvim
     add_area herdr
+    add_area opencode
     shopt -s nullglob
     for file in "$(lean_state_dir)"/*.json; do
       base="${file##*/}"
@@ -187,7 +189,7 @@ validate_selected_areas() {
 area_entrypoint() {
   local verb="$1" area="$2"
   case "$area" in
-    git|tools|bash|tmux|nvim|agents|herdr|desktop) "${verb}_${area}" ;;
+    git|tools|bash|tmux|nvim|agents|herdr|desktop|opencode) "${verb}_${area}" ;;
     *) die "area '$area' has no lean implementation" ;;
   esac
 }

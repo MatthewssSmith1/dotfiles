@@ -18,6 +18,7 @@ Use the smallest suite that covers the change. `tests/run.sh` is the exhaustive 
 | Agent area, packages, or skill tooling | `tests/contract_test.sh`, `tests/agents_test.sh` |
 | Herdr area or package | `tests/contract_test.sh`, `tests/herdr_test.sh` |
 | Desktop area or package | `tests/contract_test.sh`, `tests/desktop_test.sh` |
+| OpenCode area, config, or launchers | `tests/contract_test.sh`, `tests/opencode_test.sh` |
 | Upstream script, manifest, evidence, or snapshot | `tests/contract_test.sh`, `tests/upstream_test.sh`, affected area suites |
 | Windows Terminal managed settings or merge script | `tests/contract_test.sh`, `tests/windows_terminal_test.sh` |
 | Deployment primitives, topology, or profile parsing | `tests/contract_test.sh`, `tests/lean_engine_test.sh`, affected area suites |

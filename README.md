@@ -15,7 +15,7 @@ Omarchy is the reference Linux environment; Ubuntu reproduces its pinned, review
 
 ## Areas
 
-Eight areas, ready by default: `git`, `tools`, `bash`, `tmux`, `nvim`, `agents`, `herdr`, `desktop`. `desktop` is native ownership (natural touchpad scrolling, shell idle thresholds, and four additive XCompose aliases) and validation-only on Ubuntu.
+Eight areas are ready by default: `git`, `tools`, `bash`, `tmux`, `nvim`, `agents`, `herdr`, `desktop`. `opencode` is optional and explicitly deploys parallel work/personal configuration. `desktop` is native ownership (natural touchpad scrolling, shell idle thresholds, and four additive XCompose aliases) and validation-only on Ubuntu.
 
 ## Quick start
 
@@ -39,7 +39,7 @@ dotfiles.sh help [command]
 dotfiles.sh --help
 ```
 
-An operation is mandatory and must come first; areas are positional. No areas means ready defaults for apply/check and owned defaults for removal. `list` and `help` need no supported host.
+An operation is mandatory and must come first; areas are positional. No areas means ready defaults for apply/check and owned defaults for removal; optional areas require an explicit apply/check. `list` and `help` need no supported host.
 
 ## Safety
 
@@ -51,6 +51,6 @@ The `dotfiles.sh` deployment lifecycle never runs as root, invokes `sudo` or a d
 - [Deployment](docs/deployment.md) — packages, command contract, network/state
 - [Upstream](docs/upstream.md) — pinned sources and synchronization
 - Environments: [Omarchy](docs/environments/omarchy.md), [Ubuntu](docs/environments/ubuntu.md), [Windows Terminal](docs/environments/windows-terminal.md)
-- Tool contracts: [Git](docs/tools/git.md), [Shell](docs/tools/shell.md), [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md), [Agents](docs/tools/agents.md)
+- Tool contracts: [Git](docs/tools/git.md), [Shell](docs/tools/shell.md), [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md), [Agents](docs/tools/agents.md), [OpenCode](docs/tools/opencode.md)
 - Testing: [tests/AGENTS.md](tests/AGENTS.md)
 - [Deferred work](docs/deferred.md)

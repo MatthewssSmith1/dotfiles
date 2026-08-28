@@ -41,8 +41,8 @@ run_tmux_area() {
       source "$DOTFILES_DIR/lib/common.sh"
       source "$DOTFILES_DIR/lib/lean_engine.sh"
       source "$DOTFILES_DIR/lib/areas/tmux.sh"
-      AREA_ORDER=(git tools bash tmux nvim agents herdr desktop)
-      AREA_STATUS=([git]=ready [tools]=ready [bash]=ready [tmux]=ready [nvim]=ready [agents]=ready [herdr]=ready [desktop]=ready)
+      AREA_ORDER=(git tools bash tmux nvim agents herdr desktop opencode)
+      AREA_STATUS=([git]=ready [tools]=ready [bash]=ready [tmux]=ready [nvim]=ready [agents]=ready [herdr]=ready [desktop]=ready [opencode]=optional)
       case "$MODE" in
         check) preflight_tmux ;;
         apply) preflight_tmux; apply_tmux ;;

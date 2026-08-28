@@ -1,0 +1,171 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "enabled_providers": [
+    "truefoundry-gateway",
+    "truefoundry-gateway-openai"
+  ],
+  "provider": {
+    "truefoundry-gateway": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "TrueFoundry",
+      "options": {
+        "baseURL": "https://tfy.promptlens.trilogy.com",
+        "apiKey": "{env:TFY_API_KEY}"
+      },
+      "models": {
+        "claude-group/claude-fable-5": {
+          "name": "Claude Fable 5",
+          "reasoning": true,
+          "options": { "reasoningEffort": "medium" },
+          "variants": {
+            "none": { "reasoningEffort": "none" },
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "claude-group/claude-opus-5": {
+          "name": "Claude Opus 5",
+          "reasoning": true,
+          "options": { "reasoningEffort": "medium" },
+          "variants": {
+            "none": { "reasoningEffort": "none" },
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "claude-group/claude-sonnet-5": {
+          "name": "Claude Sonnet 5",
+          "reasoning": true,
+          "options": { "reasoningEffort": "medium" },
+          "variants": {
+            "none": { "reasoningEffort": "none" },
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "claude-group/claude-haiku-5": {
+          "name": "Claude Haiku 5",
+          "reasoning": true,
+          "options": { "reasoningEffort": "medium" },
+          "variants": {
+            "none": { "reasoningEffort": "none" },
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        }
+      }
+    },
+    "truefoundry-gateway-openai": {
+      "npm": "@ai-sdk/openai",
+      "name": "TrueFoundry (OpenAI)",
+      "options": {
+        "baseURL": "https://tfy.promptlens.trilogy.com",
+        "apiKey": "{env:TFY_API_KEY}"
+      },
+      "models": {
+        "openai-group/gpt-5.6-sol": {
+          "name": "GPT 5.6 Sol",
+          "reasoning": true,
+          "options": {
+            "reasoningEffort": "medium",
+            "reasoningSummary": "auto",
+            "include": ["reasoning.encrypted_content"]
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "openai-group/gpt-5.6-terra": {
+          "name": "GPT 5.6 Terra",
+          "reasoning": true,
+          "options": {
+            "reasoningEffort": "medium",
+            "reasoningSummary": "auto",
+            "include": ["reasoning.encrypted_content"]
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "openai-group/gpt-5.6-luna": {
+          "name": "GPT 5.6 Luna",
+          "reasoning": true,
+          "options": {
+            "reasoningEffort": "medium",
+            "reasoningSummary": "auto",
+            "include": ["reasoning.encrypted_content"]
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "codex-group/gpt-5.6-sol": {
+          "name": "GPT 5.6 Sol",
+          "reasoning": true,
+          "options": {
+            "reasoningEffort": "medium",
+            "reasoningSummary": "auto",
+            "include": ["reasoning.encrypted_content"]
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "codex-group/gpt-5.6-terra": {
+          "name": "GPT 5.6 Terra",
+          "reasoning": true,
+          "options": {
+            "reasoningEffort": "medium",
+            "reasoningSummary": "auto",
+            "include": ["reasoning.encrypted_content"]
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        },
+        "codex-group/gpt-5.6-luna": {
+          "name": "GPT 5.6 Luna",
+          "reasoning": true,
+          "options": {
+            "reasoningEffort": "medium",
+            "reasoningSummary": "auto",
+            "include": ["reasoning.encrypted_content"]
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" }
+          }
+        }
+      }
+    }
+  },
+  "agent": {
+    "explore": {
+      "model": "truefoundry-gateway-openai/openai-group/gpt-5.6-sol",
+      "variant": "medium"
+    },
+    "general": {
+      "model": "truefoundry-gateway-openai/openai-group/gpt-5.6-sol",
+      "variant": "medium"
+    },
+    "compaction": {
+      "model": "truefoundry-gateway-openai/codex-group/gpt-5.6-terra",
+      "variant": "low"
+    }
+  }
+}

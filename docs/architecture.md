@@ -14,7 +14,7 @@ overrides cannot cross the detected host class.
 ## Areas
 
 The manifest defines eight default-ready areas: Git, tools, Bash, tmux, Neovim,
-agents, Herdr, and desktop. Every area uses the lean engine. Desktop is native
+agents, Herdr, and desktop. OpenCode is an explicit optional area. Every area uses the lean engine. Desktop is native
 Omarchy ownership and validation-only on Ubuntu. Default removal combines
 package-only derivation with recorded ownership; the retired state namespace is
 never interpreted as ownership.
@@ -26,6 +26,10 @@ Host-local files remain regular files beneath `~/.config/dotfiles/local/`.
 Native refresh-managed files remain regular Omarchy-owned files and receive
 only exact guarded attachments. Ubuntu Bash likewise keeps `.bashrc` host-owned
 and attaches one exact source block.
+
+The optional OpenCode area owns a shared base, parallel named overlays, and
+launchers. Its selected variant is untracked host-local data, independent of
+the host profile.
 
 `dotfiles.sh` is user-scoped, never changes the login shell, and keeps
 apply/check/remove offline. Networked installation and Neovim restoration are

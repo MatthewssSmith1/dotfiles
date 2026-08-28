@@ -74,7 +74,7 @@ printf 'not json\n' > "$list_home/.local/state/dotfiles/v2/git.json"
 printf 'held\n' > "$list_home/.local/state/dotfiles/deploy.lock"
 HOME="$list_home" PATH=/usr/bin DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$unsupported" \
   "$DOTFILES" list > "$TEST_ROOT/list.out"
-expected=$'profiles:\n  omarchy\n  ubuntu\nareas:\n  git ready\n  tools ready\n  bash ready\n  tmux ready\n  nvim ready\n  agents ready\n  herdr ready\n  desktop ready'
+expected=$'profiles:\n  omarchy\n  ubuntu\nareas:\n  git ready\n  tools ready\n  bash ready\n  tmux ready\n  nvim ready\n  agents ready\n  herdr ready\n  desktop ready\n  opencode optional'
 [[ "$(< "$TEST_ROOT/list.out")" == "$expected" ]] || fail 'unsupported-host list output changed'
 HOME="$list_home" PATH=/usr/bin DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$ubuntu" \
   "$DOTFILES" list > "$TEST_ROOT/list-selected.out"

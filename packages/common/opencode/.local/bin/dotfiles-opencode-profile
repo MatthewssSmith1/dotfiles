@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+selector="$HOME/.config/dotfiles/local/opencode-profile"
+case "${1:-}" in
+  work|personal)
+    (($# == 1)) || { printf 'usage: dotfiles-opencode-profile [work|personal|show]\n' >&2; exit 2; }
+    mkdir -p -- "$(dirname -- "$selector")"
+    [[ ( ! -e "$selector" && ! -L "$selector" ) || ( -f "$selector" && ! -L "$selector" ) ]] || {
+      printf 'dotfiles-opencode-profile: selector is not a regular file: %s\n' "$selector" >&2
+      exit 1
+    }
+    temporary="$(mktemp "${selector}.tmp.XXXXXX")"
+    trap 'rm -f -- "$temporary"' EXIT
+    printf '%s\n' "$1" > "$temporary"
+    chmod 600 "$temporary"
+    mv -fT -- "$temporary" "$selector"
+    trap - EXIT
+    ;;
+  show)
+    (($# == 1)) || { printf 'usage: dotfiles-opencode-profile [work|personal|show]\n' >&2; exit 2; }
+    [[ -f "$selector" && ! -L "$selector" ]] || { printf 'unset\n'; exit 1; }
+    cat -- "$selector"
+    ;;
+  *) printf 'usage: dotfiles-opencode-profile [work|personal|show]\n' >&2; exit 2 ;;
+esac

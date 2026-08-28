@@ -1,11 +1,11 @@
 schema|2
 manager|apt|sudo|apt-get|install|-y
 manager|native
-require|git,tools,bash,tmux,nvim,agents,herdr,desktop|apply,check,remove|all|jq|apt-package|jq|bootstrap-critical
-require|git,tools,bash,tmux,nvim,agents,herdr|apply,check,remove|ubuntu|stow|apt-package|stow|area
-require|git,tools,bash,tmux,nvim,agents,herdr,desktop|apply,check,remove|all|flock|apt-package|util-linux|bootstrap-critical
-require|git,tools,bash,tmux,nvim,agents,herdr,desktop|apply,check,remove|all|realpath|apt-package|coreutils|bootstrap-critical
+require|git,tools,bash,tmux,nvim,agents,herdr,desktop,opencode|apply,check,remove|all|jq|apt-package|jq|bootstrap-critical
+require|git,tools,bash,tmux,nvim,agents,herdr,opencode|apply,check,remove|ubuntu|stow|apt-package|stow|area
+require|git,tools,bash,tmux,nvim,agents,herdr,desktop,opencode|apply,check,remove|all|flock|apt-package|util-linux|bootstrap-critical
+require|git,tools,bash,tmux,nvim,agents,herdr,desktop,opencode|apply,check,remove|all|realpath|apt-package|coreutils|bootstrap-critical
 require|git|apply,check|ubuntu|git|apt-package|git|area
 require|git|apply,check|omarchy|git|omarchy-native|-|area
-require|git,tools,bash,nvim,agents|apply,check,remove|omarchy|stow|omarchy-native|-|area
+require|git,tools,bash,nvim,agents,opencode|apply,check,remove|omarchy|stow|omarchy-native|-|area
 require|desktop|apply,check,remove|omarchy|stow|omarchy-native|-|area

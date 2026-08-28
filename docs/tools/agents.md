@@ -9,7 +9,7 @@ The `agents` area deploys one shared personal package on every profile. It owns 
 ~/.claude/CLAUDE.md          -> ../.agents/AGENTS.md
 ```
 
-OpenCode and Claude configuration, plugins, credentials, sessions, generated state, and unrelated skills remain host-owned. Managed skill names are whole-directory boundaries: an unmanaged same-name directory or an extra entry refuses before mutation. Other skill names coexist as external directories or symlinks and survive apply, check, reapply, and removal. In particular, the Omarchy-native `omarchy` and `diagnose-crash` skill symlinks remain native-owned.
+OpenCode configuration is independently owned only when the optional `opencode` area is applied; see [OpenCode](opencode.md). OpenCode plugins, credentials, sessions, generated state, Claude configuration, and unrelated skills remain host-owned. Managed skill names are whole-directory boundaries: an unmanaged same-name directory or an extra entry refuses before mutation. Other skill names coexist as external directories or symlinks and survive apply, check, reapply, and removal. In particular, the Omarchy-native `omarchy` and `diagnose-crash` skill symlinks remain native-owned.
 
 ## Personal Skills
 

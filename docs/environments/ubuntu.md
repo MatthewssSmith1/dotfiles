@@ -36,7 +36,7 @@ Network behavior is defined by the canonical [operation matrix](../deployment.md
 
 Managed Bash startup is always offline. Dotfiles never changes the login shell.
 
-Claude Code, Codex, and OpenCode use vendor-native user installations on this profile. They may update through their own lifecycle, but dotfiles does not install, require, inspect, or update them. Managed shell PATH gives their native user locations precedence over inherited global mise selections.
+Claude Code, Codex, and OpenCode use vendor-native user installations on this profile. They may update through their own lifecycle, but dotfiles does not install, require, inspect, or update them. The optional OpenCode area supplies a wrapper and configuration without owning the underlying executable.
 
 Codex installation is an explicit host-administration step. Review [OpenAI's current Codex CLI instructions](https://developers.openai.com/codex/cli/) before invoking the vendor installer:
 

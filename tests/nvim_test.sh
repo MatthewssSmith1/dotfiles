@@ -58,8 +58,8 @@ run_area() {
       source "$DOTFILES_DIR/lib/common.sh"
       source "$DOTFILES_DIR/lib/lean_engine.sh"
       source "$DOTFILES_DIR/lib/areas/nvim.sh"
-      AREA_ORDER=(git tools bash tmux nvim agents herdr desktop)
-      AREA_STATUS=([git]=ready [tools]=ready [bash]=ready [tmux]=ready [nvim]=ready [agents]=ready [herdr]=ready [desktop]=ready)
+      AREA_ORDER=(git tools bash tmux nvim agents herdr desktop opencode)
+      AREA_STATUS=([git]=ready [tools]=ready [bash]=ready [tmux]=ready [nvim]=ready [agents]=ready [herdr]=ready [desktop]=ready [opencode]=optional)
       if [[ "$MODE" == remove ]]; then remove_nvim
       elif [[ "$MODE" == check ]]; then preflight_nvim
       else preflight_nvim; apply_nvim
