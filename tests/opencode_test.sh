@@ -19,12 +19,57 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$native/usr/bin/omarchy"
 chmod 0755 "$native/usr/bin/omarchy"
 record_pacman_ownership "$native" 'omarchy 4.0.0-1' /usr/share/omarchy/version /usr/bin/omarchy
 
+# Personal pins the complete Codex OAuth profile; work stays gateway-only.
+personal_profile="$REPO_DIR/packages/common/opencode/.config/opencode/profiles/personal.jsonc"
+work_profile="$REPO_DIR/packages/common/opencode/.config/opencode/profiles/work.jsonc"
+personal_provider_hash='e986bec224382f24e2334b152cdf23ffaf13ccefde895e3fe4c94d2702d3bce8'
+jq -e '
+  .plugin == ["opencode-openai-codex-auth@4.4.0"] and
+  .agent.compaction == {
+    "model": "openai/gpt-5.6-terra",
+    "variant": "low"
+  } and
+  (.provider.openai.models | keys) == [
+    "gpt-5.1",
+    "gpt-5.1-codex",
+    "gpt-5.1-codex-max",
+    "gpt-5.1-codex-mini",
+    "gpt-5.2",
+    "gpt-5.2-codex"
+  ]
+' "$personal_profile" >/dev/null || fail 'personal OpenCode Codex OAuth profile drifted'
+[[ "$(jq -cS '.provider.openai' "$personal_profile" | sha256sum | cut -d ' ' -f1)" == "$personal_provider_hash" ]] ||
+  fail 'personal OpenCode 4.4.0 provider catalog drifted'
+jq -e '
+  ((.plugin // []) | index("opencode-openai-codex-auth@4.4.0") == null) and
+  .agent.compaction == {
+    "model": "truefoundry-gateway-openai/codex-group/gpt-5.6-terra",
+    "variant": "low"
+  }
+' \
+  "$work_profile" >/dev/null || fail 'work OpenCode profile boundary drifted'
+pass
+
+# Shared TUI bindings preserve prompt text and avoid default quit aliases.
+tui_profile="$REPO_DIR/packages/common/opencode/.config/opencode/dotfiles-tui.jsonc"
+jq -e '
+  .keybinds == {
+    "app_exit": "<leader>q",
+    "input_clear": "<leader>k",
+    "prompt_stash": "ctrl+s",
+    "prompt_stash_pop": "ctrl+y",
+    "input_newline": "ctrl+return,shift+return,alt+return,ctrl+j"
+  }
+' "$tui_profile" >/dev/null || fail 'shared OpenCode TUI bindings drifted'
+pass
+
 # Both host profiles deploy the same optional package without state.
 for profile_host in "$ubuntu" "$native"; do
   home="$(new_home "apply-${profile_host##*/}")"
   expect_success "$home" "$profile_host" "$DOTFILES" apply opencode
   [[ -L "$home/.config/opencode/base.jsonc" && -L "$home/.config/opencode/dotfiles-tui.jsonc" &&
     -L "$home/.config/opencode/profiles/work.jsonc" &&
+    -L "$home/.config/opencode/profiles/personal.jsonc" &&
     -L "$home/.local/bin/opencode" && -L "$home/.config/opencode/opencode.jsonc" ]] ||
     fail 'OpenCode managed links were not deployed'
   [[ "$(readlink -- "$home/.config/opencode/opencode.jsonc")" == base.jsonc ]] ||

@@ -51,6 +51,6 @@ The `dotfiles.sh` deployment lifecycle never runs as root, invokes `sudo` or a d
 - [Deployment](docs/deployment.md) — packages, command contract, network/state
 - [Upstream](docs/upstream.md) — pinned sources and synchronization
 - Environments: [Omarchy](docs/environments/omarchy.md), [Ubuntu](docs/environments/ubuntu.md), [Windows Terminal](docs/environments/windows-terminal.md)
-- Tool contracts: [Git](docs/tools/git.md), [Shell](docs/tools/shell.md), [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md), [Agents](docs/tools/agents.md), [OpenCode](docs/tools/opencode.md)
+- Tool contracts: [Git](docs/tools/git.md), [Shell](docs/tools/shell.md), [tmux](docs/tools/tmux.md), [Neovim](docs/tools/neovim.md), [Agents](docs/tools/agents.md), [Herdr](docs/tools/herdr.md), [OpenCode](docs/tools/opencode.md)
 - Testing: [tests/AGENTS.md](tests/AGENTS.md)
 - [Deferred work](docs/deferred.md)

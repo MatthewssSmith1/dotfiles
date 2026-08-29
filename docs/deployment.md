@@ -81,6 +81,7 @@ data, caches, sessions, credentials, and all Neovim runtime roots.
 | `dotfiles-omarchy-prune` | No fetch; privileged local package mutation |
 | Shell, tmux, ordinary Neovim startup | Forbidden |
 | Herdr runtime manifest refresh | Explicitly allowed for agent detection |
+| OpenCode personal startup | May fetch its pinned npm plugin when uncached |
 | `scripts/upstream verify` | Forbidden |
 | `scripts/upstream sync --proposal ...` | Explicitly allowed for pinned source refresh |
 | `nvim-restore` | Explicitly allowed for locked plugin restoration |
@@ -91,6 +92,7 @@ the exact command printed by the relevant area; dotfiles writes selectors but
 never runs `mise install`.
 
 Application runtime networking is allowed only when documented in this matrix.
-Herdr's agent-detection manifest refresh is the current managed exception; its
-version checks remain disabled. This does not alter the offline dotfiles
-apply/check/remove guarantee.
+The managed exceptions are Herdr's agent-detection manifest refresh, with
+version checks disabled, and OpenCode personal-profile installation of its
+pinned npm plugin when absent from the host cache. This does not alter the
+offline dotfiles apply/check/remove guarantee.

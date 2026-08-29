@@ -66,7 +66,7 @@ herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest
 expected_config="$TEST_ROOT/herdr-ubuntu-expected.toml"
 { printf '%s' "$herdr_preamble"; cat "$reference"; } > "$expected_config"
 cmp -s "$expected_config" "$ubuntu_config" || fail 'Ubuntu config is not the exact policy derivation'
-grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' "$selector" || fail 'Herdr selector is not exact'
+grep -qxF '"aqua:ogulcancelik/herdr" = "0.8.2"' "$selector" || fail 'Herdr selector is not exact'
 bash -n "$helper" || fail 'Herdr helpers have invalid Bash syntax'
 for function_name in hdl hds hdlm hsl; do
   grep -q "^${function_name}()" "$helper" || fail "missing Herdr helper: $function_name"
@@ -156,9 +156,9 @@ pass
 
 # Ubuntu deploys only exact Stow links, creates no state, validates syntax with
 # the selected runtime, and leaves application-owned siblings untouched.
-ubuntu_runtime="$TEST_ROOT/ubuntu-runtime"
-make_herdr_runtime "$ubuntu_runtime/herdr"
 ubuntu_home="$(new_home ubuntu)"
+ubuntu_runtime="$ubuntu_home/.local/share/mise/installs/aqua-ogulcancelik-herdr/0.8.2"
+make_herdr_runtime "$ubuntu_runtime/herdr"
 mkdir -p "$ubuntu_home/.config/herdr" "$ubuntu_home/.local/share/herdr"
 printf 'session\n' > "$ubuntu_home/.config/herdr/session.json"
 printf 'log\n' > "$ubuntu_home/.local/share/herdr/herdr.log"
@@ -191,6 +191,19 @@ run_herdr_area "$ubuntu_home" '' ubuntu remove "$ubuntu_runtime" >/dev/null
   "$(< "$ubuntu_home/.local/share/herdr/herdr.log")" == log &&
   "$(< "$ubuntu_home/.local/share/herdr/socket")" == socket ]] || fail 'Herdr lifecycle changed runtime siblings'
 run_herdr_area "$ubuntu_home" '' ubuntu remove "$TEST_ROOT/runtime-absent" >/dev/null
+pass
+
+# A stale installation cannot satisfy the Ubuntu contract by reporting the
+# selected version from a differently owned path.
+stale_home="$(new_home stale-runtime)"
+stale_runtime="$stale_home/.local/share/mise/installs/aqua-ogulcancelik-herdr/0.7.5"
+make_herdr_runtime "$stale_runtime/herdr"
+set +e
+output="$(run_herdr_area "$stale_home" '' ubuntu check "$stale_runtime" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'stale Herdr runtime path was accepted'
+assert_contains "$output" "aqua-ogulcancelik-herdr/0.8.2/herdr"
 pass
 
 # Modified destinations and legacy v1 ownership refuse without mutation.

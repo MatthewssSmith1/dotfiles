@@ -2,7 +2,7 @@
 
 readonly HERDR_VERSION='0.8.2'
 readonly HERDR_NATIVE_PACKAGE='herdr 0.8.2-1'
-readonly HERDR_SELECTOR="aqua:herdrdev/herdr@$HERDR_VERSION"
+readonly HERDR_SELECTOR="aqua:ogulcancelik/herdr@$HERDR_VERSION"
 readonly HERDR_CONFIG='.config/herdr/config.toml'
 readonly HERDR_REFERENCE='packages/upstream/reference/omarchy/config/herdr/config.toml'
 readonly HERDR_UBUNTU_CONFIG='packages/ubuntu/herdr/.config/herdr/config.toml'
@@ -57,6 +57,9 @@ validate_herdr_runtime() {
       return 1
     }
     binary="$(realpath -e -- "$resolved" 2>/dev/null || true)"
+    expected="$HOME/.local/share/mise/installs/aqua-ogulcancelik-herdr/$HERDR_VERSION/herdr"
+    [[ "$binary" == "$expected" ]] ||
+      die "Ubuntu Herdr must resolve to the selected mise install '$expected', not '${binary:-missing}'; install it with: mise install $HERDR_SELECTOR"
   fi
   [[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] ||
     die "selected Herdr runtime is not a directly executable regular file: ${binary:-missing}"
@@ -126,7 +129,7 @@ validate_herdr_closure() {
     [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == 'ubuntu/herdr' ]] ||
       die 'Ubuntu Herdr closure must contain only ubuntu/herdr'
     validate_herdr_ubuntu_derivation
-    grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' "$selector" ||
+    grep -qxF '"aqua:ogulcancelik/herdr" = "0.8.2"' "$selector" ||
       die 'Ubuntu Herdr mise selector is not the accepted 0.8.2 release'
     lean_scan_packages
     ((${#LEAN_TARGET_PATHS[@]} == ${#expected_targets[@]})) || die 'Ubuntu Herdr package target inventory is not exact'

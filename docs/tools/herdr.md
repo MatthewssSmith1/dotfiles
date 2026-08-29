@@ -8,7 +8,7 @@ On native Omarchy, Herdr is validation-only. Dotfiles requires package-owned `/u
 
 Ubuntu deploys the accepted v4 config with one mechanically verified policy
 preamble, an exact
-`aqua:herdrdev/herdr@0.8.2` mise selector, and curated `hdl`, `hds`, `hdlm`, and
+`aqua:ogulcancelik/herdr@0.8.2` mise selector, and curated `hdl`, `hds`, `hdlm`, and
 `hsl` helpers from `ubuntu/herdr`. Helpers diagnose missing Herdr, `jq`, `awk`,
 Hunk, OpenCode, and the selected editor. The Bash dispatcher sources them only
 when the Herdr package is present.
@@ -25,6 +25,6 @@ edit reviewed preferences in the repository and keep the exact policy derivation
 
 ## Installation
 
-Dotfiles does not fetch or install Herdr. On Ubuntu, install the selected runtime explicitly with `mise install aqua:herdrdev/herdr@0.8.2`; ordinary apply, check, and remove remain offline.
+Dotfiles does not fetch or install Herdr. On Ubuntu, install the selected runtime explicitly with `mise install aqua:ogulcancelik/herdr@0.8.2`; ordinary apply, check, and remove remain offline. The registry key retains Herdr's former repository owner; validation requires the exact versioned mise installation so stale launchers cannot satisfy the contract by reporting the selected version.
 
 `herdr update` is outside the contract. Update by reviewing and refreshing the repository lock.

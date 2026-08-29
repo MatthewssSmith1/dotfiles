@@ -111,7 +111,7 @@ cmp -s "$herdr_ubuntu" "$herdr_expected" || fail 'Ubuntu Herdr config is not the
   "$(grep -c '^version_check = false$' "$herdr_ubuntu")" == 1 &&
   "$(grep -c '^manifest_check = true$' "$herdr_ubuntu")" == 1 ]] ||
   fail 'Ubuntu Herdr policy values are not exact'
-grep -qxF '"aqua:herdrdev/herdr" = "0.8.2"' \
+grep -qxF '"aqua:ogulcancelik/herdr" = "0.8.2"' \
   "$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml" ||
   fail 'Ubuntu Herdr selector is not exact'
 [[ ! -e "$REPO_DIR/packages/common/herdr/.config/dotfiles/herdr/config.toml" ]] ||

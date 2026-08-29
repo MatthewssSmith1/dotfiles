@@ -1,6 +1,10 @@
 {
   "$schema": "https://opencode.ai/tui.json",
   "keybinds": {
+    "app_exit": "<leader>q",
+    "input_clear": "<leader>k",
+    "prompt_stash": "ctrl+s",
+    "prompt_stash_pop": "ctrl+y",
     "input_newline": "ctrl+return,shift+return,alt+return,ctrl+j"
   }
 }
