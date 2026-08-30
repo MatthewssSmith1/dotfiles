@@ -5,6 +5,8 @@ readonly DESKTOP_INPUT_FRAGMENT='.config/dotfiles/omarchy/hypr/input.lua'
 readonly DESKTOP_XCOMPOSE='.XCompose'
 readonly DESKTOP_XCOMPOSE_ALIASES='.config/dotfiles/omarchy/XCompose'
 readonly DESKTOP_SHELL='.config/omarchy/shell.json'
+readonly DESKTOP_MENU_EXTENSION='.config/omarchy/extensions/omarchy-menu.jsonc'
+readonly DESKTOP_THEME_SWITCHER='.local/bin/dotfiles-omarchy-theme-switcher'
 readonly DESKTOP_INPUT_BEGIN='-- >>> dotfiles desktop input >>>'
 readonly DESKTOP_INPUT_END='-- <<< dotfiles desktop input <<<'
 readonly DESKTOP_INPUT_TOKEN='dotfiles desktop input'
@@ -89,6 +91,37 @@ validate_desktop_stock_input() {
     die 'Omarchy settings package version does not exactly match authoritative Omarchy'
 }
 
+validate_desktop_theme_filter() {
+  local package="$DOTFILES_DIR/packages/omarchy/desktop" menu selector hidden
+  menu="$package/$DESKTOP_MENU_EXTENSION"
+  selector="$package/$DESKTOP_THEME_SWITCHER"
+  [[ -f "$menu" && ! -L "$menu" ]] || die 'desktop menu extension is missing or unsafe'
+  [[ -f "$selector" && ! -L "$selector" && -x "$selector" && "$(stat -c %a -- "$selector")" == 755 ]] ||
+    die 'desktop theme selector is not an accepted executable payload'
+  bash -n "$selector" || die 'desktop theme selector has invalid Bash syntax'
+  mapfile -t hidden < <(awk '/^readonly -a HIDDEN_THEMES=\($/{inside=1; next} inside && /^\)/{exit} inside {sub(/^[[:space:]]+/, ""); print}' "$selector")
+  [[ "${hidden[*]}" == 'ethereal flexoki-light hackerman last-horizon lumon lupine miasma rose-pine vantablack white' ]] ||
+    die 'desktop theme selector denylist is not exact'
+  jq -e '
+    keys == ["style.theme"] and
+    .["style.theme"].icon == "󰸌" and
+    .["style.theme"].label == "Theme" and
+    .["style.theme"].aliases == ["theme", "themes"] and
+    .["style.theme"].action == "theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""
+  ' "$menu" >/dev/null || die 'desktop menu extension routing is not exact'
+}
+
+desktop_require_adoptable_menu() {
+  local path="$HOME/$DESKTOP_MENU_EXTENSION"
+  local stock="${HOST_ROOT:-}/usr/share/omarchy/config/omarchy/extensions/omarchy-menu.jsonc"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  [[ ! -L "$path" ]] || return 0
+  if [[ -f "$path" && -f "$stock" && ! -L "$stock" ]] && cmp -s -- "$path" "$stock"; then
+    die "unchanged Omarchy menu extension requires one-time adoption; remove $path, then rerun: dotfiles.sh apply desktop"
+  fi
+  die "menu extension contains user changes or is unexpected; manually merge $path before dotfiles.sh apply desktop"
+}
+
 desktop_require_adoptable_input() {
   local stock="${HOST_ROOT:-}/usr/share/omarchy/config/hypr/input.lua"
   validate_desktop_stock_input
@@ -111,18 +144,37 @@ validate_desktop_closure() {
       die 'native desktop closure must contain only omarchy/desktop'
     validate_desktop_fragment
     validate_desktop_xcompose_aliases
+    validate_desktop_theme_filter
   else
     [[ "$PROFILE_ENTRY_KIND" == validation-only && ${#PACKAGES[@]} -eq 0 ]] ||
       die 'Ubuntu desktop must be validation-only'
   fi
 }
 
+desktop_managed_links_and_markers_absent() {
+  local index path
+  lean_scan_packages
+  for index in "${!LEAN_TARGET_PATHS[@]}"; do
+    path="$HOME/${LEAN_TARGET_PATHS[index]}"
+    [[ ! -e "$path" && ! -L "$path" ]] || return 1
+  done
+  for index in "${!LEAN_ATTACHMENT_PATHS[@]}"; do
+    lean_inspect_attachment "$index"
+    [[ "$LEAN_ATTACHMENT_STATUS" == absent ]] || return 1
+  done
+}
+
 preflight_desktop() {
   register_desktop_area
   validate_desktop_closure
+  if [[ "$SELECTED_PROFILE" == omarchy && "$MODE" == remove && ! -e "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] &&
+    desktop_managed_links_and_markers_absent; then
+    return 0
+  fi
   if [[ "$SELECTED_PROFILE" == omarchy && "$MODE" != remove ]]; then
     desktop_require_adoptable_input
     desktop_require_xcompose
+    desktop_require_adoptable_menu
   fi
   lean_preflight_area "$MODE"
   if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
@@ -136,10 +188,11 @@ apply_desktop() {
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     desktop_require_adoptable_input
     desktop_require_xcompose
+    desktop_require_adoptable_menu
   fi
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    log 'applied desktop natural-scroll and XCompose loaders plus shell idle values without restarting the Omarchy shell'
+    log 'applied desktop preferences and theme filter without restarting the Omarchy shell'
   else
     log 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
   fi
@@ -148,6 +201,11 @@ apply_desktop() {
 remove_desktop() {
   register_desktop_area
   validate_desktop_closure
+  if [[ "$SELECTED_PROFILE" == omarchy && ! -e "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] &&
+    desktop_managed_links_and_markers_absent; then
+    log 'desktop ownership is already absent; no changes made'
+    return 0
+  fi
   lean_remove_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     log 'restored desktop shell idle values and removed exact desktop links and loaders'

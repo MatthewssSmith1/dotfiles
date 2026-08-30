@@ -56,6 +56,10 @@ rewrite historical helper paths; existing host-local files retain precedence.
 `rebase.autostash` is not supplied unless a host-local or repository layer sets
 it.
 
+Follow [GitHub Access](github-access.md) before GitHub credential setup, remote
+writes, protected-branch changes, or PAT rotation. Its intended owner-aware
+routing remains provisional until the documented repository support lands.
+
 ## Non-Goals
 
 - Committing user identity or credentials.

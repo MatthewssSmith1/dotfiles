@@ -10,6 +10,8 @@ readonly TMUX_BASELINE="$REPO_DIR/packages/upstream/tmux/.config/dotfiles/upstre
 readonly TMUX_DISPATCHER="$REPO_DIR/packages/ubuntu/tmux/.config/tmux/tmux.conf"
 readonly TMUX_ADAPTER="$REPO_DIR/packages/ubuntu/tmux/.config/dotfiles/tmux/ubuntu.conf"
 readonly OMARCHY_PRUNE="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-prune"
+readonly OMARCHY_THEME_SWITCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-theme-switcher"
+readonly OMARCHY_MENU_EXTENSION="$REPO_DIR/packages/omarchy/desktop/.config/omarchy/extensions/omarchy-menu.jsonc"
 
 # Every dotfiles source exists, parses, and keeps strict mode.
 readonly DOTFILES_SOURCES=(
@@ -33,7 +35,7 @@ done
 bash -n "${DOTFILES_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
   "$REPO_DIR/scripts/agent-skills" \
-  "$OMARCHY_PRUNE" || fail 'a dotfiles Bash file has invalid syntax'
+  "$OMARCHY_PRUNE" "$OMARCHY_THEME_SWITCHER" || fail 'a dotfiles Bash file has invalid syntax'
 grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missing'
 [[ -x "$DOTFILES" && ! -e "$REPO_DIR/bootstrap.sh" ]] || fail 'root command rename is incomplete'
 [[ -x "$REPO_DIR/packages/common/tools/.local/bin/dotfiles" ]] || fail 'dotfiles launcher is not executable'
@@ -75,7 +77,7 @@ for executable in "$opencode_package/.local/bin/"* "$opencode_package/.local/sha
 done
 pass
 
-# Desktop is native-only ownership with two exact private payloads. Ubuntu is
+# Desktop is native-only ownership with four exact private payloads. Ubuntu is
 # validation-only, and default removal can select desktop only from v2 state.
 desktop_fragment="$REPO_DIR/packages/omarchy/desktop/.config/dotfiles/omarchy/hypr/input.lua"
 desktop_aliases="$REPO_DIR/packages/omarchy/desktop/.config/dotfiles/omarchy/XCompose"
@@ -83,14 +85,30 @@ expected_desktop_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p
 grep -qxF 'desktop omarchy/desktop' "$REPO_DIR/profiles/omarchy.conf" || fail 'native desktop closure is not final'
 grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu desktop is not validation-only'
 [[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f -printf '%P\n' | LC_ALL=C sort)" == \
-  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/input.lua' && -f "$desktop_fragment" ]] ||
+  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/input.lua\n.config/omarchy/extensions/omarchy-menu.jsonc\n.local/bin/dotfiles-omarchy-theme-switcher' && -f "$desktop_fragment" ]] ||
   fail 'desktop package payload inventory is not exact'
 [[ "$(< "$desktop_aliases")" == "$expected_desktop_aliases" ]] || fail 'desktop Compose aliases are not exact'
+[[ -f "$OMARCHY_THEME_SWITCHER" && ! -L "$OMARCHY_THEME_SWITCHER" && -x "$OMARCHY_THEME_SWITCHER" &&
+  "$(stat -c %a "$OMARCHY_THEME_SWITCHER")" == 755 ]] || fail 'desktop theme selector is not an exact executable payload'
+[[ -f "$OMARCHY_MENU_EXTENSION" && ! -L "$OMARCHY_MENU_EXTENSION" ]] || fail 'desktop menu extension is not a regular payload'
+grep -qxF 'readonly -a HIDDEN_THEMES=(' "$OMARCHY_THEME_SWITCHER" || fail 'theme denylist is not readonly'
+expected_hidden=$'ethereal\nflexoki-light\nhackerman\nlast-horizon\nlumon\nlupine\nmiasma\nrose-pine\nvantablack\nwhite'
+actual_hidden="$(awk '/^readonly -a HIDDEN_THEMES=\($/{inside=1; next} inside && /^\)/{exit} inside {sub(/^[[:space:]]+/, ""); print}' "$OMARCHY_THEME_SWITCHER")"
+[[ "$actual_hidden" == "$expected_hidden" ]] || fail 'theme denylist names are not exact'
+jq -e '
+  keys == ["style.theme"] and
+  .["style.theme"] == {
+    "icon":"󰸌", "label":"Theme", "aliases":["theme", "themes"],
+    "action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""
+  }
+' "$OMARCHY_MENU_EXTENSION" >/dev/null || fail 'desktop menu theme routing is not exact'
 grep -Fq '|| "$1" == desktop' "$DOTFILES" || fail 'desktop is absent from lean dispatch'
 grep -Fq 'for file in "$(lean_state_dir)"/*.json' "$DOTFILES" || fail 'default removal does not inspect ownership state'
 ! grep -Eq 'add_area[[:space:]]+desktop' "$DOTFILES" || fail 'default removal selects desktop without ownership'
 ! grep -Eq '(^|[;&|[:space:]])(omarchy-shell|hyprctl|omarchy[[:space:]]+restart|omarchy[[:space:]]+reload)([;&|[:space:]]|$)' \
   "$REPO_DIR/lib/areas/desktop.sh" || fail 'desktop invokes shell restart/reload'
+! grep -Eq '^[[:space:]]*(omarchy[[:space:]]+menu[[:space:]]+refresh|dotfiles-omarchy-theme-switcher|omarchy-theme-(switcher|set))([;&|[:space:]]|$)' \
+  "$REPO_DIR/lib/areas/desktop.sh" || fail 'desktop deployment invokes theme/menu runtime commands'
 pass
 
 # Herdr uses native validation-only ownership and one Ubuntu package-only

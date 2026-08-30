@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+readonly -a HIDDEN_THEMES=(
+  ethereal
+  flexoki-light
+  hackerman
+  last-horizon
+  lumon
+  lupine
+  miasma
+  rose-pine
+  vantablack
+  white
+)
+
+die() {
+  printf 'dotfiles-omarchy-theme-switcher: %s\n' "$*" >&2
+  exit 1
+}
+
+ensure_owned_dir() {
+  local path="$1"
+  if [[ -e "$path" || -L "$path" ]]; then
+    [[ -d "$path" && ! -L "$path" && "$(stat -c %u -- "$path")" == "$EUID" ]] ||
+      die "cache directory is unsafe: $path"
+  else
+    mkdir -m 0700 -- "$path"
+  fi
+}
+
+ensure_private_dir() {
+  local path="$1"
+  ensure_owned_dir "$path"
+  chmod 0700 -- "$path"
+}
+
+is_hidden_theme() {
+  local candidate="$1" hidden
+  for hidden in "${HIDDEN_THEMES[@]}"; do
+    [[ "$candidate" != "$hidden" ]] || return 0
+  done
+  return 1
+}
+
+real_omarchy_path="${OMARCHY_PATH:-/usr/share/omarchy}"
+real_themes="$real_omarchy_path/themes"
+real_switcher="$real_omarchy_path/bin/omarchy-theme-switcher"
+[[ "$real_omarchy_path" == /* && -d "$real_omarchy_path" && ! -L "$real_omarchy_path" ]] ||
+  die "Omarchy root is missing or unsafe: $real_omarchy_path"
+[[ -d "$real_themes" && ! -L "$real_themes" ]] ||
+  die "bundled themes directory is missing or unsafe: $real_themes"
+[[ -f "$real_switcher" && ! -L "$real_switcher" && -x "$real_switcher" ]] ||
+  die "native theme selector is missing or unsafe: $real_switcher"
+
+cache_base="${XDG_CACHE_HOME:-$HOME/.cache}"
+[[ "$cache_base" == /* ]] || die "cache root is not absolute: $cache_base"
+if [[ ! -e "$cache_base" && ! -L "$cache_base" ]]; then
+  cache_parent="$(dirname -- "$cache_base")"
+  [[ -d "$cache_parent" && ! -L "$cache_parent" && "$(stat -c %u -- "$cache_parent")" == "$EUID" ]] ||
+    die "cache parent is missing or unsafe: $cache_parent"
+fi
+ensure_owned_dir "$cache_base"
+
+cache_root="$cache_base/dotfiles"
+selector_root="$cache_root/omarchy-theme-switcher"
+version_root="$selector_root/v1"
+view_root="$version_root/view"
+view_themes="$view_root/themes"
+runtime_cache="$version_root/runtime-cache"
+ensure_private_dir "$cache_root"
+ensure_private_dir "$selector_root"
+ensure_private_dir "$version_root"
+ensure_private_dir "$view_root"
+ensure_private_dir "$view_themes"
+ensure_private_dir "$runtime_cache"
+
+lock="$version_root/lock"
+if [[ -e "$lock" || -L "$lock" ]]; then
+  [[ -f "$lock" && ! -L "$lock" && "$(stat -c %u -- "$lock")" == "$EUID" ]] ||
+    die "cache lock is unsafe: $lock"
+fi
+exec 9>"$lock"
+flock 9
+
+declare -A allowed=()
+user_themes="$HOME/.config/omarchy/themes"
+while IFS= read -r -d '' theme_path; do
+  theme_name="${theme_path##*/}"
+  if ! is_hidden_theme "$theme_name" || [[ -d "$user_themes/$theme_name" ]]; then
+    allowed["$theme_name"]="$theme_path"
+  fi
+done < <(find "$real_themes" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+
+while IFS= read -r -d '' managed_path; do
+  theme_name="${managed_path##*/}"
+  [[ -L "$managed_path" ]] || die "refusing unexpected cache entry: $managed_path"
+  if [[ -z "${allowed[$theme_name]+x}" ]]; then
+    rm -- "$managed_path"
+  elif [[ "$(readlink -- "$managed_path")" != "${allowed[$theme_name]}" ]]; then
+    temporary="$view_themes/.dotfiles-theme-link.$$.${RANDOM}"
+    ln -s -- "${allowed[$theme_name]}" "$temporary"
+    mv -Tf -- "$temporary" "$managed_path"
+  fi
+done < <(find "$view_themes" -mindepth 1 -maxdepth 1 -print0)
+
+for theme_name in "${!allowed[@]}"; do
+  managed_path="$view_themes/$theme_name"
+  [[ -L "$managed_path" ]] || ln -s -- "${allowed[$theme_name]}" "$managed_path"
+done
+
+flock -u 9
+exec 9>&-
+
+OMARCHY_PATH="$view_root" XDG_CACHE_HOME="$runtime_cache" exec "$real_switcher" "$@"

@@ -69,6 +69,8 @@ desktop use guarded attachments; desktop also owns only the two registered
 idle scalars in `shell.json`. Its package XCompose fragment provides four
 personal aliases; a guarded include attaches it to the regular Omarchy-owned
 `~/.XCompose` without replacing the default include, name, or email content.
+The desktop package also links the personal Omarchy menu extension and bundled
+theme-filter selector after explicit adoption of any regular menu template.
 tmux and Herdr are validation-only.
 Modified links or attachments refuse removal. Removal preserves application
 data, caches, sessions, credentials, and all Neovim runtime roots.
