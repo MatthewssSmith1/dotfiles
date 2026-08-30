@@ -62,10 +62,15 @@ reference="$REPO_DIR/packages/upstream/reference/omarchy/config/herdr/config.tom
 ubuntu_config="$REPO_DIR/packages/ubuntu/herdr/.config/herdr/config.toml"
 helper="$REPO_DIR/packages/ubuntu/herdr/.config/dotfiles/bash/fns/herdr"
 selector="$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml"
+path_dropin="$REPO_DIR/packages/ubuntu/herdr/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf"
 herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
+path_dropin_content=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 expected_config="$TEST_ROOT/herdr-ubuntu-expected.toml"
+expected_path_dropin="$TEST_ROOT/moshi-herdr-path-expected.conf"
 { printf '%s' "$herdr_preamble"; cat "$reference"; } > "$expected_config"
+printf '%s' "$path_dropin_content" > "$expected_path_dropin"
 cmp -s "$expected_config" "$ubuntu_config" || fail 'Ubuntu config is not the exact policy derivation'
+cmp -s "$expected_path_dropin" "$path_dropin" || fail 'Moshi PATH drop-in bytes are not exact'
 grep -qxF '"aqua:ogulcancelik/herdr" = "0.8.2"' "$selector" || fail 'Herdr selector is not exact'
 bash -n "$helper" || fail 'Herdr helpers have invalid Bash syntax'
 for function_name in hdl hds hdlm hsl; do
@@ -99,6 +104,21 @@ for mutation in missing altered duplicated reordered extra; do
   [[ "$(< "$malformed_home/.config/herdr/session.json")" == session ]] || fail "$mutation derivation refusal mutated HOME"
   [[ ! -e "$malformed_home/.local/state/dotfiles/v2/herdr.json" ]] || fail "$mutation derivation refusal wrote state"
 done
+pass
+
+# The area validator, not only this test's static assertion, rejects drop-in drift.
+fixture="$TEST_ROOT/repo-dropin-drift"
+make_herdr_repo_fixture "$fixture"
+printf '%s# drift\n' "$path_dropin_content" > \
+  "$fixture/packages/ubuntu/herdr/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf"
+malformed_home="$(new_home dropin-drift)"
+set +e
+output="$(run_herdr_area "$malformed_home" '' ubuntu apply "$TEST_ROOT/runtime-absent" "$fixture" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'mutated Moshi PATH drop-in passed area validation'
+assert_contains "$output" 'Moshi Herdr PATH drop-in bytes are not exact'
+assert_empty_home "$malformed_home"
 pass
 
 # Native apply, check, and remove validate exact package-owned stock behavior
@@ -159,8 +179,9 @@ pass
 ubuntu_home="$(new_home ubuntu)"
 ubuntu_runtime="$ubuntu_home/.local/share/mise/installs/aqua-ogulcancelik-herdr/0.8.2"
 make_herdr_runtime "$ubuntu_runtime/herdr"
-mkdir -p "$ubuntu_home/.config/herdr" "$ubuntu_home/.local/share/herdr"
+mkdir -p "$ubuntu_home/.config/herdr" "$ubuntu_home/.config/systemd/user" "$ubuntu_home/.local/share/herdr"
 printf 'session\n' > "$ubuntu_home/.config/herdr/session.json"
+printf 'generated primary service\n' > "$ubuntu_home/.config/systemd/user/moshi-hook.service"
 printf 'log\n' > "$ubuntu_home/.local/share/herdr/herdr.log"
 printf 'socket\n' > "$ubuntu_home/.local/share/herdr/socket"
 cp -a "$ubuntu_home" "$TEST_ROOT/ubuntu-check-before"
@@ -173,12 +194,17 @@ set -e
 ((status != 0)) || fail 'unapplied Ubuntu Herdr check converged'
 diff --no-dereference -r "$ubuntu_home" "$TEST_ROOT/ubuntu-check-before" >/dev/null || fail 'Ubuntu Herdr check mutated HOME'
 run_herdr_area "$ubuntu_home" '' ubuntu apply "$ubuntu_runtime" >/dev/null
-for path in .config/herdr/config.toml .config/dotfiles/bash/fns/herdr .config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml; do
+for path in .config/herdr/config.toml .config/dotfiles/bash/fns/herdr .config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml .config/systemd/user/moshi-hook.service.d/10-herdr-path.conf; do
   [[ -L "$ubuntu_home/$path" ]] || fail "Ubuntu Herdr omitted package link: $path"
 done
 cmp -s "$ubuntu_home/.config/herdr/config.toml" "$ubuntu_config" || fail 'deployed Herdr config bytes changed'
+cmp -s "$ubuntu_home/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf" "$path_dropin" || fail 'deployed Moshi PATH drop-in bytes changed'
+[[ ! -L "$ubuntu_home/.config/systemd/user/moshi-hook.service" &&
+  "$(< "$ubuntu_home/.config/systemd/user/moshi-hook.service")" == 'generated primary service' ]] || fail 'Herdr owned Moshi primary service'
 [[ ! -e "$ubuntu_home/.local/state/dotfiles/v2/herdr.json" ]] || fail 'package-only Herdr wrote v2 state'
 cp -a "$ubuntu_home" "$TEST_ROOT/ubuntu-applied"
+run_herdr_area "$ubuntu_home" '' ubuntu apply "$ubuntu_runtime" >/dev/null
+diff --no-dereference -r "$ubuntu_home" "$TEST_ROOT/ubuntu-applied" >/dev/null || fail 'converged Herdr apply mutated HOME'
 run_herdr_area "$ubuntu_home" '' ubuntu check "$ubuntu_runtime" >/dev/null
 ubuntu_hash="$(sha256sum "$ubuntu_config" | cut -d ' ' -f1)"
 [[ "$(sort -u "$HERDR_CONFIG_TRACE")" == "$ubuntu_hash" ]] || fail 'Ubuntu syntax check did not use the derived payload'
@@ -186,11 +212,29 @@ unset HERDR_CONFIG_TRACE
 diff --no-dereference -r "$ubuntu_home" "$TEST_ROOT/ubuntu-applied" >/dev/null || fail 'converged Herdr check mutated HOME'
 run_herdr_area "$ubuntu_home" '' ubuntu remove "$ubuntu_runtime" >/dev/null
 [[ ! -e "$ubuntu_home/.config/herdr/config.toml" && ! -e "$ubuntu_home/.config/dotfiles/bash/fns/herdr" &&
-  ! -e "$ubuntu_home/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml" ]] || fail 'Herdr removal retained managed links'
+  ! -e "$ubuntu_home/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml" &&
+  ! -e "$ubuntu_home/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf" ]] || fail 'Herdr removal retained managed links'
 [[ "$(< "$ubuntu_home/.config/herdr/session.json")" == session &&
+  "$(< "$ubuntu_home/.config/systemd/user/moshi-hook.service")" == 'generated primary service' &&
   "$(< "$ubuntu_home/.local/share/herdr/herdr.log")" == log &&
   "$(< "$ubuntu_home/.local/share/herdr/socket")" == socket ]] || fail 'Herdr lifecycle changed runtime siblings'
 run_herdr_area "$ubuntu_home" '' ubuntu remove "$TEST_ROOT/runtime-absent" >/dev/null
+pass
+
+# A pre-existing Moshi PATH drop-in refuses deployment without touching it.
+collision_home="$(new_home dropin-collision)"
+collision_runtime="$collision_home/.local/share/mise/installs/aqua-ogulcancelik-herdr/0.8.2"
+make_herdr_runtime "$collision_runtime/herdr"
+mkdir -p "$collision_home/.config/systemd/user/moshi-hook.service.d"
+printf 'host-owned\n' > "$collision_home/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf"
+set +e
+run_herdr_area "$collision_home" '' ubuntu apply "$collision_runtime" >/dev/null 2>&1
+status=$?
+set -e
+((status != 0)) || fail 'existing Moshi PATH drop-in was replaced'
+[[ "$(< "$collision_home/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf")" == host-owned ]] ||
+  fail 'Moshi PATH drop-in collision refusal mutated destination'
+[[ ! -e "$collision_home/.config/herdr/config.toml" ]] || fail 'Moshi PATH drop-in collision partially deployed Herdr'
 pass
 
 # A stale installation cannot satisfy the Ubuntu contract by reporting the

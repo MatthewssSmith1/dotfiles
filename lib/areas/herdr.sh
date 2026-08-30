@@ -7,6 +7,8 @@ readonly HERDR_CONFIG='.config/herdr/config.toml'
 readonly HERDR_REFERENCE='packages/upstream/reference/omarchy/config/herdr/config.toml'
 readonly HERDR_UBUNTU_CONFIG='packages/ubuntu/herdr/.config/herdr/config.toml'
 readonly HERDR_UBUNTU_PREAMBLE=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
+readonly HERDR_MOSHI_PATH='.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf'
+readonly HERDR_MOSHI_PATH_CONTENT=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 
 register_herdr_area() {
   local package
@@ -119,6 +121,7 @@ validate_herdr_closure() {
     .config/dotfiles/bash/fns/herdr
     .config/herdr/config.toml
     .config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml
+    .config/systemd/user/moshi-hook.service.d/10-herdr-path.conf
   )
   [[ -f "$DOTFILES_DIR/$HERDR_REFERENCE" && ! -L "$DOTFILES_DIR/$HERDR_REFERENCE" ]] ||
     die 'accepted Herdr v4 reference config is missing'
@@ -129,6 +132,8 @@ validate_herdr_closure() {
     [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == 'ubuntu/herdr' ]] ||
       die 'Ubuntu Herdr closure must contain only ubuntu/herdr'
     validate_herdr_ubuntu_derivation
+    cmp -s -- "$DOTFILES_DIR/packages/ubuntu/herdr/$HERDR_MOSHI_PATH" \
+      <(printf '%s' "$HERDR_MOSHI_PATH_CONTENT") || die 'Ubuntu Moshi Herdr PATH drop-in bytes are not exact'
     grep -qxF '"aqua:ogulcancelik/herdr" = "0.8.2"' "$selector" ||
       die 'Ubuntu Herdr mise selector is not the accepted 0.8.2 release'
     lean_scan_packages
