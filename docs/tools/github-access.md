@@ -1,244 +1,206 @@
 # GitHub Access
 
-Status: provisional policy for repository review. Credential routing and the
-constrained `gh` launcher described here are not implemented yet. Apply no PAT
-or host-authentication step until its repository support is reviewed and ready.
+Ubuntu Git deployment makes owner-routed HTTPS credentials and a constrained
+`gh` launcher available. They remain dormant until the host-local Git file
+includes the managed activation file. Omarchy receives neither payload.
 
-Official documentation reviewed: 2026-08-29. Live UI not yet reconfirmed.
+Official documentation reviewed: 2026-08-29. Reconfirm live UI labels before
+changing repository settings.
 
-## Workflow
+## Inventory
 
-Before changing GitHub access, credentials, remotes, protected branches, or pull
-requests:
+| Repository | Visibility | Default | Routine PAT |
+|---|---|---|---|
+| `MatthewssSmith1/dotfiles` | public | `main` | personal owner PAT |
+| `mimir-db/mimir-db` | private | `main` | `mimir-db` owner PAT |
+| `mimir-db/mimir-db-v0` | private | `main` | `mimir-db` owner PAT |
 
-1. Inventory the repository with the worksheet below.
-2. Compare its live GitHub settings with the baseline and identify exceptions.
-3. Apply reviewed ruleset and merge-setting changes from a trusted human admin
-   session.
-4. Record justified exceptions here before relying on them operationally.
-5. Create or rotate PATs only after repository selection and local credential
-   routing are ready.
-6. Verify authentication, authorization, and ruleset behavior separately.
+All selected remotes use canonical credential-free
+`https://github.com/OWNER/REPOSITORY.git` URLs. The owner PATs are fine-grained,
+expire within 90 days, select only the repositories above, and grant only
+`Contents: read/write`, `Pull requests: read/write`, and mandatory Metadata
+read. `Workflows: write`, Administration, and every other optional permission
+remain disabled.
 
-Completion: every selected repository has an explicit disposition; its live
-settings match either the baseline or a recorded exception; credentials contain
-only the reviewed repositories and permissions.
+## Repository Rules
 
-## Repository Worksheet
+For public `MatthewssSmith1/dotfiles`, maintain an active ruleset on `main` that
+requires linear history, blocks force pushes, restricts deletion, has no bypass
+actors, and does not restrict ordinary updates. Squash and rebase merging are
+enabled; merge commits are disabled. PR and status-check requirements are not
+initially added.
 
-Review this repository and each immediate Git repository under `~/dev/*`.
-Retain the worksheet host-locally if private repository names should not be
-tracked.
+The current unpaid plan does not enforce equivalent branch or tag rules on the
+two private repositories. Record them as unenforced, not unverified. Enable
+squash and rebase merging and disable merge commits, including on
+`mimir-db-v0`. Do not run destructive rejection probes there. Any writer PAT can
+still force-update or delete private refs and tags through Git or another API
+client. Revisit protections before expanding unattended use or after adopting a
+supporting plan.
+
+Merge settings guide PR operations; they do not protect refs from direct writes.
+Agents push or merge only when Matt requests that remote operation. Force push,
+branch deletion, merge commits, and workflow-file writes are outside routine
+policy.
+
+## Availability And Activation
+
+Ubuntu deploys:
 
 ```text
-OWNER/REPOSITORY:
-visibility:
-default branch:
-local fetch URL:
-local push URL:
-current protection/ruleset:
-current merge methods:
-automation or bypass actors:
-Actions workflows present:
-unattended workflow edits required:
-releases published:
-immutable release tag patterns:
-PAT selected: yes/no
-PAT owner: MatthewssSmith1/mimir-db/none
-baseline exceptions and reason:
+~/.config/dotfiles/git/github-vps.conf
+~/.local/share/dotfiles/bin/dotfiles-github-auth
+~/.local/bin/gh
 ```
 
-Stop before applying the baseline when the default branch is not `main`, an
-automation actor relies on bypass or direct protected-branch writes, required
-checks are already enforced, release tags have an established policy, or an
-agent must modify `.github/workflows/**`.
+Without an activation marker, `~/.local/bin/gh` exact-execs `/usr/bin/gh` with
+untouched arguments and environment. It performs no policy parsing or bundle
+read. Activate both Git and `gh` by appending this to the real, safe
+`~/.config/dotfiles/local/git.conf` after generic helper settings:
 
-## Repository Baseline
+```gitconfig
+[include]
+	path = ~/.config/dotfiles/git/github-vps.conf
+```
 
-For each selected repository, use an active branch ruleset targeting the default
-branch, which should be `main` before rollout:
+The tracked file supplies the sole true activation marker, resets inherited
+GitHub helpers, installs the owner router, enables `useHttpPath`, and fails
+closed for HTTP. A marker from any other origin, duplicate marker, malformed
+activation, altered helper chain, or repository-local credential helper is an
+error. Active operation requires the regular fixed `/usr/bin/gh` backend.
 
-- Require linear history.
-- Block force pushes.
-- Restrict deletions.
-- Leave the bypass list empty.
-- Leave restrict updates disabled so requested fast-forward updates remain
-  possible.
-- Do not initially require a pull request.
-- Preserve existing required status checks until they are deliberately reviewed;
-  do not add new required checks without a stable check contract.
+Verify activation without displaying credentials:
 
-Under repository pull-request merge settings:
+```bash
+command -v gh
+git config --includes --show-origin --get-all dotfiles.github-vps.enabled
+git config --includes --get-all credential.https://github.com.helper
+git config --includes --get credential.https://github.com.useHttpPath
+gh --help
+dotfiles check git
+```
 
-- Enable squash merging.
-- Enable rebase merging.
-- Disable merge commits.
+The marker must be exactly `true` from
+`~/.config/dotfiles/git/github-vps.conf`; the helper chain must be one empty
+reset followed by `!~/.local/share/dotfiles/bin/dotfiles-github-auth`.
 
-Prefer repository rulesets. Use an organization ruleset only when the current
-GitHub plan supports it and all selected repositories share the same policy.
-Inspect the resulting active rule and bypass list after saving it.
+## Owner Bundles
 
-Direct fast-forward pushes to `main` are permitted by policy but remain an
-explicit remote operation: an agent performs one only when Matt requests it.
-Force pushes, protected-branch deletion, and nonlinear merges are prohibited.
+Create the real EUID-owned directory as mode `0700` and install these files as
+regular EUID-owned mode-`0600` files through a trusted editor or hidden-input
+procedure:
 
-## Release And Workflow Exceptions
+```text
+~/.config/dotfiles/local/secrets/github-MatthewssSmith1.env
+~/.config/dotfiles/local/secrets/github-mimir-db.env
+```
 
-`Contents: write` can create, update, and delete unprotected refs and GitHub
-release objects. For release-producing repositories, inventory immutable tag
-patterns and add appropriate tag rulesets. Tag protection does not make the
-associated GitHub release object immutable; record that residual capability.
+Each contains exactly one nonempty literal assignment:
 
-The baseline PAT omits `Workflows: write`. A PAT-authenticated push that adds or
-modifies `.github/workflows/**` should fail. Handle such work through a separate
-human-reviewed credential or explicitly revise this policy; do not silently
-broaden every routine PAT.
+```dotenv
+GH_TOKEN=github_pat_placeholder
+```
 
-## Fine-Grained PAT Profile
+Replace the placeholder locally; never put a real value in chat, arguments,
+history, Git configuration, remotes, logs, tracked files, or a parent shell.
+Blank lines and lines beginning with `#` are ignored; exactly one other line
+must be a nonempty `GH_TOKEN` assignment. Extra assignments, duplicate names,
+control bytes, unsafe parents, links, broad modes, changed files, and oversized
+files fail closed. The
+Git-owned loader is independent of the generic Bash `dotfiles-secret` command.
 
-Use one fine-grained PAT per GitHub resource owner:
+Git credential `get` routes canonical HTTPS paths case-insensitively by owner.
+Unknown owners, malformed paths, HTTP, unsafe bundles, and missing bundles return
+`quit=1`, preventing fallback to a generic cache. `store` does nothing. `erase`
+does not alter bundles and instead directs the operator to rotate the PAT.
 
-| Token label | Resource owner |
-|---|---|
-| `vps-git-personal` | `MatthewssSmith1` |
-| `vps-git-mimir-db` | `mimir-db` |
+## Active `gh` Policy
 
-For each token:
+`gh --help` is authoritative for the exact routine grammar. Its leading
+`MATT'S VPS GH POLICY` section applies even when native help lists additional
+features. Supported families are only `gh pr list`, `view`, `status`, `diff`,
+`create`, and `merge`. The launcher validates every argument and resolves one
+selected canonical repository before reading a bundle. Create and merge require
+one explicit `--repo OWNER/REPO`.
 
-- Expiration: 90 days or the shorter organization maximum.
-- Repository access: only worksheet entries marked selected for that owner.
-- Repository permission `Contents`: read and write.
-- Repository permission `Pull requests`: read and write.
-- `Metadata`: mandatory read-only access supplied by GitHub.
-- Every other optional repository, organization, and account permission: no
-  access.
+Merge requires exactly one of `--squash` or `--rebase` and exactly one full
+`--match-head-commit SHA`:
 
-For `mimir-db`, inspect organization settings for fine-grained PAT access,
-approval, and maximum lifetime. Matt administers these settings. Confirm GitHub
-recognizes the acting account as an organization owner when relying on automatic
-approval.
+```bash
+gh pr view 42 --json headRefOid
+gh pr diff 42
+gh pr merge 42 --squash --match-head-commit REVIEWED_SHA --repo OWNER/REPOSITORY
+```
 
-These limits are effective, not complete isolation:
+This rejects a changed head through native GitHub behavior. Browser, API, auth,
+alias, extension, repository, release, workflow, secret, variable, project,
+milestone, recovery, dry-run, merge-commit, administrator, auto-merge, and branch
+deletion flows are rejected before bundle access. Policy diagnostics begin
+`gh-vps-policy:`; policy rejection exits 77 and malformed invocation exits 64.
+Help and version need no token.
 
-- Selected-repository access limits private access and writes. Fine-grained PATs
-  retain read access to public GitHub resources, including unselected public
-  repositories.
-- `Contents: write` includes ordinary Git writes plus unprotected refs, tags,
-  and releases.
-- GitHub treats a PAT holder as Matt's identity; it does not distinguish an
-  instructed agent from an attacker holding the token.
+For active commands, repository selection is one validated repo option, then
+inherited `GH_REPO`, then one unambiguous canonical HTTPS `origin` from the
+current checkout or subdirectory. Malformed URLs, hostname-qualified values,
+aliases, credential URLs, HTTP/SSH remotes, malformed paths, and conflicting
+targets exit 64; valid but unselected repositories exit 77. Checkout URL
+rewriting, distinct fetch/push targets, multiplicity, unknown owners, and
+ambiguous origins fail closed. Inherited token, host,
+enterprise, config-directory, socket, and Git-config rerouting variables are
+removed. Only the selected `GH_TOKEN`, normalized `GH_REPO`, and
+`GH_HOST=github.com` reach fixed `/usr/bin/gh`; original command arguments and
+streams are preserved.
 
-Create tokens manually in GitHub's UI from a trusted device. Install each value
-through the reviewed hidden-input or trusted-editor procedure once local routing
-is ready. Keep values out of chat, command arguments, shell history, Git config,
-remote URLs, logs, tracked files, and long-lived parent-shell environments.
+The launcher is deterministic routing and accidental-misuse control, not a
+sandbox. A same-user process can invoke `/usr/bin/gh`, another HTTP client, or
+read bundles. Direct backend bypass requires Matt's explicit instruction.
 
-## Git And CLI Policy
+## Acceptance
 
-Selected GitHub remotes use canonical HTTPS URLs. Existing GitHub SSH keys,
-credential helpers, repository-local overrides, and `gh` stored authentication
-must not provide a broader write route.
+After repository settings, activation, and manual PAT installation, verify one
+selected repository per owner: authenticated fetch, feature push, requested
+fast-forward `main` push, PR creation, reviewed-head squash/rebase merge, and
+workflow-file denial. Verify unknown-owner and unselected-private writes fail
+without prompts or helper fallback; public reads may still succeed. Do not run
+private force-push/deletion probes and never run `gh auth token` during audit.
 
-The intended Ubuntu implementation routes HTTPS credentials by canonical owner
-and fails closed for unknown GitHub contexts. It installs a real
-`~/.local/bin/gh` executable found through `PATH`, not an alias or shell
-function. The launcher will support a reviewed PR workflow, provisionally:
+After replacement routes pass, revoke the broader token formerly stored in
+`~/.config/gh/hosts.yml` from a trusted device. Confirm direct `/usr/bin/gh` has
+no stored authentication without displaying token data. Provider snapshots
+should exclude bundles where possible; otherwise treat snapshot access as token
+access.
 
-- `gh pr list`, `view`, `status`, and `diff`.
-- `gh pr create`.
-- `gh pr merge` using squash or rebase behavior.
+## Deactivation And Rotation
 
-The launcher will reject arbitrary API access, aliases, extensions, token
-display, and repository, release, workflow, secret, variable, or administrative
-mutation before reading a PAT bundle.
+Remove only the managed include from host-local `git.conf` to deactivate. The
+launcher immediately returns to untouched `/usr/bin/gh` pass-through and Git no
+longer receives the managed helper. This is rollback, not revocation; bundles
+and PATs remain valid until separately removed or revoked.
 
-This launcher is deterministic routing and accidental-misuse control, not a
-sandbox. A same-user process can invoke `/usr/bin/gh`, use another HTTP client,
-or read a host-owned PAT bundle. After old stored authentication is revoked,
-direct `/usr/bin/gh` should have no stored credential, but the Unix user remains
-the actual trust boundary.
-
-Until this implementation lands, inspect current behavior rather than assuming
-the intended constraints exist. Never run `gh auth token` during an audit.
-
-## UI Review
-
-GitHub UI labels and locations can change. Follow the official documentation
-linked below and update the review date when this procedure is reconfirmed.
-
-For each repository:
-
-1. Open **Settings > General > Pull Requests** and set the baseline merge
-   methods.
-2. Open **Settings > Rules > Rulesets** and inspect existing branch and tag
-   rulesets before adding or editing one.
-3. Create or update an active branch ruleset targeting the default branch with
-   the baseline rules and no bypass actors.
-4. Inspect the saved active rule and effective target.
-5. Review tag rulesets where releases are published.
-6. Record every exception in the worksheet before continuing.
-
-For the organization, inspect **Settings > Personal access tokens** before token
-creation. Verify access, approval, lifetime, and pending-request policy.
-
-Apply protections before installing durable writer PATs. Keep an independent
-trusted administrative session available while changing rules. If a live
-negative probe is necessary, temporarily target a disposable branch with the
-same reviewed rules; remove that target before deleting the branch.
-
-## Verification
-
-Distinguish failure classes:
-
-- Authentication: GitHub received no usable credential.
-- Authorization: the credential lacks repository selection or permission.
-- Ruleset: authentication and permission succeeded, but repository policy
-  rejected the operation.
-
-Safe acceptance checks for each owner after implementation:
-
-- Authenticated fetch succeeds for a selected repository.
-- A feature-branch push succeeds.
-- A requested direct fast-forward `main` push succeeds.
-- PR creation and squash/rebase merge succeed.
-- Merge-commit merge is unavailable or rejected.
-- A write to an unselected repository fails; public read may still succeed.
-- A PAT-authenticated workflow-file change fails without `Workflows: write`.
-- Unknown-owner and insecure-HTTP credential requests fail without prompting or
-  falling through to another GitHub credential.
-
-Use a disposable protected target for force-update and deletion probes; do not
-probe destructive behavior against a real default branch.
-
-## Rotation And Incident Response
+`dotfiles remove git` refuses while this activation include remains and does not
+edit the host-local file. Deactivate first, then remove the area.
 
 Normal rotation:
 
-1. Create an equal-or-narrower replacement PAT for one owner.
-2. Atomically replace only that owner's mode-`0600` host bundle.
-3. Verify HTTPS fetch/push and supported PR operations.
+1. Create an equal-or-narrower replacement for one owner.
+2. Atomically replace only that owner's mode-`0600` bundle.
+3. Verify Git and race-safe PR operations.
 4. Revoke the old PAT and confirm it no longer writes.
-5. Update expiry reminders and review repository selection, permissions,
-   rulesets, merge methods, and exceptions for drift.
+5. Review repository selection, permissions, merge settings, rules, and expiry reminders.
 
 Suspected compromise:
 
 1. Revoke both VPS PATs from a trusted device.
-2. Revoke VPS access and terminate sessions if host access may be compromised.
-3. Review GitHub security/audit events, refs, merges, tags, releases, and token
-   usage.
-4. Compare protected history with trusted clones and backups; revert malicious
-   additions without rewriting protected history.
-5. Rotate every other secret readable by the compromised Unix user.
-6. Rebuild the VPS from a trusted image before issuing replacement credentials.
+2. Terminate VPS access and sessions when host access may be compromised.
+3. Review security events, refs, merges, tags, releases, and token use.
+4. Compare with trusted clones/backups and revert malicious additions.
+5. Rotate every other same-user-readable secret and rebuild from a trusted image.
 
 ## References
 
 - [Managing organization PAT policy](https://docs.github.com/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization)
 - [Managing fine-grained PAT requests](https://docs.github.com/organizations/managing-programmatic-access-to-your-organization/reviewing-and-revoking-personal-access-tokens-in-your-organization)
 - [Creating a fine-grained PAT](https://docs.github.com/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
-- [Available fine-grained PAT permissions](https://docs.github.com/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
 - [Repository rulesets](https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/managing-rulesets-for-a-repository)
-- [Rules available for rulesets](https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)
 - [Pull-request merge methods](https://docs.github.com/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges)
 - [`gh` environment variables](https://cli.github.com/manual/gh_help_environment)

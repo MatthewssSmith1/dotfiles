@@ -6,6 +6,11 @@ owns the launcher and format contract. The host owns every real bundle and any
 application wrapper; dotfiles never creates, reads, copies, backs up, or
 removes them.
 
+GitHub VPS PAT bundles use the same safety principles but are loaded by the
+independent Git-owned `dotfiles-github-auth` executable. Their exact names and
+single-`GH_TOKEN` format are documented in [GitHub Access](github-access.md);
+they are not generic `dotfiles-secret` bundles.
+
 ## Interface
 
 ```text

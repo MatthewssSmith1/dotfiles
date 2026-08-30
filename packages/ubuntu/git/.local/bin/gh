@@ -1,0 +1,356 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly POLICY_PREFIX='gh-vps-policy:'
+BACKEND=/usr/bin/gh
+
+policy_error() {
+  printf '%s %s\n' "$POLICY_PREFIX" "$2" >&2
+  exit "$1"
+}
+
+sanitize_git_environment() {
+  local name
+  unset XDG_CONFIG_HOME
+  unset GIT_CONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS
+  unset GIT_CONFIG_NOSYSTEM GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
+  unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CEILING_DIRECTORIES GIT_DISCOVERY_ACROSS_FILESYSTEM
+  while IFS= read -r name; do
+    [[ "$name" =~ ^GIT_CONFIG_(KEY|VALUE)_[0-9]+$ ]] || continue
+    unset "$name"
+  done < <(compgen -A variable GIT_CONFIG_)
+}
+
+backend_guard() {
+  local backend_identity wrapper_identity backend_real wrapper_real
+  [[ -x "$BACKEND" && -f "$BACKEND" && ! -L "$BACKEND" ]] ||
+    policy_error 77 'fixed /usr/bin/gh backend is unavailable'
+  backend_real="$(realpath -e -- "$BACKEND" 2>/dev/null || true)"
+  wrapper_real="$(realpath -e -- "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+  backend_identity="$(stat -Lc '%d:%i' -- "$BACKEND" 2>/dev/null || true)"
+  wrapper_identity="$(stat -Lc '%d:%i' -- "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+  [[ -n "$backend_real" && "$backend_real" != "$wrapper_real" &&
+    -n "$backend_identity" && "$backend_identity" != "$wrapper_identity" ]] ||
+    policy_error 77 'fixed /usr/bin/gh backend resolves to the policy launcher'
+  cmp -s -- "$BACKEND" "${BASH_SOURCE[0]}" &&
+    policy_error 77 'fixed /usr/bin/gh backend is a copy of the policy launcher'
+  return 0
+}
+
+marker_records() {
+  (sanitize_git_environment
+    git -C "$HOME" config --includes --show-origin --get-all dotfiles.github-vps.enabled)
+}
+
+set +e
+marker_output="$(marker_records 2>/dev/null)"
+marker_status=$?
+set -e
+if ((marker_status == 1)) && [[ -z "$marker_output" ]]; then
+  backend_guard
+  exec "$BACKEND" "$@"
+fi
+((marker_status == 0)) || policy_error 77 'VPS activation is malformed; repair the managed Git include'
+mapfile -t marker_lines <<< "$marker_output"
+expected_origin="file:$HOME/.config/dotfiles/git/github-vps.conf"
+if ((${#marker_lines[@]} != 1)) || [[ "${marker_lines[0]}" != "$expected_origin"$'\t'true ]]; then
+  policy_error 77 'VPS activation must be true from the deployed github-vps.conf'
+fi
+
+policy_help() {
+  cat <<'EOF'
+MATT'S VPS GH POLICY
+Allowed: gh pr list|view|status|diff|create|merge with the grammar below.
+  gh pr list [--app V] [--assignee|-a V] [--author|-A V] [--base|-B V] [--draft] [--head|-H V] [--label|-l V] [--limit|-L N] [--search|-S V] [--state|-s V] [OUTPUT] [-R|--repo OWNER/REPO]
+  gh pr view [NUMBER] [--comments|-c] [OUTPUT] [-R|--repo OWNER/REPO]
+  gh pr status [--conflict-status] [OUTPUT] [-R|--repo OWNER/REPO]
+  gh pr diff [NUMBER] [--color V] [--name-only|--patch] [-R|--repo OWNER/REPO]
+  gh pr create --repo OWNER/REPO [--title|-t V] [--body|-b V|--body-file|-F FILE] [--fill|--fill-first|--fill-verbose] [--base|-B V] [--head|-H V] [--draft|-d] [--reviewer|-r V] [--assignee|-a V] [--label|-l V]
+  gh pr merge [NUMBER] --repo OWNER/REPO (--squash|--rebase) --match-head-commit SHA [--subject|-t V] [--body|-b V|--body-file|-F FILE]
+OUTPUT means [--json FIELDS [--jq EXPR] [--template TEMPLATE]]. Limit is an integer; state is open|closed|merged|all; color is always|never|auto. Repeated native list-valued flags remain allowed.
+Repository: one canonical selected OWNER/REPO from -R/--repo, GH_REPO, or the checkout's canonical HTTPS origin.
+Merge: review `gh pr view NUMBER --json headRefOid` and `gh pr diff NUMBER`, then use exactly one of --squash/--rebase with --match-head-commit REVIEWED_SHA.
+Completion: the fixed native gh command must succeed; policy validation alone is not completion.
+Boundary: /usr/bin/gh bypasses this guidance and requires Matt's explicit instruction.
+Details: docs/tools/github-access.md
+EOF
+}
+
+sanitize_environment() {
+  unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN GH_REPO GH_HOST GH_CONFIG_DIR
+  unset GH_HTTP_UNIX_SOCKET XDG_CONFIG_HOME
+  sanitize_git_environment
+}
+
+if (($# == 1)) && [[ "$1" == --version ]]; then
+  printf '%s Matt\x27s VPS policy is active\n' "$POLICY_PREFIX"
+  backend_guard
+  sanitize_environment
+  exec "$BACKEND" --version
+fi
+
+help_args=false
+if (($# == 1)) && [[ "$1" == --help || "$1" == help ]]; then
+  help_args=true
+elif (($# == 2)) && [[ "$1" == pr && "$2" == --help ]]; then
+  help_args=true
+elif (($# == 3)) && [[ "$1" == pr ]] &&
+  [[ "$2" =~ ^(list|view|status|diff|create|merge)$ ]] && [[ "$3" == --help ]]; then
+  help_args=true
+fi
+if [[ "$help_args" == true ]]; then
+  policy_help
+  backend_guard
+  sanitize_environment
+  exec "$BACKEND" "$@"
+fi
+
+(($# >= 2)) || policy_error 64 'expected an allowed gh pr command; run gh --help'
+[[ "$1" == pr ]] || policy_error 77 "command '$1' is outside Matt's VPS policy; run gh --help"
+command_name="$2"
+[[ "$command_name" =~ ^(list|view|status|diff|create|merge)$ ]] ||
+  policy_error 77 "pr command '$command_name' is outside Matt's VPS policy; run gh pr --help"
+shift 2
+original_args=(pr "$command_name" "$@")
+
+repo_value=''
+repo_count=0
+positionals=0
+merge_modes=0
+match_count=0
+json_count=0
+jq_count=0
+template_count=0
+body_sources=0
+diff_modes=0
+fill_modes=0
+declare -A SEEN_SINGLETONS=()
+
+parse_repo() {
+  local value="$1" owner repository
+  [[ "$value" =~ ^([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9][A-Za-z0-9._-]{0,99})$ ]] || return 1
+  owner="${BASH_REMATCH[1],,}"
+  repository="${BASH_REMATCH[2]}"
+  printf '%s/%s' "$owner" "$repository"
+}
+
+authorize_repo() {
+  local value="$1"
+  case "$value" in
+    matthewsssmith1/dotfiles) printf 'MatthewssSmith1/dotfiles' ;;
+    mimir-db/mimir-db) printf 'mimir-db/mimir-db' ;;
+    mimir-db/mimir-db-v0) printf 'mimir-db/mimir-db-v0' ;;
+    *) return 1 ;;
+  esac
+}
+
+integer_value() {
+  local value="$1" digits limit
+  [[ "$value" =~ ^[+-]?[0-9]+$ ]] || return 1
+  digits="${value#[+-]}"
+  while [[ "$digits" == 0* && "$digits" != 0 ]]; do digits="${digits#0}"; done
+  [[ -n "$digits" ]] || digits=0
+  ((${#digits} < 19)) && return 0
+  ((${#digits} == 19)) || return 1
+  limit=9223372036854775807
+  [[ "$value" != -* ]] || limit=9223372036854775808
+  [[ "$digits" < "$limit" || "$digits" == "$limit" ]]
+}
+
+record_singleton() {
+  local name="$1"
+  [[ -z "${SEEN_SINGLETONS[$name]+x}" ]] || policy_error 64 "$name may be specified only once"
+  SEEN_SINGLETONS["$name"]=1
+}
+
+needs_value() {
+  case "$command_name:$1" in
+    list:--app|list:--assignee|list:-a|list:--author|list:-A|list:--base|list:-B|list:--head|list:-H|list:--json|list:--jq|list:--label|list:-l|list:--limit|list:-L|list:--search|list:-S|list:--state|list:-s|list:--template) return 0 ;;
+    view:--json|view:--jq|view:--template) return 0 ;;
+    status:--json|status:--jq|status:--template) return 0 ;;
+    diff:--color) return 0 ;;
+    create:--assignee|create:-a|create:--base|create:-B|create:--body|create:-b|create:--body-file|create:-F|create:--head|create:-H|create:--label|create:-l|create:--reviewer|create:-r|create:--title|create:-t) return 0 ;;
+    merge:--body|merge:-b|merge:--body-file|merge:-F|merge:--subject|merge:-t|merge:--match-head-commit) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_switch() {
+  case "$command_name:$1" in
+    list:--draft|view:--comments|view:-c|status:--conflict-status|diff:--name-only|diff:--patch) return 0 ;;
+    create:--draft|create:-d|create:--fill|create:--fill-first|create:--fill-verbose) return 0 ;;
+    merge:--squash|merge:--rebase) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+args=("$@")
+for ((index=0; index<${#args[@]}; index++)); do
+  arg="${args[index]}"
+  if [[ "$arg" == -R || "$arg" == --repo ]]; then
+    ((index + 1 < ${#args[@]})) || policy_error 64 "$arg requires OWNER/REPO"
+    ((repo_count += 1))
+    repo_value="${args[++index]}"
+    [[ -n "$repo_value" ]] || policy_error 64 "$arg requires OWNER/REPO"
+    continue
+  elif [[ "$arg" == --repo=* ]]; then
+    ((repo_count += 1))
+    repo_value="${arg#*=}"
+    [[ -n "$repo_value" ]] || policy_error 64 '--repo requires OWNER/REPO'
+    continue
+  fi
+  if [[ "$arg" == --*=* ]]; then
+    flag="${arg%%=*}"
+    value="${arg#*=}"
+    needs_value "$flag" || policy_error 77 "$flag is outside Matt's VPS policy"
+    [[ -n "$value" ]] || policy_error 64 "$flag requires a value"
+  elif needs_value "$arg"; then
+    ((index + 1 < ${#args[@]})) || policy_error 64 "$arg requires a value"
+    value="${args[++index]}"
+    flag="$arg"
+  elif is_switch "$arg"; then
+    flag="$arg"
+    value=''
+  elif [[ "$arg" == -* ]]; then
+    policy_error 77 "$arg is outside Matt's VPS policy"
+  else
+    ((positionals += 1))
+    ((positionals <= 1)) || policy_error 64 'only one numeric pull request argument is allowed'
+    [[ "$arg" =~ ^[1-9][0-9]*$ ]] || policy_error 64 "pull request '$arg' must be a positive number"
+    continue
+  fi
+  if [[ "$command_name" == merge && "$flag" =~ ^--(squash|rebase)$ ]]; then
+    ((merge_modes += 1))
+  elif [[ "$command_name" == merge && "$flag" == --match-head-commit ]]; then
+    ((match_count += 1))
+    [[ "$value" =~ ^[0-9a-fA-F]{40}$ ]] || policy_error 64 '--match-head-commit requires a full 40-character commit SHA'
+  fi
+  case "$flag" in
+    --limit|-L)
+      record_singleton --limit
+      integer_value "$value" || policy_error 64 '--limit requires an integer'
+      ;;
+    --state|-s)
+      record_singleton --state
+      [[ "$value" =~ ^(open|closed|merged|all)$ ]] || policy_error 64 '--state requires open, closed, merged, or all'
+      ;;
+    --color)
+      record_singleton --color
+      [[ "$value" =~ ^(always|never|auto)$ ]] || policy_error 64 '--color requires always, never, or auto'
+      ;;
+    --json) record_singleton --json; ((json_count += 1)) ;;
+    --jq) record_singleton --jq; ((jq_count += 1)) ;;
+    --template) record_singleton --template; ((template_count += 1)) ;;
+    --app) record_singleton --app ;;
+    --author|-A) record_singleton --author ;;
+    --base|-B) record_singleton --base ;;
+    --head|-H) record_singleton --head ;;
+    --search|-S) record_singleton --search ;;
+    --title|-t)
+      [[ "$command_name" != merge ]] || record_singleton --subject
+      [[ "$command_name" == merge ]] || record_singleton --title
+      ;;
+    --subject) record_singleton --subject ;;
+    --body|-b) record_singleton --body; ((body_sources += 1)) ;;
+    --body-file|-F) record_singleton --body-file; ((body_sources += 1)) ;;
+    --match-head-commit) record_singleton --match-head-commit ;;
+    --name-only|--patch) ((diff_modes += 1)) ;;
+    --fill|--fill-first|--fill-verbose) ((fill_modes += 1)) ;;
+  esac
+done
+
+case "$command_name" in
+  list|status|create) ((positionals == 0)) || policy_error 64 "pr $command_name does not accept a pull request number" ;;
+esac
+if [[ "$command_name" == merge ]]; then
+  ((merge_modes == 1)) || policy_error 64 'pr merge requires exactly one of --squash or --rebase'
+  ((match_count == 1)) || policy_error 64 'pr merge requires exactly one --match-head-commit SHA'
+fi
+((jq_count == 0 || json_count == 1)) || policy_error 64 '--jq requires --json'
+((template_count == 0 || json_count == 1)) || policy_error 64 '--template requires --json'
+((body_sources <= 1)) || policy_error 64 '--body and --body-file are mutually exclusive and may appear only once'
+((diff_modes <= 1)) || policy_error 64 'pr diff accepts only one of --name-only or --patch'
+((fill_modes <= 1)) || policy_error 64 'pr create accepts only one fill mode'
+((repo_count <= 1)) || policy_error 64 'repository may be specified only once'
+if [[ "$command_name" == create || "$command_name" == merge ]]; then
+  ((repo_count == 1)) || policy_error 64 "pr $command_name requires one explicit --repo OWNER/REPO"
+fi
+
+explicit_repo=''
+if ((repo_count == 1)); then
+  parsed_repo="$(parse_repo "$repo_value")" || policy_error 64 "repository '$repo_value' must be canonical OWNER/REPO"
+  explicit_repo="$(authorize_repo "$parsed_repo")" ||
+    policy_error 77 "repository '$repo_value' has no VPS token route; use a selected MatthewssSmith1 or mimir-db repository"
+fi
+inherited_repo=''
+if [[ -n "${GH_REPO:-}" ]]; then
+  parsed_repo="$(parse_repo "$GH_REPO")" || policy_error 64 "inherited GH_REPO '$GH_REPO' must be canonical OWNER/REPO"
+  inherited_repo="$(authorize_repo "$parsed_repo")" || policy_error 77 "inherited GH_REPO '$GH_REPO' has no VPS token route"
+fi
+if [[ -n "$explicit_repo" && -n "$inherited_repo" && "$explicit_repo" != "$inherited_repo" ]]; then
+  policy_error 64 'explicit repository conflicts with inherited GH_REPO'
+fi
+
+resolved_repo="${explicit_repo:-$inherited_repo}"
+if [[ -z "$resolved_repo" ]]; then
+  raw_fetch_output=''
+  raw_push_output=''
+  effective_fetch_output=''
+  effective_push_output=''
+  raw_fetch_urls=()
+  raw_push_urls=()
+  effective_fetch_urls=()
+  effective_push_urls=()
+  set +e
+  raw_fetch_output="$(sanitize_git_environment; git config --local --get-all remote.origin.url 2>/dev/null)"
+  raw_fetch_status=$?
+  raw_push_output="$(sanitize_git_environment; git config --local --get-all remote.origin.pushurl 2>/dev/null)"
+  raw_push_status=$?
+  effective_fetch_output="$(sanitize_git_environment; git remote get-url --all origin 2>/dev/null)"
+  effective_fetch_status=$?
+  effective_push_output="$(sanitize_git_environment; git remote get-url --push --all origin 2>/dev/null)"
+  effective_push_status=$?
+  set -e
+  ((raw_fetch_status != 0)) || mapfile -t raw_fetch_urls <<< "$raw_fetch_output"
+  ((raw_push_status != 0)) || mapfile -t raw_push_urls <<< "$raw_push_output"
+  ((effective_fetch_status != 0)) || mapfile -t effective_fetch_urls <<< "$effective_fetch_output"
+  ((effective_push_status != 0)) || mapfile -t effective_push_urls <<< "$effective_push_output"
+  ((raw_fetch_status == 0 && ${#raw_fetch_urls[@]} == 1)) ||
+    policy_error 77 'checkout must have one unambiguous canonical HTTPS origin or use --repo OWNER/REPO'
+  if ((raw_push_status == 1)) && ((${#raw_push_urls[@]} == 0)); then
+    raw_push_urls=("${raw_fetch_urls[0]}")
+  elif ((raw_push_status != 0 || ${#raw_push_urls[@]} != 1)); then
+    policy_error 77 'checkout must have one unambiguous canonical HTTPS origin or use --repo OWNER/REPO'
+  fi
+  ((effective_fetch_status == 0 && effective_push_status == 0 &&
+    ${#effective_fetch_urls[@]} == 1 && ${#effective_push_urls[@]} == 1)) ||
+    policy_error 77 "origin URL rewriting or multiplicity is outside Matt's VPS policy"
+  [[ "${raw_fetch_urls[0]}" == "${raw_push_urls[0]}" &&
+    "${raw_fetch_urls[0]}" == "${effective_fetch_urls[0]}" &&
+    "${raw_fetch_urls[0]}" == "${effective_push_urls[0]}" &&
+    "${raw_fetch_urls[0]}" =~ ^https://github\.com/([^/]+)/([^/]+)$ ]] ||
+    policy_error 77 'origin must be one canonical credential-free https://github.com/OWNER/REPO remote'
+  origin_repository="${BASH_REMATCH[2]}"
+  origin_repository="${origin_repository%.git}"
+  origin_repo="${BASH_REMATCH[1]}/$origin_repository"
+  parsed_repo="$(parse_repo "$origin_repo")" || policy_error 77 'origin repository syntax is not canonical'
+  resolved_repo="$(authorize_repo "$parsed_repo")" || policy_error 77 "origin repository '$origin_repo' has no VPS token route"
+fi
+
+backend_guard
+helper="$HOME/.local/share/dotfiles/bin/dotfiles-github-auth"
+[[ -f "$helper" ]] || policy_error 77 'deployed GitHub credential helper is unavailable'
+original_lc_all_set="${LC_ALL+x}"
+original_lc_all="${LC_ALL-}"
+# shellcheck source=/dev/null
+source "$helper"
+owner="${resolved_repo%%/*}"
+github_load_owner_token "$owner" || policy_error 77 "token bundle for '$owner' is missing or unsafe"
+token="$TOKEN"
+TOKEN=''
+if [[ -n "$original_lc_all_set" ]]; then export LC_ALL="$original_lc_all"; else unset LC_ALL; fi
+sanitize_environment
+export GH_TOKEN="$token" GH_REPO="$resolved_repo" GH_HOST=github.com
+token=''
+exec "$BACKEND" "${original_args[@]}"

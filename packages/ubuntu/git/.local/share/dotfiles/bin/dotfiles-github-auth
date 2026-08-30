@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+set +x
+export LC_ALL=C
+
+readonly MAX_INPUT_SIZE=65536
+readonly MAX_INPUT_FIELDS=256
+readonly MAX_BUNDLE_SIZE=65536
+
+fail_closed() {
+  printf 'quit=1\n\n'
+  exit 0
+}
+
+safe_directory() {
+  local path="$1" required_mode="${2:-}" mode
+  [[ -d "$path" && ! -L "$path" ]] || return 1
+  [[ "$(realpath -m -s -- "$path")" == "$path" && "$(realpath -e -- "$path")" == "$path" ]] || return 1
+  [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || return 1
+  mode="$(stat -c %a -- "$path")"
+  if [[ -n "$required_mode" ]]; then
+    [[ "$mode" == "$required_mode" ]]
+  else
+    (((8#$mode & 022) == 0))
+  fi
+}
+
+validate_bundle_path() {
+  local current component
+  safe_directory "$HOME" || return 1
+  current="$HOME"
+  for component in .config dotfiles local; do
+    current="$current/$component"
+    safe_directory "$current" || return 1
+  done
+  safe_directory "$SECRETS_DIRECTORY" 700 || return 1
+  [[ "$(realpath -m -s -- "$BUNDLE_PATH")" == "$BUNDLE_PATH" ]] || return 1
+  [[ -f "$BUNDLE_PATH" && ! -L "$BUNDLE_PATH" && -r "$BUNDLE_PATH" ]] || return 1
+  [[ "$(realpath -e -- "$BUNDLE_PATH")" == "$BUNDLE_PATH" ]] || return 1
+  [[ "$(stat -c %u -- "$BUNDLE_PATH")" == "$EUID" && "$(stat -c %a -- "$BUNDLE_PATH")" == 600 ]]
+}
+
+file_identity() {
+  stat -Lc '%d:%i:%s:%y:%z' -- "$1"
+}
+
+consume_input() {
+  local line total=0 count=0
+  CREDENTIAL_LINES=()
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    ((total += ${#line} + 1, count += 1))
+    ((total <= MAX_INPUT_SIZE && count <= MAX_INPUT_FIELDS)) || return 1
+    [[ "$line" != *[$'\001'-$'\011'$'\013'-$'\037'$'\177']* ]] || return 1
+    [[ -n "$line" ]] || break
+    CREDENTIAL_LINES+=("$line")
+  done
+}
+
+load_token() {
+  local identity_before identity_after bundle_size line name value assignment_count=0
+  validate_bundle_path || return 1
+  exec {bundle_fd}< "$BUNDLE_PATH" || return 1
+  identity_before="$(file_identity "/proc/self/fd/$bundle_fd")" || return 1
+  [[ "$identity_before" == "$(file_identity "$BUNDLE_PATH")" ]] || return 1
+  bundle_size="$(stat -Lc %s -- "/proc/self/fd/$bundle_fd")" || return 1
+  [[ "$bundle_size" =~ ^[0-9]+$ && "$bundle_size" -gt 0 && "$bundle_size" -le "$MAX_BUNDLE_SIZE" ]] || return 1
+  LC_ALL=C tr -d '\012\040-\377' <&"$bundle_fd" | cmp -s -- /dev/null - || return 1
+  exec {bundle_fd}<&-
+  exec {bundle_fd}< "$BUNDLE_PATH" || return 1
+  [[ "$identity_before" == "$(file_identity "/proc/self/fd/$bundle_fd")" ]] || return 1
+  TOKEN=''
+  while IFS= read -r line <&"$bundle_fd" || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] || continue
+    [[ "$line" != \#* ]] || continue
+    [[ "$line" == *=* ]] || return 1
+    name="${line%%=*}"
+    value="${line#*=}"
+    [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 1
+    ((assignment_count += 1))
+    ((assignment_count == 1)) || return 1
+    [[ "$name" == GH_TOKEN && -n "$value" ]] || return 1
+    TOKEN="$value"
+  done
+  identity_after="$(file_identity "/proc/self/fd/$bundle_fd")" || return 1
+  exec {bundle_fd}<&-
+  validate_bundle_path || return 1
+  [[ "$identity_before" == "$identity_after" && "$identity_after" == "$(file_identity "$BUNDLE_PATH")" ]] || return 1
+  [[ "$assignment_count" == 1 && -n "$TOKEN" ]]
+}
+
+github_load_owner_token() {
+  local owner="${1,,}" bundle_name
+  case "$owner" in
+    matthewsssmith1) bundle_name=github-MatthewssSmith1 ;;
+    mimir-db) bundle_name=github-mimir-db ;;
+    *) return 1 ;;
+  esac
+  [[ -n "${HOME:-}" && "$HOME" == /* ]] || return 1
+  SECRETS_DIRECTORY="$HOME/.config/dotfiles/local/secrets"
+  BUNDLE_PATH="$SECRETS_DIRECTORY/$bundle_name.env"
+  TOKEN=''
+  load_token
+}
+
+github_credential_main() {
+  local operation="${1:-}" line name value protocol='' host='' path='' owner repository
+  declare -a CREDENTIAL_LINES=()
+  declare -A SEEN_FIELDS=()
+  if ! consume_input; then
+    [[ "$operation" != get ]] || fail_closed
+    return 0
+  fi
+  case "$operation" in
+    store) return 0 ;;
+    erase)
+      printf 'dotfiles-github-auth: credentials are owner bundles; rotate the PAT and replace its bundle instead\n' >&2
+      return 1
+      ;;
+    get) ;;
+    *) return 0 ;;
+  esac
+  for line in "${CREDENTIAL_LINES[@]}"; do
+    [[ "$line" == *=* ]] || fail_closed
+    name="${line%%=*}"
+    value="${line#*=}"
+    case "$name" in
+      protocol|host|path)
+        [[ -z "${SEEN_FIELDS[$name]+x}" ]] || fail_closed
+        SEEN_FIELDS["$name"]=1
+        printf -v "$name" '%s' "$value"
+        ;;
+    esac
+  done
+  [[ "$protocol" == https && "$host" == github.com ]] || fail_closed
+  [[ ${#path} -le 141 ]] || fail_closed
+  path="${path%.git}"
+  [[ "$path" =~ ^([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9][A-Za-z0-9._-]{0,99})$ ]] || fail_closed
+  owner="${BASH_REMATCH[1],,}"
+  repository="${BASH_REMATCH[2]}"
+  [[ "$repository" != . && "$repository" != .. ]] || fail_closed
+  case "$owner/$repository" in
+    matthewsssmith1/dotfiles|mimir-db/mimir-db|mimir-db/mimir-db-v0) ;;
+    *) fail_closed ;;
+  esac
+  github_load_owner_token "$owner" || fail_closed
+  printf 'username=x-access-token\npassword=%s\n\n' "$TOKEN"
+  TOKEN=''
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  github_credential_main "$@"
+fi

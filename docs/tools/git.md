@@ -29,14 +29,18 @@ Expected effective order:
 ~/.config/git/config
 ~/.gitconfig
 ~/.config/dotfiles/personal/git.conf
-~/.gitconfig.local
 ~/.config/dotfiles/local/git.conf
+~/.gitconfig.local
 repository .git/config
 ```
 
 On Omarchy, preserve the native XDG file as the untouched baseline. On Ubuntu, Stow the pinned synchronized XDG baseline.
 
-Keep `~/.gitconfig` as a regular guarded include entrypoint. This allows native `git config --global` writes without mutating the checkout. Its managed include sequence loads the shared personal file, external identity file, and optional central host-local file in the order shown above.
+Keep `~/.gitconfig` as a regular guarded include entrypoint. This allows native
+`git config --global` writes without mutating the checkout. Its managed sequence
+loads shared personal configuration, whose final optional include loads the
+central host-local file, then loads external identity. Repository configuration
+retains final precedence.
 
 ## Omarchy Baseline Pin
 
@@ -51,14 +55,19 @@ On the `omarchy` profile, apply and check hard-fail during preflight unless the 
   `~/.config/dotfiles/local/git.conf`.
 - Let repository-local configuration retain final precedence.
 
-Credential helpers remain host-local settings. Dotfiles does not migrate or
-rewrite historical helper paths; existing host-local files retain precedence.
+Credential helpers normally remain host-local settings. Dotfiles does not
+migrate or rewrite historical helper paths. On Ubuntu VPS hosts, appending the
+managed `github-vps.conf` include to the host-local file activates the exact
+GitHub helper reset/router and constrained `gh`; without that include the
+capability is dormant. The managed reset deliberately supersedes earlier
+generic helpers. Active validation rejects every later generic helper and every
+additional URL helper Git would select for a managed repository over HTTP or
+HTTPS, including included and repository-local settings.
 `rebase.autostash` is not supplied unless a host-local or repository layer sets
 it.
 
-Follow [GitHub Access](github-access.md) before GitHub credential setup, remote
-writes, protected-branch changes, or PAT rotation. Its intended owner-aware
-routing remains provisional until the documented repository support lands.
+Follow [GitHub Access](github-access.md) before activation, GitHub credential
+setup, remote writes, protected-branch changes, or PAT rotation.
 
 ## Non-Goals
 
@@ -75,8 +84,9 @@ routing remains provisional until the documented repository support lands.
 - Identity resolves from the mode-`0600` external local file.
 - Optional host settings resolve from the central local file.
 - Repository settings can override all user-level layers.
-- Host-local credential helpers retain precedence; `rebase.autostash` is absent
-  unless another layer supplies it.
+- Host-local settings load before identity; an activated managed GitHub reset is
+  the sole effective helper for exact GitHub HTTP/HTTPS contexts.
+- `rebase.autostash` is absent unless another layer supplies it.
 - `git config --show-origin --show-scope --get-regexp '.*'` reports expected
   values and provenance.
 - Authenticated fetch through a fake host-local helper succeeds with terminal
