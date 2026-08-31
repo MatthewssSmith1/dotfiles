@@ -20,6 +20,7 @@ LEAN_ATTACHMENT_MODES=()
 LEAN_ATTACHMENT_ORIGINS=()
 LEAN_ATTACHMENT_BEFORE_HASHES=()
 LEAN_ATTACHMENT_REFRESHES=()
+LEAN_ATTACHMENT_ANCHORS=()
 LEAN_JSON_IDS=()
 LEAN_JSON_PATHS=()
 LEAN_JSON_VALIDATORS=()
@@ -319,6 +320,7 @@ lean_begin_area() {
   LEAN_ATTACHMENT_ORIGINS=()
   LEAN_ATTACHMENT_BEFORE_HASHES=()
   LEAN_ATTACHMENT_REFRESHES=()
+  LEAN_ATTACHMENT_ANCHORS=()
   LEAN_JSON_IDS=()
   LEAN_JSON_PATHS=()
   LEAN_JSON_VALIDATORS=()
@@ -343,11 +345,14 @@ lean_add_package() {
 
 lean_add_guarded_attachment() {
   local id="$1" relative="$2" begin="$3" end="$4" token="$5" block="$6"
-  local placement="$7" mode="$8" refresh="${9:-false}" existing
+  local placement="$7" mode="$8" refresh="${9:-false}" anchor="${10:-}" existing
   [[ "$LEAN_ENTRY_KIND" == packages ]] || die 'validation-only areas cannot register attachments'
   [[ "$id" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || die "invalid attachment ID: $id"
   safe_relative_path "$relative" || die "unsafe guarded attachment path: $relative"
-  [[ "$placement" == prepend || "$placement" == append ]] || die "invalid guarded attachment placement: $placement"
+  [[ "$placement" == prepend || "$placement" == append || "$placement" == after-exact ]] ||
+    die "invalid guarded attachment placement: $placement"
+  [[ "$placement" == after-exact && -n "$anchor" || "$placement" != after-exact && -z "$anchor" ]] ||
+    die 'invalid guarded attachment anchor'
   [[ "$mode" =~ ^0?[0-7]{3}$ ]] || die "invalid guarded attachment mode: $mode"
   [[ "$refresh" == true || "$refresh" == false ]] || die "invalid guarded attachment refresh policy: $refresh"
   [[ -n "$begin" && -n "$end" && -n "$token" && "$begin" != "$end" &&
@@ -366,6 +371,7 @@ lean_add_guarded_attachment() {
   LEAN_ATTACHMENT_PLACEMENTS+=("$placement")
   LEAN_ATTACHMENT_MODES+=("$mode")
   LEAN_ATTACHMENT_REFRESHES+=("$refresh")
+  LEAN_ATTACHMENT_ANCHORS+=("$anchor")
 }
 
 lean_json_scalar_matches_type() {
@@ -495,8 +501,8 @@ lean_run_stow_preflight() {
 }
 
 lean_inspect_attachment() {
-  local index="$1" path line inside=false
-  local begin_count=0 end_count=0 found=""
+  local index="$1" path line inside=false line_number=0 anchor_line=0 begin_line=0
+  local begin_count=0 end_count=0 anchor_count=0 found=""
   path="$HOME/${LEAN_ATTACHMENT_PATHS[index]}"
   LEAN_ATTACHMENT_STATUS=absent
   LEAN_ATTACHMENT_CURRENT_ORIGIN=created
@@ -514,9 +520,13 @@ lean_inspect_attachment() {
     LEAN_ATTACHMENT_CURRENT_ORIGIN=existing-no-final-newline
   fi
   while IFS= read -r line || [[ -n "$line" ]]; do
+    ((line_number += 1))
+    if [[ -n "${LEAN_ATTACHMENT_ANCHORS[index]}" && "$line" == "${LEAN_ATTACHMENT_ANCHORS[index]}" ]]; then
+      ((anchor_count += 1)); anchor_line="$line_number"
+    fi
     if [[ "$line" == "${LEAN_ATTACHMENT_BEGINS[index]}" ]]; then
       ((begin_count += 1)); [[ "$inside" == false ]] || { LEAN_ATTACHMENT_STATUS=malformed; return; }
-      inside=true; found="$line"
+      inside=true; found="$line"; begin_line="$line_number"
     elif [[ "$line" == "${LEAN_ATTACHMENT_ENDS[index]}" ]]; then
       ((end_count += 1)); [[ "$inside" == true ]] || { LEAN_ATTACHMENT_STATUS=malformed; return; }
       found+=$'\n'"$line"; inside=false
@@ -526,7 +536,8 @@ lean_inspect_attachment() {
       found+=$'\n'"$line"
     fi
   done < "$path"
-  if [[ "$inside" == true || "$begin_count" != "$end_count" || "$begin_count" -gt 1 ]]; then
+  if [[ "$inside" == true || "$begin_count" != "$end_count" || "$begin_count" -gt 1 ||
+    ( -n "${LEAN_ATTACHMENT_ANCHORS[index]}" && ( "$anchor_count" != 1 || ( "$begin_count" == 1 && "$begin_line" != $((anchor_line + 1)) ) ) ) ]]; then
     LEAN_ATTACHMENT_STATUS=malformed
   elif ((begin_count == 0)); then
     LEAN_ATTACHMENT_STATUS=absent
@@ -543,18 +554,28 @@ lean_state_attachment_field() {
 }
 
 lean_preflight_attachments() {
-  local mode="$1" index relative recorded_id recorded_origin recorded_hash state_count
+  local mode="$1" index relative recorded_id recorded_origin recorded_hash state_count state_path registered state_has
   LEAN_ATTACHMENT_ORIGINS=()
   LEAN_ATTACHMENT_BEFORE_HASHES=()
   if [[ -f "$LEAN_STATE" ]]; then
     state_count="$(jq '.attachments | length' "$LEAN_STATE")"
-    ((state_count == ${#LEAN_ATTACHMENT_PATHS[@]})) || die "lean state attachment set differs for area '$LEAN_AREA'"
+    if ((state_count != ${#LEAN_ATTACHMENT_PATHS[@]})); then
+      [[ "$mode" == apply && "$state_count" -lt "${#LEAN_ATTACHMENT_PATHS[@]}" ]] ||
+        die "lean state attachment set differs for area '$LEAN_AREA'"
+      while IFS= read -r state_path; do
+        registered=false
+        for relative in "${LEAN_ATTACHMENT_PATHS[@]}"; do [[ "$state_path" != "$relative" ]] || registered=true; done
+        [[ "$registered" == true ]] || die "lean state attachment set differs for area '$LEAN_AREA'"
+      done < <(jq -r '.attachments | keys[]' "$LEAN_STATE")
+    fi
   fi
   for index in "${!LEAN_ATTACHMENT_PATHS[@]}"; do
     relative="${LEAN_ATTACHMENT_PATHS[index]}"
     lean_inspect_attachment "$index"
     [[ "$LEAN_ATTACHMENT_STATUS" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $HOME/$relative"
-    if [[ -f "$LEAN_STATE" ]]; then
+    state_has=false
+    if [[ -f "$LEAN_STATE" ]] && jq -e --arg path "$relative" '.attachments | has($path)' "$LEAN_STATE" >/dev/null; then state_has=true; fi
+    if [[ "$state_has" == true ]]; then
       recorded_id="$(lean_state_attachment_field "$relative" id)" || die "lean state is missing attachment ownership: $relative"
       recorded_origin="$(lean_state_attachment_field "$relative" origin)"
       recorded_hash="$(jq -er --arg path "$relative" '.attachments[$path].before_sha256 // ""' "$LEAN_STATE")"
@@ -758,12 +779,16 @@ lean_build_state_json() {
 }
 
 lean_write_state_atomic() {
-  local content dir base temporary temporary_hash temporary_identity
+  local content dir base temporary temporary_hash temporary_identity source_hash source_identity
   ((${#LEAN_ATTACHMENT_PATHS[@]} > 0 || ${#LEAN_JSON_PATHS[@]} > 0)) || die 'refusing lean state write without guarded attachments'
   content="$(lean_build_state_json)"
   if [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" && "$(jq -cS . "$LEAN_STATE")" == "$(jq -cS . <<< "$content")" ]]; then
     return 0
   fi
+  capture_path_object_identity "$LEAN_STATE" || die "could not inspect lean state identity: $LEAN_STATE"
+  source_identity="$PATH_OBJECT_IDENTITY"
+  source_hash=""
+  [[ "$source_identity" == absent ]] || source_hash="$(sha256_file "$LEAN_STATE")"
   dir="$(dirname -- "$LEAN_STATE")"
   base="${LEAN_STATE##*/}"
   lean_ensure_directory "$dir"
@@ -779,6 +804,9 @@ lean_write_state_atomic() {
     retain_tracked_temp_path "$temporary"
     die "lean state temporary file changed before publication: $temporary"
   fi
+  capture_path_object_identity "$LEAN_STATE" || die "could not recheck lean state identity: $LEAN_STATE"
+  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && ( "$source_identity" == absent || "$(sha256_file "$LEAN_STATE")" == "$source_hash" ) ]] ||
+    die "lean state changed concurrently; refusing overwrite: $LEAN_STATE"
   mv -fT -- "$temporary" "$LEAN_STATE"
 }
 
@@ -847,11 +875,16 @@ lean_apply_stow() {
 
 lean_write_attachment() {
   local index="$1" path="$HOME/${LEAN_ATTACHMENT_PATHS[index]}" dir base temporary
-  local status origin="${LEAN_ATTACHMENT_ORIGINS[index]}"
+  local status origin="${LEAN_ATTACHMENT_ORIGINS[index]}" source_hash source_identity source_mode temporary_hash temporary_identity line read_status
   lean_inspect_attachment "$index"
   [[ "$LEAN_ATTACHMENT_STATUS" == absent ]] || return 0
   [[ "$LEAN_ATTACHMENT_CURRENT_ORIGIN" == "$origin" && "$LEAN_ATTACHMENT_CURRENT_HASH" == "${LEAN_ATTACHMENT_BEFORE_HASHES[index]}" ]] ||
     die "guarded attachment changed before apply: $path"
+  source_hash="$LEAN_ATTACHMENT_CURRENT_HASH"
+  capture_path_object_identity "$path" || die "could not inspect guarded attachment identity: $path"
+  source_identity="$PATH_OBJECT_IDENTITY"
+  source_mode="${LEAN_ATTACHMENT_MODES[index]}"
+  [[ "$origin" == created ]] || source_mode="$(stat -c %a -- "$path")"
   dir="$(dirname -- "$path")"; base="${path##*/}"
   lean_ensure_directory "$dir"
   temporary="$(mktemp "$dir/.$base.tmp.XXXXXX")"
@@ -859,18 +892,40 @@ lean_write_attachment() {
   if [[ "${LEAN_ATTACHMENT_PLACEMENTS[index]}" == prepend ]]; then
     printf '%s\n' "${LEAN_ATTACHMENT_BLOCKS[index]}" > "$temporary"
     [[ "$origin" == created ]] || dd if="$path" of="$temporary" oflag=append conv=notrunc status=none
-  else
+  elif [[ "${LEAN_ATTACHMENT_PLACEMENTS[index]}" == append ]]; then
     : > "$temporary"
     [[ "$origin" == created ]] || dd if="$path" of="$temporary" conv=notrunc status=none
     [[ "$origin" != existing-no-final-newline ]] || printf '\n' >> "$temporary"
     printf '%s\n' "${LEAN_ATTACHMENT_BLOCKS[index]}" >> "$temporary"
+  else
+    : > "$temporary"
+    while true; do
+      line=""; read_status=0; IFS= read -r line || read_status=$?
+      printf '%s' "$line" >> "$temporary"
+      ((read_status != 0)) || printf '\n' >> "$temporary"
+      if [[ "$line" == "${LEAN_ATTACHMENT_ANCHORS[index]}" ]]; then
+        ((read_status == 0)) || die "guarded attachment anchor has no following line: $path"
+        printf '%s\n' "${LEAN_ATTACHMENT_BLOCKS[index]}" >> "$temporary"
+      fi
+      ((read_status == 0)) || break
+    done < "$path"
   fi
+  chmod "$source_mode" "$temporary"
+  capture_path_object_identity "$temporary" || die "could not inspect guarded attachment temporary file: $temporary"
+  temporary_identity="$PATH_OBJECT_IDENTITY"; temporary_hash="$(sha256_file "$temporary")"
+  test_hold lean-before-attachment-rename
+  capture_path_object_identity "$temporary" || die "could not recheck guarded attachment temporary file: $temporary"
+  [[ "$PATH_OBJECT_IDENTITY" == "$temporary_identity" && "$(sha256_file "$temporary")" == "$temporary_hash" ]] || {
+    retain_tracked_temp_path "$temporary"
+    die "guarded attachment temporary file changed before publication: $temporary"
+  }
+  capture_path_object_identity "$path" || die "could not recheck guarded attachment identity: $path"
+  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && ( "$source_identity" == absent || "$(sha256_file "$path")" == "$source_hash" ) ]] ||
+    die "guarded attachment changed concurrently; refusing overwrite: $path"
   if [[ "$origin" == created ]]; then
-    chmod "${LEAN_ATTACHMENT_MODES[index]}" "$temporary"
     ln -T -- "$temporary" "$path" 2>/dev/null || { rm -f -- "$temporary"; die "guarded attachment destination appeared: $path"; }
     rm -- "$temporary"
   else
-    chmod "$(stat -c %a -- "$path")" "$temporary"
     mv -fT -- "$temporary" "$path"
   fi
   lean_inspect_attachment "$index"
@@ -915,13 +970,20 @@ lean_remove_stow() {
 
 lean_remove_attachment() {
   local index="$1" path="$HOME/${LEAN_ATTACHMENT_PATHS[index]}" origin="${LEAN_ATTACHMENT_ORIGINS[index]}"
-  local dir base temporary line status inside=false mode
+  local dir base temporary line status inside=false mode source_hash source_identity temporary_hash temporary_identity
   [[ -e "$path" || -L "$path" ]] || return 0
   lean_inspect_attachment "$index"
   [[ "$LEAN_ATTACHMENT_STATUS" == exact ]] || die "recorded guarded attachment changed before removal: $path"
+  source_hash="$(sha256_file "$path")"
+  capture_path_object_identity "$path" || die "could not inspect guarded attachment identity: $path"
+  source_identity="$PATH_OBJECT_IDENTITY"
   if [[ "$origin" == created ]]; then
     [[ "$(sha256_file "$path")" == "$(sha256_string "${LEAN_ATTACHMENT_BLOCKS[index]}"$'\n')" ]] ||
       die "created guarded attachment contains unrelated content: $path"
+    test_hold lean-before-attachment-remove
+    capture_path_object_identity "$path" || die "could not recheck guarded attachment identity: $path"
+    [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && "$(sha256_file "$path")" == "$source_hash" ]] ||
+      die "guarded attachment changed concurrently; refusing removal: $path"
     rm -- "$path"
     return 0
   fi
@@ -944,11 +1006,22 @@ lean_remove_attachment() {
     ((status == 0)) || break
   done < "$path"
   chmod "$mode" "$temporary"
+  capture_path_object_identity "$temporary" || die "could not inspect guarded attachment temporary file: $temporary"
+  temporary_identity="$PATH_OBJECT_IDENTITY"; temporary_hash="$(sha256_file "$temporary")"
+  test_hold lean-before-attachment-remove
+  capture_path_object_identity "$temporary" || die "could not recheck guarded attachment temporary file: $temporary"
+  [[ "$PATH_OBJECT_IDENTITY" == "$temporary_identity" && "$(sha256_file "$temporary")" == "$temporary_hash" ]] || {
+    retain_tracked_temp_path "$temporary"
+    die "guarded attachment temporary file changed before publication: $temporary"
+  }
+  capture_path_object_identity "$path" || die "could not recheck guarded attachment identity: $path"
+  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && "$(sha256_file "$path")" == "$source_hash" ]] ||
+    die "guarded attachment changed concurrently; refusing overwrite: $path"
   mv -fT -- "$temporary" "$path"
 }
 
 lean_remove_area() {
-  local index
+  local index state_hash state_identity
   lean_preflight_area remove
   [[ "$LEAN_ENTRY_KIND" != validation-only ]] || return 0
   for index in "${!LEAN_JSON_PATHS[@]}"; do
@@ -959,6 +1032,13 @@ lean_remove_area() {
   for index in "${!LEAN_ATTACHMENT_PATHS[@]}"; do lean_remove_attachment "$index"; done
   if ((${#LEAN_ATTACHMENT_PATHS[@]} > 0 || ${#LEAN_JSON_PATHS[@]} > 0)); then
     lean_validate_state_file "$LEAN_STATE"
+    state_hash="$(sha256_file "$LEAN_STATE")"
+    capture_path_object_identity "$LEAN_STATE" || die "could not inspect lean state identity: $LEAN_STATE"
+    state_identity="$PATH_OBJECT_IDENTITY"
+    test_hold lean-before-state-remove
+    capture_path_object_identity "$LEAN_STATE" || die "could not recheck lean state identity: $LEAN_STATE"
+    [[ "$PATH_OBJECT_IDENTITY" == "$state_identity" && "$(sha256_file "$LEAN_STATE")" == "$state_hash" ]] ||
+      die "lean state changed concurrently; refusing removal: $LEAN_STATE"
     rm -- "$LEAN_STATE"
   fi
 }

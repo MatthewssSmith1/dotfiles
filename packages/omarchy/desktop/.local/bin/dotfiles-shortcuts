@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+source_path="$(readlink -f -- "${BASH_SOURCE[0]}")"
+directory="$(dirname -- "$source_path")"
+roots=()
+
+while :; do
+  if [[ -x "$directory/scripts/dotfiles-shortcuts" &&
+    -f "$directory/manifests/areas.tsv" &&
+    -f "$directory/profiles/omarchy.conf" &&
+    -f "$directory/profiles/ubuntu.conf" ]]; then
+    roots+=("$directory")
+  fi
+  [[ "$directory" != / ]] || break
+  directory="$(dirname -- "$directory")"
+done
+
+if ((${#roots[@]} != 1)); then
+  printf 'dotfiles-shortcuts: expected exactly one checkout root, found %d\n' "${#roots[@]}" >&2
+  exit 1
+fi
+
+exec "${roots[0]}/scripts/dotfiles-shortcuts" "$@"

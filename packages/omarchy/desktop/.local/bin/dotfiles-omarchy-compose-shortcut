@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+case "${1:-}" in
+  space-a) sequence=(Multi_key space a) ;;
+  space-e) sequence=(Multi_key space e) ;;
+  space-n) sequence=(Multi_key space n) ;;
+  space-space) sequence=(Multi_key space space) ;;
+  p-b) sequence=(Multi_key p b) ;;
+  p-d) sequence=(Multi_key p d) ;;
+  p-p) sequence=(Multi_key p p) ;;
+  p-t) sequence=(Multi_key p t) ;;
+  *)
+    printf 'dotfiles-omarchy-compose-shortcut: unknown shortcut: %s\n' "${1:-}" >&2
+    exit 64
+    ;;
+esac
+
+command -v wtype >/dev/null 2>&1 || {
+  printf 'dotfiles-omarchy-compose-shortcut: wtype is unavailable\n' >&2
+  exit 127
+}
+
+exec wtype -s 180 -k "${sequence[0]}" -k "${sequence[1]}" -k "${sequence[2]}"

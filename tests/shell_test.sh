@@ -129,6 +129,54 @@ expected_trace=$'ubuntu\nenvironment\nupstream-shell\nupstream-aliases\nupstream
   fail 'guarded initializer order changed'
 pass
 
+# Interactive OpenCode defaults to personal when its optional launcher exists
+# and otherwise falls back to the native PATH executable.
+mkdir -p "$home/native-bin"
+printf '#!/usr/bin/env bash\nprintf "native"\nprintf "<%%s>" "$@"\n' > "$home/native-bin/opencode"
+printf '#!/usr/bin/env bash\nprintf "work"\nprintf "<%%s>" "$@"\n' > "$home/native-bin/opencode-work"
+chmod 0755 "$home/native-bin/opencode" "$home/native-bin/opencode-work"
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode "two words"' 2>/dev/null)"
+[[ "$output" == 'native<two words>' ]] || fail 'OpenCode Bash fallback changed native arguments'
+mkdir -p "$home/.local/share/dotfiles/bin"
+printf '#!/usr/bin/env bash\nprintf "helper"\nprintf "<%%s>" "$@"\n' > "$home/.local/share/dotfiles/bin/opencode-launch"
+chmod 0755 "$home/.local/share/dotfiles/bin/opencode-launch"
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode literal' 2>/dev/null)"
+[[ "$output" == 'helper<personal><literal>' ]] || fail 'plain OpenCode did not select personal'
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; alias c="opencode --auto"; eval '\''c "two words"'\''' 2>/dev/null)"
+[[ "$output" == 'helper<personal><--auto><two words>' ]] || fail 'native c alias did not route through personal OpenCode'
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-work literal' 2>/dev/null)"
+[[ "$output" == 'work<literal>' ]] || fail 'OpenCode Bash function intercepted the named work launcher'
+set +e
+HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; bash --noprofile --norc -c "declare -F opencode >/dev/null"' \
+  >/dev/null 2>&1
+status=$?
+set -e
+((status != 0)) || fail 'OpenCode Bash function was exported to child shells'
+rm "$home/.local/share/dotfiles/bin/opencode-launch"
+mkdir -p "$home/.config/dotfiles/opencode" "$home/production-bin"
+ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/personal.jsonc" \
+  "$home/.config/dotfiles/opencode/personal.jsonc"
+ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/tui.jsonc" \
+  "$home/.config/dotfiles/opencode/tui.jsonc"
+ln -s "$REPO_DIR/packages/common/opencode/.local/share/dotfiles/bin/opencode-launch" \
+  "$home/.local/share/dotfiles/bin/opencode-launch"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_TUI_CONFIG"\nprintf "<%%s>" "$@"\n' > "$home/production-bin/opencode"
+chmod 0755 "$home/production-bin/opencode"
+output="$(HOME="$home" PATH="$home/production-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode literal' 2>/dev/null)"
+[[ "$output" == "$home/.config/dotfiles/opencode/personal.jsonc"$'\n'"$home/.config/dotfiles/opencode/tui.jsonc"$'\n<literal>' ]] ||
+  fail 'interactive OpenCode did not compose with the production launcher'
+rm "$home/.local/share/dotfiles/bin/opencode-launch"
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode literal' 2>/dev/null)"
+[[ "$output" == 'native<literal>' ]] || fail 'OpenCode removal fallback did not restore native behavior'
+pass
+
 # Noninteractive and missing-tool startup remain silent and side-effect free.
 : > "$home/trace"
 HOME="$home" PATH=/usr/bin:/bin DOTFILES_BASH_TRACE="$home/trace" bash --noprofile --norc -c \
@@ -160,6 +208,8 @@ assert_same "$home/.profile" "$TEST_ROOT/ubuntu.profile.original"
 [[ "$(stat -c %a -- "$home/.bashrc")" == 640 && ! -e "$state" &&
   ! -e "$home/.config/dotfiles/bash/rc.bash" && -f "$home/.config/dotfiles/local/bash.sh" ]] ||
   fail 'Ubuntu Bash removal did not preserve host ownership'
+[[ "$(HOME="$home" PATH="$home/native-bin:$PATH" bash --noprofile --norc -c 'type -t opencode')" == file ]] ||
+  fail 'Bash removal did not leave native OpenCode resolution'
 pass
 
 # Native Omarchy receives only the common payload, preserves v4 aliases, and

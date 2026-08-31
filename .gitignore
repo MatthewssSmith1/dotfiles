@@ -10,3 +10,6 @@ docs/todo.md
 .upstream-staging.*
 
 .zed/
+
+__pycache__/
+*.py[cod]

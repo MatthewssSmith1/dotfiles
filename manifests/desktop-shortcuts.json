@@ -1,0 +1,81 @@
+{
+  "_instructions": "After manual edits, run: dotfiles-shortcuts sync",
+  "version": 2,
+  "menu": {
+    "id": "shortcuts",
+    "icon": "󰌌",
+    "label": "Shortcuts",
+    "aliases": ["shortcut", "shortcuts"]
+  },
+  "binding": {
+    "keys": "SUPER + SHIFT + K",
+    "description": "Personal shortcuts"
+  },
+  "groups": [
+    {"id": "general", "name": "General", "prefix": "space"},
+    {"id": "prompts", "name": "Prompts", "prefix": "p"}
+  ],
+  "shortcuts": [
+    {
+      "id": "space-a",
+      "group": "general",
+      "key": "a",
+      "label": "a · AGENTS.md",
+      "source": "managed",
+      "output": "AGENTS.md"
+    },
+    {
+      "id": "space-e",
+      "group": "general",
+      "key": "e",
+      "label": "e · Email",
+      "source": "host"
+    },
+    {
+      "id": "space-n",
+      "group": "general",
+      "key": "n",
+      "label": "n · Name",
+      "source": "host"
+    },
+    {
+      "id": "space-space",
+      "group": "general",
+      "key": "space",
+      "label": "space · Em dash",
+      "source": "omarchy"
+    },
+    {
+      "id": "p-b",
+      "group": "prompts",
+      "key": "b",
+      "label": "b · Continue briefly",
+      "source": "managed",
+      "output": "Continue discussing with me briefly."
+    },
+    {
+      "id": "p-d",
+      "group": "prompts",
+      "key": "d",
+      "label": "d · Discuss unresolved points",
+      "source": "managed",
+      "output": "Continue discussing with me, focussing on points we have yet to agree on."
+    },
+    {
+      "id": "p-p",
+      "group": "prompts",
+      "key": "p",
+      "label": "p · Write implementation plan",
+      "source": "managed",
+      "output": "Write an implementation plan for this; put it in a temporary *.md file outside this repo."
+    },
+    {
+      "id": "p-t",
+      "group": "prompts",
+      "key": "t",
+      "label": "t · Ask for recommendation",
+      "source": "managed",
+      "output": "What do you think/recommend? Discuss with me."
+    }
+  ]
+}

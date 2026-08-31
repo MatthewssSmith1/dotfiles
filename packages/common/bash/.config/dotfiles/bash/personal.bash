@@ -10,3 +10,12 @@ for _dotfiles_bash_pnpm_dir in "$PNPM_HOME" "$PNPM_HOME/bin"; do
 done
 unset _dotfiles_bash_pnpm_dir
 export PATH
+
+opencode() {
+  local launcher="$HOME/.local/share/dotfiles/bin/opencode-launch"
+  if [[ -x "$launcher" ]]; then
+    "$launcher" personal "$@"
+  else
+    command opencode "$@"
+  fi
+}

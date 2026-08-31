@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+die() {
+  printf 'dotfiles omarchy-menu-images adapter: %s\n' "$*" >&2
+  exit 1
+}
+
+if [[ -n "${DOTFILES_TEST_OMARCHY_ROOT:-}${DOTFILES_TEST_NATIVE_MENU_IMAGES:-}${DOTFILES_TEST_NATIVE_OWNER:-}" &&
+  "${DOTFILES_TESTING:-}" != 1 ]]; then
+  die 'test path overrides require DOTFILES_TESTING=1'
+fi
+
+real_omarchy_path="${DOTFILES_TEST_OMARCHY_ROOT:-/usr/share/omarchy}"
+native_menu_images="${DOTFILES_TEST_NATIVE_MENU_IMAGES:-/usr/bin/omarchy-menu-images}"
+native_owner="${DOTFILES_TEST_NATIVE_OWNER:-0}"
+real_menu_images="$real_omarchy_path/bin/omarchy-menu-images"
+
+[[ "$real_omarchy_path" == /* && -d "$real_omarchy_path" && ! -L "$real_omarchy_path" ]] ||
+  die "Omarchy root is missing or unsafe: $real_omarchy_path"
+[[ -L "$real_menu_images" && "$(realpath -e -- "$real_menu_images" 2>/dev/null || true)" == "$native_menu_images" &&
+  -f "$native_menu_images" && ! -L "$native_menu_images" && -x "$native_menu_images" &&
+  "$(stat -c %u -- "$native_menu_images")" == "$native_owner" ]] ||
+  die "native image selector is missing or unsafe: $real_menu_images"
+
+OMARCHY_PATH="$real_omarchy_path" exec "$native_menu_images" "$@"

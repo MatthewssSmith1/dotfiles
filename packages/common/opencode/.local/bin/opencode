@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
-selector="$HOME/.config/dotfiles/local/opencode-profile"
-[[ -f "$selector" && ! -L "$selector" ]] || { printf 'opencode: choose work or personal with dotfiles-opencode-profile\n' >&2; exit 1; }
-profile="$(< "$selector")"
-exec "$HOME/.local/share/dotfiles/bin/opencode-launch" "$profile" "$@"

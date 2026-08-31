@@ -15,7 +15,7 @@ Omarchy is the reference Linux environment; Ubuntu reproduces its pinned, review
 
 ## Areas
 
-Eight areas are ready by default: `git`, `tools`, `bash`, `tmux`, `nvim`, `agents`, `herdr`, `desktop`. `opencode` is optional and explicitly deploys parallel work/personal configuration. `desktop` is native ownership (natural touchpad scrolling, shell idle thresholds, and four additive XCompose aliases) and validation-only on Ubuntu.
+Eight areas are ready by default: `git`, `tools`, `bash`, `tmux`, `nvim`, `agents`, `herdr`, `desktop`. `opencode` is optional and explicitly deploys parallel work/personal configuration. `desktop` is native ownership (natural touchpad scrolling, shell idle thresholds, generated Compose aliases, and a shortcut manager/menu) and validation-only on Ubuntu.
 
 ## Quick start
 

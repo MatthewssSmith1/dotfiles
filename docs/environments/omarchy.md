@@ -65,21 +65,54 @@ upstream kernel fix is confirmed.
 
 The desktop area owns natural touchpad scrolling in a private fragment, the
 `idle.screensaver=600` and `idle.lock=900` scalar values in the regular Omarchy
-`shell.json`, and a package XCompose fragment with four personal aliases. It
-also owns the personal menu extension and `dotfiles-omarchy-theme-switcher`.
-The Style > Theme row still uses Omarchy's native image carousel and
+`shell.json`, and a generated package XCompose fragment with managed aliases. It
+also guards the `Style > Theme` entry and a `Shortcuts` submenu in the regular personal menu
+extension and owns `dotfiles-omarchy-theme-switcher`. That row still uses
+Omarchy's native image carousel and
 `omarchy-theme-set`, but hides these bundled theme directories: `ethereal`,
 `flexoki-light`, `hackerman`, `last-horizon`, `lumon`, `lupine`, `miasma`,
 `rose-pine`, `vantablack`, and `white`. User-installed themes remain visible,
 and new bundled themes appear unless added to that exact denylist. Hidden
 themes remain installed and directly selectable with `omarchy theme set NAME`.
+Background double-right-click remains native and unfiltered; dotfiles does not
+intercept or replace its selector.
+The selector exposes a filtered themes-only root during preview discovery, then
+a scoped `omarchy-menu-images` adapter restores `/usr/share/omarchy` for shell
+IPC. The filtered root is never exposed to `omarchy-shell`.
+
+`SUPER+SHIFT+K` opens the generated shortcut submenu. Its actions call
+`dotfiles-omarchy-compose-shortcut` with stable IDs and replay the corresponding
+`Multi_key` sequence through `wtype`; XCompose remains authoritative. The
+clipboard is unchanged and actions do not submit Enter. Name and email are
+read-only references to definitions in native `~/.XCompose`; em dash references
+Omarchy's packaged default. Their private output is never copied into the
+repository, and managed CRUD cannot edit or delete them.
+
+Use these operator workflows:
+
+```bash
+dotfiles-shortcuts manage
+dotfiles-shortcuts edit-manifest
+dotfiles-shortcuts sync
+```
+
+The manager offers alias/group CRUD, manifest editing, and synchronization.
+After manual edits, run `dotfiles-shortcuts sync`. CRUD updates the canonical
+repository manifest and generated XCompose, menu, binding, and helper artifacts,
+so changes persist for ordinary review and commits. Sync separately applies the
+desktop area, restarts XCompose, refreshes the menu, and reloads Hyprland only
+when its generated binding changed; `dotfiles.sh apply/check/remove` never do
+those runtime operations.
 
 A guarded include attaches that fragment to the regular Omarchy-owned
-`~/.XCompose`, preserving its default include, name, and email content. It
+`~/.XCompose`, preserving its default include, name, and email content. A second
+guarded loader attaches the private shortcut binding fragment to the regular
+`~/.config/hypr/bindings.lua`. It
 leaves keyboard layout/options and every unrelated shell value, including
 Tailscale widgets, to Omarchy. It does not install, configure, authenticate, or
 validate Tailscale. Apply does not restart or reload desktop components; the
-shell file watcher consumes valid shell changes.
+shell file watchers consume valid shell and menu changes, so no menu refresh is
+normally needed.
 
 If an Omarchy refresh replaces `~/.XCompose`, reapplying the desktop area
 restores the guarded include without duplication.
@@ -87,13 +120,14 @@ restores the guarded include without duplication.
 First adoption requires separate explicit confirmation before the single-file
 native reset `omarchy refresh config hypr/input.lua`, followed by
 `dotfiles.sh apply desktop`. Do not substitute the broader Hyprland refresh.
-Omarchy also initially creates
-`~/.config/omarchy/extensions/omarchy-menu.jsonc` as a regular stock template.
-After reviewing it, remove the unchanged template and rerun
-`dotfiles.sh apply desktop`; edited templates are preserved and require a
-manual merge. If an explicit Omarchy config reset later replaces the managed
-link, check reports drift and apply preserves the replacement until it is
-deliberately re-adopted.
+Omarchy creates `~/.config/omarchy/extensions/omarchy-menu.jsonc` as a regular
+stock template. Dotfiles keeps it regular, inserts one marked `style.theme`
+entry after the opening `{`, and preserves compatible unrelated entries byte
+for byte, including multiline objects, partial overrides, submenus, providers,
+and target links. If refresh removes the markers, check reports drift;
+deliberate apply re-adopts the refreshed compatible baseline. Unmanaged
+`style.theme`, malformed or wrapped `items` objects, ambiguous anchors, and
+unsafe paths are refused.
 
 For tmux, the native `~/.config/tmux/tmux.conf` remains the regular Omarchy-owned baseline. The validation-only area checks exact package identity, runtime output, stock bytes, safe owner/mode, key prefixes, terminal, and parsing without writing files or state.
 
@@ -107,7 +141,7 @@ Herdr resolves exactly to package-owned `/usr/bin/herdr`; dotfiles validates
 its accepted version and stock config without changing it. See the
 [Herdr contract](../tools/herdr.md).
 
-Claude Code, Codex, and the OpenCode executable retain their Omarchy or native host owners. The optional OpenCode area manages configuration only; it adds no assistant mise selector, does not require an assistant executable, and leaves assistant application state untouched.
+Claude Code, Codex, and the generic OpenCode executable retain their Omarchy or native host owners. The optional OpenCode area adds only profile/TUI overlays, named launchers, and a helper; interactive Bash routes plain `opencode` through the personal overlay without replacing the native executable. It adds no assistant mise selector, does not require an assistant executable, and leaves assistant application state untouched.
 
 Bash is ready; native attachment and refresh behavior is covered by isolated fixtures.
 

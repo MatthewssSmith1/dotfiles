@@ -45,15 +45,28 @@ is_hidden_theme() {
   return 1
 }
 
-real_omarchy_path="${OMARCHY_PATH:-/usr/share/omarchy}"
+if [[ -n "${DOTFILES_TEST_OMARCHY_ROOT:-}${DOTFILES_TEST_NATIVE_SELECTOR:-}${DOTFILES_TEST_NATIVE_MENU_IMAGES:-}${DOTFILES_TEST_NATIVE_OWNER:-}" &&
+  "${DOTFILES_TESTING:-}" != 1 ]]; then
+  die 'test path overrides require DOTFILES_TESTING=1'
+fi
+real_omarchy_path="${DOTFILES_TEST_OMARCHY_ROOT:-/usr/share/omarchy}"
 real_themes="$real_omarchy_path/themes"
 real_switcher="$real_omarchy_path/bin/omarchy-theme-switcher"
+native_switcher="${DOTFILES_TEST_NATIVE_SELECTOR:-/usr/bin/omarchy-theme-switcher}"
+native_menu_images="${DOTFILES_TEST_NATIVE_MENU_IMAGES:-/usr/bin/omarchy-menu-images}"
+native_owner="${DOTFILES_TEST_NATIVE_OWNER:-0}"
+payload_local="$(dirname -- "$(dirname -- "$(realpath -e -- "${BASH_SOURCE[0]}")")")"
+adapter_dir="$payload_local/libexec/dotfiles-omarchy-theme-switcher"
+adapter="$adapter_dir/omarchy-menu-images"
 [[ "$real_omarchy_path" == /* && -d "$real_omarchy_path" && ! -L "$real_omarchy_path" ]] ||
   die "Omarchy root is missing or unsafe: $real_omarchy_path"
 [[ -d "$real_themes" && ! -L "$real_themes" ]] ||
   die "bundled themes directory is missing or unsafe: $real_themes"
-[[ -f "$real_switcher" && ! -L "$real_switcher" && -x "$real_switcher" ]] ||
+[[ -L "$real_switcher" && "$(realpath -e -- "$real_switcher" 2>/dev/null || true)" == "$native_switcher" &&
+  -f "$native_switcher" && ! -L "$native_switcher" && -x "$native_switcher" && "$(stat -c %u -- "$native_switcher")" == "$native_owner" ]] ||
   die "native theme selector is missing or unsafe: $real_switcher"
+[[ -f "$adapter" && ! -L "$adapter" && -x "$adapter" ]] ||
+  die "image selector adapter is missing or unsafe: $adapter"
 
 cache_base="${XDG_CACHE_HOME:-$HOME/.cache}"
 [[ "$cache_base" == /* ]] || die "cache root is not absolute: $cache_base"
@@ -82,8 +95,17 @@ if [[ -e "$lock" || -L "$lock" ]]; then
   [[ -f "$lock" && ! -L "$lock" && "$(stat -c %u -- "$lock")" == "$EUID" ]] ||
     die "cache lock is unsafe: $lock"
 fi
-exec 9>"$lock"
+exec 9>>"$lock"
+lock_fd_identity="$(stat -Lc '%d:%i:%u' -- "/proc/$$/fd/9" 2>/dev/null || true)"
+lock_path_identity="$(stat -c '%d:%i:%u' -- "$lock" 2>/dev/null || true)"
+[[ -f "/proc/$$/fd/9" && -f "$lock" && ! -L "$lock" &&
+  "$lock_fd_identity" == "$lock_path_identity" && "$lock_fd_identity" == *":$EUID" ]] ||
+  die "cache lock changed while opening: $lock"
 flock 9
+[[ -f "/proc/$$/fd/9" && -f "$lock" && ! -L "$lock" &&
+  "$(stat -c '%d:%i:%u' -- "$lock" 2>/dev/null || true)" == "$lock_fd_identity" &&
+  "$(stat -Lc '%d:%i:%u' -- "/proc/$$/fd/9" 2>/dev/null || true)" == "$lock_fd_identity" ]] ||
+  die "cache lock changed while locking: $lock"
 
 declare -A allowed=()
 user_themes="$HOME/.config/omarchy/themes"
@@ -114,4 +136,4 @@ done
 flock -u 9
 exec 9>&-
 
-OMARCHY_PATH="$view_root" XDG_CACHE_HOME="$runtime_cache" exec "$real_switcher" "$@"
+PATH="$adapter_dir:$PATH" OMARCHY_PATH="$view_root" XDG_CACHE_HOME="$runtime_cache" exec "$native_switcher" "$@"

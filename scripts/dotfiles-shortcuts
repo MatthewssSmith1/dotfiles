@@ -1,0 +1,456 @@
+#!/usr/bin/env python3
+
+import argparse
+import copy
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import unicodedata
+from pathlib import Path
+
+from desktop_shortcuts_lib import load_manifest, output_paths, render, sequence_for, validate_manifest
+
+
+ROOT = Path(__file__).resolve().parent.parent
+MANIFEST_REL = Path("manifests/desktop-shortcuts.json")
+GENERATOR_REL = Path("scripts/generate-desktop-shortcuts")
+
+
+class ShortcutError(Exception):
+    pass
+
+
+def atomic_write(path, content, mode=None):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old_mode = path.stat().st_mode & 0o777 if path.exists() else None
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode if mode is not None else old_mode or 0o644)
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+
+
+def manifest_bytes(data):
+    return (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode()
+
+
+def lock_path(root):
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    base = Path(runtime) if runtime else Path(tempfile.gettempdir()) / f"dotfiles-shortcuts-{os.getuid()}"
+    try:
+        base.mkdir(mode=0o700, parents=True, exist_ok=True)
+        info = base.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise OSError(f"unsafe lock directory: {base}")
+    except OSError as error:
+        raise ShortcutError(f"cannot prepare repository lock: {error}") from error
+    identity = hashlib.sha256(str(Path(root).resolve()).encode()).hexdigest()
+    return base / f"dotfiles-shortcuts-{identity}.lock"
+
+
+@contextlib.contextmanager
+def repository_lock(root):
+    path = lock_path(root)
+    flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = None
+    try:
+        descriptor = os.open(path, flags, 0o600)
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise OSError(f"unsafe lock file: {path}")
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+    except OSError as error:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise ShortcutError(f"cannot lock repository: {error}") from error
+    try:
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def generated_state(root):
+    state = {}
+    for name, path in output_paths(root).items():
+        state[name] = (path.read_bytes(), path.stat().st_mode & 0o777) if path.exists() else None
+    return state
+
+
+def restore_state(root, manifest, outputs):
+    atomic_write(root / MANIFEST_REL, manifest[0], manifest[1])
+    for name, saved in outputs.items():
+        path = output_paths(root)[name]
+        if saved is None:
+            path.unlink(missing_ok=True)
+        else:
+            atomic_write(path, saved[0], saved[1])
+
+
+def write_generated(root, rendered):
+    paths = output_paths(root)
+    previous = generated_state(root)
+    try:
+        for name, path in paths.items():
+            atomic_write(path, rendered[name].encode(), 0o755 if name == "helper" else 0o644)
+    except Exception:
+        for name, saved in previous.items():
+            path = paths[name]
+            if saved is None:
+                path.unlink(missing_ok=True)
+            else:
+                atomic_write(path, saved[0], saved[1])
+        raise
+
+
+def check_generated(root):
+    result = subprocess.run([str(root / GENERATOR_REL)], cwd=root, text=True, capture_output=True)
+    if result.returncode:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise ShortcutError(f"generated files are stale; run 'dotfiles-shortcuts sync'\n{detail}")
+
+
+def run_checked(args, cwd, capture=False):
+    result = subprocess.run(args, cwd=cwd, text=True, capture_output=capture)
+    if result.returncode:
+        detail = (result.stderr if capture else "").strip()
+        raise ShortcutError(f"command failed ({result.returncode}): {' '.join(args)}" + (f"\n{detail}" if detail else ""))
+    return result
+
+
+def _sync(root):
+    data = load_manifest(root / MANIFEST_REL)
+    rendered = render(data)
+    binding_path = output_paths(root)["binding"]
+    old_binding = binding_path.read_text() if binding_path.exists() else None
+    write_generated(root, rendered)
+    binding_changed = old_binding != rendered["binding"]
+
+    run_checked([str(root / "dotfiles.sh"), "apply", "desktop"], root)
+    run_checked(["omarchy", "restart", "xcompose"], root)
+    run_checked(["omarchy", "menu", "refresh"], root)
+    if binding_changed:
+        run_checked(["hyprctl", "reload"], root)
+        errors = run_checked(["hyprctl", "configerrors"], root, capture=True).stdout.strip()
+        if errors:
+            raise ShortcutError(f"Hyprland configuration errors:\n{errors}")
+    run_checked([str(root / "dotfiles.sh"), "check", "desktop"], root)
+
+
+def sync(root):
+    with repository_lock(root):
+        _sync(root)
+
+
+def mutate(root, change):
+    with repository_lock(root):
+        check_generated(root)
+        path = root / MANIFEST_REL
+        original_manifest = (path.read_bytes(), path.stat().st_mode & 0o777)
+        original_outputs = generated_state(root)
+        candidate = copy.deepcopy(load_manifest(path))
+        change(candidate)
+        validate_manifest(candidate)
+        rendered = render(candidate)
+        try:
+            atomic_write(path, manifest_bytes(candidate), original_manifest[1])
+            write_generated(root, rendered)
+        except Exception:
+            restore_state(root, original_manifest, original_outputs)
+            raise
+        try:
+            _sync(root)
+        except Exception as error:
+            raise ShortcutError(
+                f"repository updated, but host synchronization failed: {error}\n"
+                "retry with: dotfiles-shortcuts sync"
+            ) from error
+
+
+def slug(value, description):
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode().lower()
+    result = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+    if not result or not result[0].isalpha():
+        raise ShortcutError(f"cannot derive {description}; provide a value beginning with a letter")
+    return result
+
+
+def groups_by_id(data):
+    return {group["id"]: group for group in data["groups"]}
+
+
+def require_group(data, group_id):
+    try:
+        return groups_by_id(data)[group_id]
+    except KeyError as error:
+        raise ShortcutError(f"unknown group: {group_id}") from error
+
+
+def require_shortcut(data, shortcut_id, managed=False):
+    item = next((item for item in data["shortcuts"] if item["id"] == shortcut_id), None)
+    if item is None:
+        raise ShortcutError(f"unknown shortcut: {shortcut_id}")
+    if managed and item["source"] != "managed":
+        raise ShortcutError(f"shortcut is {item['source']}-owned and cannot be changed: {shortcut_id}")
+    return item
+
+
+def add_alias(data, group_id, key, label, text):
+    group = require_group(data, group_id)
+    shortcut_id = slug(f"{group['prefix']}-{key}", "shortcut ID")
+    if any(item["id"] == shortcut_id for item in data["shortcuts"]):
+        raise ShortcutError(f"shortcut ID already exists: {shortcut_id}")
+    data["shortcuts"].append({
+        "id": shortcut_id, "group": group_id, "key": key,
+        "label": label, "source": "managed", "output": text,
+    })
+    return shortcut_id
+
+
+def edit_alias(data, shortcut_id, key=None, label=None, text=None):
+    item = require_shortcut(data, shortcut_id, managed=True)
+    if key is not None:
+        item["key"] = key
+    if label is not None:
+        item["label"] = label
+    if text is not None:
+        item["output"] = text
+
+
+def delete_alias(data, shortcut_id):
+    item = require_shortcut(data, shortcut_id, managed=True)
+    data["shortcuts"].remove(item)
+
+
+def add_group(data, name, prefix, group_id=None):
+    group_id = group_id or slug(name, "group ID")
+    data["groups"].append({"id": group_id, "name": name, "prefix": prefix})
+    return group_id
+
+
+def rename_group(data, group_id, name):
+    require_group(data, group_id)["name"] = name
+
+
+def delete_group(data, group_id):
+    group = require_group(data, group_id)
+    if any(item["group"] == group_id for item in data["shortcuts"]):
+        raise ShortcutError(f"group is not empty: {group_id}")
+    data["groups"].remove(group)
+
+
+def run_menu(args):
+    try:
+        result = subprocess.run(args, text=True, capture_output=True)
+    except OSError as error:
+        raise ShortcutError(f"menu command unavailable: {error}") from error
+    if result.returncode == 0:
+        return result.stdout.rstrip("\n")
+    if result.returncode == 1 and not result.stdout and not result.stderr:
+        return None
+    detail = result.stderr.strip() or result.stdout.strip()
+    message = f"menu command failed ({result.returncode}): {' '.join(args)}"
+    raise ShortcutError(message + (f"\n{detail}" if detail else ""))
+
+
+def menu_select(prompt, options):
+    if not options:
+        return None
+    return run_menu(["omarchy", "menu", "select", prompt, *options])
+
+
+def menu_input(prompt):
+    return run_menu(["omarchy", "menu", "input", prompt])
+
+
+def confirm(text):
+    return menu_select(text, ["Confirm", "Cancel"]) == "Confirm"
+
+
+def notify(message, failure=False):
+    if shutil.which("notify-send"):
+        subprocess.run(["notify-send", "Dotfiles shortcuts", message], check=False)
+    else:
+        print(message, file=sys.stderr)
+    if failure:
+        print(message, file=sys.stderr)
+
+
+def choose(data, values, prompt):
+    labels = {f"{value['id']} · {value.get('name', value.get('label'))}": value for value in values}
+    selected = menu_select(prompt, list(labels))
+    return labels.get(selected)
+
+
+def manage(root):
+    operations = [
+        "Add text alias", "Edit text alias", "Delete text alias", "Add group",
+        "Rename group", "Delete empty group", "Edit manifest", "Sync configuration",
+    ]
+    operation = menu_select("Manage shortcuts", operations)
+    if operation is None:
+        return
+    if operation == "Edit manifest":
+        run_checked(["omarchy-launch-editor", str(root / MANIFEST_REL)], root)
+        return
+    if operation == "Sync configuration":
+        sync(root)
+        notify("Shortcut configuration synchronized")
+        return
+
+    data = load_manifest(root / MANIFEST_REL)
+    action = None
+    summary = ""
+    if operation == "Add text alias":
+        group = choose(data, data["groups"], "Group")
+        if group is None:
+            return
+        key = menu_input("Compose key")
+        label = menu_input("Menu label") if key is not None else None
+        text = menu_input("Replacement text") if label is not None else None
+        if text is None:
+            return
+        summary = f"Add <Multi_key> <{group['prefix']}> <{key}>"
+        action = lambda candidate: add_alias(candidate, group["id"], key, label, text)
+    elif operation == "Edit text alias":
+        item = choose(data, [item for item in data["shortcuts"] if item["source"] == "managed"], "Alias")
+        if item is None:
+            return
+        key = menu_input(f"Compose key [{item['key']}] (blank keeps current)")
+        label = menu_input(f"Menu label [{item['label']}] (blank keeps current)") if key is not None else None
+        text = menu_input("Replacement text (blank keeps current)") if label is not None else None
+        if text is None:
+            return
+        prefix = groups_by_id(data)[item["group"]]["prefix"]
+        summary = f"Edit <Multi_key> <{prefix}> <{key or item['key']}>"
+        action = lambda candidate: edit_alias(candidate, item["id"], key or None, label or None, text or None)
+    elif operation == "Delete text alias":
+        item = choose(data, [item for item in data["shortcuts"] if item["source"] == "managed"], "Alias")
+        if item is None:
+            return
+        sequence = sequence_for(item, groups_by_id(data))
+        summary = "Delete " + " ".join(f"<{key}>" for key in sequence)
+        action = lambda candidate: delete_alias(candidate, item["id"])
+    elif operation == "Add group":
+        name = menu_input("Group name")
+        prefix = menu_input("Compose prefix") if name is not None else None
+        if prefix is None:
+            return
+        group_id = slug(name, "group ID")
+        summary = f"Add group {group_id} (<Multi_key> <{prefix}>)"
+        action = lambda candidate: add_group(candidate, name, prefix, group_id)
+    elif operation == "Rename group":
+        group = choose(data, data["groups"], "Group")
+        name = menu_input("New group name") if group is not None else None
+        if name is None:
+            return
+        summary = f"Rename {group['id']} to {name}"
+        action = lambda candidate: rename_group(candidate, group["id"], name)
+    elif operation == "Delete empty group":
+        used = {item["group"] for item in data["shortcuts"]}
+        group = choose(data, [group for group in data["groups"] if group["id"] not in used], "Empty group")
+        if group is None:
+            return
+        summary = f"Delete empty group {group['id']}"
+        action = lambda candidate: delete_group(candidate, group["id"])
+    if action is not None and confirm(summary):
+        mutate(root, action)
+        notify(summary)
+
+
+def parser_for():
+    parser = argparse.ArgumentParser(prog="dotfiles-shortcuts")
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("list")
+    add = commands.add_parser("add")
+    add.add_argument("--group", required=True)
+    add.add_argument("--key", required=True)
+    add.add_argument("--label", required=True)
+    add.add_argument("--text", required=True)
+    edit = commands.add_parser("edit")
+    edit.add_argument("id")
+    edit.add_argument("--key")
+    edit.add_argument("--label")
+    edit.add_argument("--text")
+    delete = commands.add_parser("delete")
+    delete.add_argument("id")
+    delete.add_argument("--yes", action="store_true")
+    group = commands.add_parser("group").add_subparsers(dest="group_command", required=True)
+    group_add = group.add_parser("add")
+    group_add.add_argument("--name", required=True)
+    group_add.add_argument("--prefix", required=True)
+    group_add.add_argument("--id")
+    group_rename = group.add_parser("rename")
+    group_rename.add_argument("id")
+    group_rename.add_argument("--name", required=True)
+    group_delete = group.add_parser("delete")
+    group_delete.add_argument("id")
+    group_delete.add_argument("--yes", action="store_true")
+    commands.add_parser("edit-manifest")
+    commands.add_parser("sync")
+    commands.add_parser("manage")
+    return parser
+
+
+def main(argv=None, root=ROOT):
+    args = parser_for().parse_args(argv)
+    try:
+        if args.command == "list":
+            data = load_manifest(root / MANIFEST_REL)
+            groups = groups_by_id(data)
+            for item in data["shortcuts"]:
+                sequence = " ".join(sequence_for(item, groups)[1:])
+                print(f"{item['id']}\t{item['source']}\t{sequence}\t{item['label']}")
+        elif args.command == "add":
+            mutate(root, lambda data: add_alias(data, args.group, args.key, args.label, args.text))
+        elif args.command == "edit":
+            if args.key is None and args.label is None and args.text is None:
+                raise ShortcutError("edit requires at least one changed field")
+            mutate(root, lambda data: edit_alias(data, args.id, args.key, args.label, args.text))
+        elif args.command == "delete":
+            if not args.yes:
+                raise ShortcutError("delete requires --yes")
+            mutate(root, lambda data: delete_alias(data, args.id))
+        elif args.command == "group" and args.group_command == "add":
+            mutate(root, lambda data: add_group(data, args.name, args.prefix, args.id))
+        elif args.command == "group" and args.group_command == "rename":
+            mutate(root, lambda data: rename_group(data, args.id, args.name))
+        elif args.command == "group" and args.group_command == "delete":
+            if not args.yes:
+                raise ShortcutError("group delete requires --yes")
+            mutate(root, lambda data: delete_group(data, args.id))
+        elif args.command == "edit-manifest":
+            run_checked(["omarchy-launch-editor", str(root / MANIFEST_REL)], root)
+        elif args.command == "sync":
+            sync(root)
+        elif args.command == "manage":
+            manage(root)
+    except (ShortcutError, OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+        message = f"dotfiles-shortcuts: {error}"
+        if args.command == "manage":
+            notify(message, failure=True)
+        else:
+            print(message, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

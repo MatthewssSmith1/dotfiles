@@ -64,32 +64,35 @@ There is no `export` prefix, quote removal, escaping, interpolation, command
 substitution, inline comment, multiline value, or shell syntax. Prefer one
 bundle per application or trust boundary rather than one global bundle.
 
-## OpenCode Wrapper
+## OpenCode Work Wrapper
 
-The host-owned `~/.config/dotfiles/local/bash.sh` may define a lazy wrapper:
+Managed interactive Bash already routes plain `opencode` through the personal
+profile. The host-owned `~/.config/dotfiles/local/bash.sh` may lazily inject the
+work credential by overriding only the named work launcher:
 
 ```bash
-opencode() {
-  local executable
-  executable="$(type -P -- opencode)" || {
-    printf '%s\n' 'opencode executable is unavailable' >&2
+opencode-work() {
+  local launcher="$HOME/.local/share/dotfiles/bin/opencode-launch"
+  if [[ ! -x "$launcher" ]]; then
+    printf '%s\n' 'opencode work launcher is unavailable' >&2
     return 127
-  }
-  command dotfiles-secret exec-env opencode -- "$executable" "$@"
+  fi
+  command dotfiles-secret exec-env opencode -- "$launcher" work "$@"
 }
 ```
 
-The real executable is selected before the child environment changes, avoiding
-function recursion. Sourcing the host-local file performs no bundle read or
-network operation. Calling `opencode` reads only `opencode.env`; the tracked
-`c='opencode --auto'` alias continues through the function unchanged.
+Sourcing the host-local file performs no bundle read or network operation.
+Calling `opencode-work` reads only `opencode.env`; plain `opencode`,
+`opencode-personal`, and the tracked `c='opencode --auto'` alias remain personal
+and do not receive the work credential. Do not define a host-local `opencode()`
+unless intentionally replacing managed personal-default routing.
 
 ## Host Setup And Rotation
 
 Create `~/.config/dotfiles/local/secrets/` as a real mode-`0700` directory. With
 `umask 077`, create `opencode.env` using a trusted editor or input method that
 does not place its value in command arguments, shell history, or repository
-files, then verify exact mode `0600` and user ownership. Add the wrapper to the
+files, then verify exact mode `0600` and user ownership. Add the work wrapper to the
 real host-local Bash file, start a new managed interactive Bash, and run:
 
 ```bash

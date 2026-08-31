@@ -1,7 +1,4 @@
-# OpenCode configuration variants and exact canonical base bridge.
-
-readonly OPENCODE_CANONICAL='.config/opencode/opencode.jsonc'
-readonly OPENCODE_BASE_LEXICAL='base.jsonc'
+# OpenCode profile overlays and named launchers.
 
 register_opencode_area() {
   local package
@@ -12,14 +9,62 @@ register_opencode_area() {
 }
 
 opencode_source() {
-  printf '%s' "$DOTFILES_DIR/packages/common/opencode/.config/opencode/$1"
+  printf '%s' "$DOTFILES_DIR/packages/common/opencode/.config/dotfiles/opencode/$1"
+}
+
+opencode_json() {
+  jq -eRsc '
+    gsub("(?m)^\\s*//[^\\n]*(\\n|$)"; "") |
+    gsub(",(?<close>\\s*[}\\]])"; "\(.close)") |
+    fromjson
+  ' "$1"
+}
+
+opencode_legacy_link_is_exact() {
+  local target="$1" source="$2" path
+  path="$HOME/$target"
+  [[ -L "$path" && "$(resolve_link "$path")" == "$DOTFILES_DIR/packages/common/opencode/$source" ]]
+}
+
+opencode_legacy_canonical_is_exact() {
+  local path="$HOME/.config/opencode/opencode.jsonc"
+  [[ -L "$path" && "$(readlink -- "$path")" == base.jsonc ]] &&
+    opencode_legacy_link_is_exact .config/opencode/base.jsonc .config/opencode/base.jsonc
+}
+
+opencode_legacy_links_present() {
+  opencode_legacy_link_is_exact .config/opencode/base.jsonc .config/opencode/base.jsonc ||
+    opencode_legacy_link_is_exact .config/opencode/dotfiles-tui.jsonc .config/opencode/dotfiles-tui.jsonc ||
+    opencode_legacy_link_is_exact .config/opencode/profiles/personal.jsonc .config/opencode/profiles/personal.jsonc ||
+    opencode_legacy_link_is_exact .config/opencode/profiles/work.jsonc .config/opencode/profiles/work.jsonc ||
+    opencode_legacy_link_is_exact .local/bin/dotfiles-opencode-profile .local/bin/dotfiles-opencode-profile ||
+    opencode_legacy_link_is_exact .local/bin/opencode .local/bin/opencode ||
+    opencode_legacy_canonical_is_exact
+}
+
+remove_opencode_legacy_links() {
+  local target source target_source
+  local -a legacy=(
+    '.config/opencode/base.jsonc .config/opencode/base.jsonc'
+    '.config/opencode/dotfiles-tui.jsonc .config/opencode/dotfiles-tui.jsonc'
+    '.config/opencode/profiles/personal.jsonc .config/opencode/profiles/personal.jsonc'
+    '.config/opencode/profiles/work.jsonc .config/opencode/profiles/work.jsonc'
+    '.local/bin/dotfiles-opencode-profile .local/bin/dotfiles-opencode-profile'
+    '.local/bin/opencode .local/bin/opencode'
+  )
+  opencode_legacy_canonical_is_exact && rm -- "$HOME/.config/opencode/opencode.jsonc"
+  for target_source in "${legacy[@]}"; do
+    read -r target source <<< "$target_source"
+    opencode_legacy_link_is_exact "$target" "$source" && rm -- "$HOME/$target"
+  done
+  return 0
 }
 
 validate_opencode_payload() {
   local expected actual source
   [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == common/opencode ]] ||
     die 'OpenCode closure must contain only common/opencode'
-  expected=$'.config/opencode/base.jsonc\n.config/opencode/dotfiles-tui.jsonc\n.config/opencode/profiles/personal.jsonc\n.config/opencode/profiles/work.jsonc\n.local/bin/dotfiles-opencode-profile\n.local/bin/opencode\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch'
+  expected=$'.config/dotfiles/opencode/personal.jsonc\n.config/dotfiles/opencode/tui.jsonc\n.config/dotfiles/opencode/work.jsonc\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch'
   actual="$(printf '%s\n' "${LEAN_TARGET_PATHS[@]}" | LC_ALL=C sort)"
   [[ "$actual" == "$expected" ]] || die 'OpenCode package payload inventory is not exact'
   for source in "${LEAN_TARGET_SOURCES[@]}"; do
@@ -29,71 +74,45 @@ validate_opencode_payload() {
       [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected OpenCode config mode: $source"
     fi
   done
-  jq empty "$(opencode_source base.jsonc)" "$(opencode_source dotfiles-tui.jsonc)" "$(opencode_source profiles/work.jsonc)" \
-    "$(opencode_source profiles/personal.jsonc)" >/dev/null || die 'managed OpenCode config is invalid JSON'
+  jq empty "$(opencode_source personal.jsonc)" "$(opencode_source tui.jsonc)" \
+    "$(opencode_source work.jsonc)" >/dev/null || die 'managed OpenCode config is invalid JSON'
 }
 
-opencode_canonical_is_exact() {
-  local path="$HOME/$OPENCODE_CANONICAL"
-  [[ -L "$path" && "$(readlink -- "$path")" == "$OPENCODE_BASE_LEXICAL" &&
-    "$(resolve_link "$path")" == "$(opencode_source base.jsonc)" ]]
-}
-
-opencode_package_is_deployed() {
-  local index
-  for index in "${!LEAN_TARGET_PATHS[@]}"; do
-    lean_link_is_exact "$index" && return 0
-  done
-  return 1
-}
-
-preflight_opencode_canonical() {
-  local mode="$1" path="$HOME/$OPENCODE_CANONICAL"
-  validate_home_parent_chain "$path"
-  if [[ -e "$path" || -L "$path" ]]; then
-    opencode_canonical_is_exact && return 0
-    [[ "$mode" != remove ]] || ! opencode_package_is_deployed ||
-      die "managed OpenCode configuration has a modified canonical base: $path"
-    [[ "$mode" != remove ]] || return 0
-    if [[ "$mode" == apply && -f "$path" && ! -L "$path" ]] &&
-      cmp -s -- "$path" "$(opencode_source profiles/work.jsonc)"; then
-      return 0
+validate_opencode_global_configs() {
+  local name path parsed
+  for name in config.json opencode.json opencode.jsonc; do
+    path="$HOME/.config/opencode/$name"
+    validate_home_parent_chain "$path"
+    [[ -e "$path" || -L "$path" ]] || continue
+    [[ "$name" != opencode.jsonc ]] || ! opencode_legacy_canonical_is_exact || continue
+    [[ -f "$path" && ! -L "$path" && -r "$path" && "$(stat -c %u -- "$path")" == "$EUID" ]] ||
+      die "global OpenCode config is not a readable EUID-owned regular file: $path"
+    file_contains_nul "$path" && die "global OpenCode config contains NUL bytes: $path"
+    parsed="$(opencode_json "$path")" || die "global OpenCode config is invalid JSON/JSONC: $path"
+    [[ "$(jq -r type <<< "$parsed")" == object ]] || die "global OpenCode config is not an object: $path"
+    if jq -e 'has("plugin") or has("provider")' <<< "$parsed" >/dev/null; then
+      die "global OpenCode config declares plugin or provider settings: $path"
     fi
-    die "unrelated OpenCode config conflicts with managed canonical base: $path"
-  fi
-  [[ "$mode" != check ]] || die "managed OpenCode canonical base is absent: $path"
+  done
 }
 
 preflight_opencode() {
   register_opencode_area
   validate_opencode_payload
+  [[ "$MODE" != check ]] || ! opencode_legacy_links_present ||
+    die 'legacy managed OpenCode links remain; run dotfiles.sh apply opencode to migrate them'
+  [[ "$MODE" == remove ]] || validate_opencode_global_configs
   lean_preflight_area "$MODE"
-  preflight_opencode_canonical "$MODE"
 }
 
 apply_opencode() {
-  local path="$HOME/$OPENCODE_CANONICAL" adopted=false selector
   register_opencode_area
   validate_opencode_payload
-  [[ ! -f "$path" || -L "$path" ]] || adopted=true
+  validate_opencode_global_configs
+  lean_preflight_area apply
+  remove_opencode_legacy_links
+  validate_opencode_global_configs
   lean_apply_area
-  if [[ "$adopted" == true ]]; then
-    cmp -s -- "$path" "$(opencode_source profiles/work.jsonc)" ||
-      die 'OpenCode config changed after preflight; refusing adoption'
-    rm -- "$path"
-  fi
-  if ! opencode_canonical_is_exact; then
-    ln -sT -- "$OPENCODE_BASE_LEXICAL" "$path" 2>/dev/null ||
-      die 'OpenCode canonical destination appeared concurrently; refusing to overwrite'
-  fi
-  if [[ "$adopted" == true ]]; then
-    selector="$HOME/.config/dotfiles/local/opencode-profile"
-    if [[ ! -e "$selector" && ! -L "$selector" ]]; then
-      lean_ensure_directory "$(dirname -- "$selector")"
-      printf 'work\n' > "$selector"
-      chmod 600 "$selector"
-    fi
-  fi
   log "applied optional OpenCode area for profile '$SELECTED_PROFILE'"
 }
 
@@ -101,8 +120,7 @@ remove_opencode() {
   register_opencode_area
   validate_opencode_payload
   lean_preflight_area remove
-  preflight_opencode_canonical remove
-  opencode_canonical_is_exact && rm -- "$HOME/$OPENCODE_CANONICAL"
+  remove_opencode_legacy_links
   lean_remove_stow
-  log 'removed exact managed OpenCode configuration links; preserved the host-local selector'
+  log 'removed exact managed OpenCode profile and launcher links'
 }

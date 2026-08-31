@@ -42,6 +42,11 @@ does not install, update, fetch, or emit missing-tool diagnostics. Starship is
 also skipped for `TERM=dumb`. The readable, user-owned regular
 `~/.config/dotfiles/local/bash.sh` is sourced last and remains untracked.
 
+The common personal layer defines interactive `opencode` to use the optional
+personal profile launcher. If that launcher is absent, it falls back to the
+native PATH executable. Named `opencode-personal` and `opencode-work` launchers
+remain available to noninteractive callers when the optional area is applied.
+
 ## Validation
 
 `tests/shell_test.sh` covers payload syntax and closure, load order,

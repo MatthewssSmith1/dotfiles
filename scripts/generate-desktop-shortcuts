@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import sys
+
+from desktop_shortcuts_lib import OUTPUTS, ROOT, load_manifest, native_references, render
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--write", action="store_true")
+    parser.add_argument("--native-references", action="store_true")
+    args = parser.parse_args()
+    try:
+        manifest = load_manifest()
+        rendered = render(manifest)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
+        print(f"generate-desktop-shortcuts: {error}", file=sys.stderr)
+        return 1
+
+    if args.native_references:
+        if args.write:
+            parser.error("--write and --native-references are mutually exclusive")
+        for reference in native_references(manifest):
+            print("\t".join(reference))
+        return 0
+
+    stale = []
+    for name, path in OUTPUTS.items():
+        if args.write:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(rendered[name])
+            if name == "helper":
+                path.chmod(0o755)
+        elif not path.is_file() or path.read_text() != rendered[name]:
+            stale.append(path.relative_to(ROOT))
+    if stale:
+        print("generated desktop shortcut files are stale:", file=sys.stderr)
+        for path in stale:
+            print(f"  {path}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

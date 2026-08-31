@@ -12,7 +12,8 @@ readonly TMUX_ADAPTER="$REPO_DIR/packages/ubuntu/tmux/.config/dotfiles/tmux/ubun
 readonly OMARCHY_PRUNE="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-prune"
 readonly OMARCHY_AMDGPU_IPS="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-amdgpu-ips"
 readonly OMARCHY_THEME_SWITCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-theme-switcher"
-readonly OMARCHY_MENU_EXTENSION="$REPO_DIR/packages/omarchy/desktop/.config/omarchy/extensions/omarchy-menu.jsonc"
+readonly OMARCHY_THEME_MENU_ADAPTER="$REPO_DIR/packages/omarchy/desktop/.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images"
+readonly SHORTCUTS_LAUNCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-shortcuts"
 
 # Every dotfiles source exists, parses, and keeps strict mode.
 readonly DOTFILES_SOURCES=(
@@ -35,8 +36,8 @@ for source_file in "${DOTFILES_SOURCES[@]}"; do
 done
 bash -n "${DOTFILES_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
-  "$REPO_DIR/scripts/agent-skills" \
-  "$OMARCHY_PRUNE" "$OMARCHY_AMDGPU_IPS" "$OMARCHY_THEME_SWITCHER" ||
+  "$REPO_DIR/scripts/agent-skills" "$SHORTCUTS_LAUNCHER" \
+  "$OMARCHY_PRUNE" "$OMARCHY_AMDGPU_IPS" "$OMARCHY_THEME_SWITCHER" "$OMARCHY_THEME_MENU_ADAPTER" ||
   fail 'a dotfiles Bash file has invalid syntax'
 grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missing'
 [[ -x "$DOTFILES" && ! -e "$REPO_DIR/bootstrap.sh" ]] || fail 'root command rename is incomplete'
@@ -59,7 +60,7 @@ done
   fail 'profile validation-only entries are not exact'
 pass
 
-# OpenCode is an optional, package-only area with parallel non-secret configs.
+# OpenCode is an optional package-only area with isolated profile overlays.
 grep -qxF 'area|opencode|optional' "$REPO_DIR/manifests/areas.tsv" || fail 'OpenCode area is not optional'
 for profile in omarchy ubuntu; do
   grep -qxF 'opencode common/opencode' "$REPO_DIR/profiles/$profile.conf" ||
@@ -68,44 +69,88 @@ done
 grep -Fq '|| "$1" == opencode' "$DOTFILES" || fail 'OpenCode is absent from lean dispatch'
 opencode_package="$REPO_DIR/packages/common/opencode"
 opencode_inventory="$(find "$opencode_package" -type f -printf '%P\n' | LC_ALL=C sort)"
-[[ "$opencode_inventory" == $'.config/opencode/base.jsonc\n.config/opencode/dotfiles-tui.jsonc\n.config/opencode/profiles/personal.jsonc\n.config/opencode/profiles/work.jsonc\n.local/bin/dotfiles-opencode-profile\n.local/bin/opencode\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
+[[ "$opencode_inventory" == $'.config/dotfiles/opencode/personal.jsonc\n.config/dotfiles/opencode/tui.jsonc\n.config/dotfiles/opencode/work.jsonc\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
   fail 'OpenCode payload inventory is not exact'
-jq empty "$opencode_package/.config/opencode/"*.jsonc "$opencode_package/.config/opencode/profiles/"*.jsonc ||
-  fail 'managed OpenCode config is invalid JSON'
-tui_config="$opencode_package/.config/opencode/dotfiles-tui.jsonc"
-[[ "$(jq -r '."$schema"' "$tui_config")" == 'https://opencode.ai/tui.json' &&
-  "$(jq -r '.keybinds.input_newline' "$tui_config")" == 'ctrl+return,shift+return,alt+return,ctrl+j' ]] ||
-  fail 'managed OpenCode TUI config is not exact'
-for executable in "$opencode_package/.local/bin/"* "$opencode_package/.local/share/dotfiles/bin/opencode-launch"; do
-  [[ -f "$executable" && ! -L "$executable" && -x "$executable" ]] || fail "OpenCode launcher is not executable: $executable"
+[[ ! -e "$opencode_package/.local/bin/opencode" &&
+  ! -e "$opencode_package/.local/bin/dotfiles-opencode-profile" &&
+  ! -e "$opencode_package/.config/opencode/base.jsonc" &&
+  ! -e "$opencode_package/.config/opencode/opencode.jsonc" ]] ||
+  fail 'OpenCode package still claims a native or global path'
+for config in "$opencode_package/.config/dotfiles/opencode/"*.jsonc; do
+  [[ -f "$config" && ! -L "$config" && "$(stat -c %a -- "$config")" == 644 ]] ||
+    fail "OpenCode config is not an exact regular payload: $config"
 done
+jq empty "$opencode_package/.config/dotfiles/opencode/"*.jsonc ||
+  fail 'managed OpenCode config is invalid JSON'
+tui_config="$opencode_package/.config/dotfiles/opencode/tui.jsonc"
+jq -e '."$schema" == "https://opencode.ai/tui.json" and .keybinds == {
+  "app_exit":"<leader>q",
+  "input_clear":"<leader>k",
+  "prompt_stash":"ctrl+s",
+  "prompt_stash_pop":"ctrl+y",
+  "input_newline":"ctrl+return,shift+return,alt+return,ctrl+j"
+}' "$tui_config" >/dev/null ||
+  fail 'managed OpenCode TUI config is not exact'
+for profile in personal work; do
+  [[ "$(jq -r '."$schema"' "$opencode_package/.config/dotfiles/opencode/$profile.jsonc")" == 'https://opencode.ai/config.json' ]] ||
+    fail "OpenCode $profile profile schema is not exact"
+done
+for executable in "$opencode_package/.local/bin/"* "$opencode_package/.local/share/dotfiles/bin/opencode-launch"; do
+  [[ -f "$executable" && ! -L "$executable" && "$(stat -c %a -- "$executable")" == 755 ]] ||
+    fail "OpenCode launcher is not an exact executable: $executable"
+  bash -n "$executable" || fail "OpenCode launcher has invalid syntax: $executable"
+done
+bash -n "$REPO_DIR/packages/common/bash/.config/dotfiles/bash/personal.bash" ||
+  fail 'common personal Bash has invalid syntax'
 pass
 
-# Desktop is native-only ownership with four exact private payloads. Ubuntu is
+# Desktop is native-only ownership with generated shortcut payloads. Ubuntu is
 # validation-only, and default removal can select desktop only from v2 state.
 desktop_fragment="$REPO_DIR/packages/omarchy/desktop/.config/dotfiles/omarchy/hypr/input.lua"
 desktop_aliases="$REPO_DIR/packages/omarchy/desktop/.config/dotfiles/omarchy/XCompose"
-expected_desktop_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p> <b> : "Continue discussing with me briefly."\n<Multi_key> <p> <d> : "Continue discussing with me, focussing on points we have yet to agree on."\n<Multi_key> <p> <t> : "What do you think/recommend? Discuss with me."'
+expected_desktop_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p> <b> : "Continue discussing with me briefly."\n<Multi_key> <p> <d> : "Continue discussing with me, focussing on points we have yet to agree on."\n<Multi_key> <p> <p> : "Write an implementation plan for this; put it in a temporary *.md file outside this repo."\n<Multi_key> <p> <t> : "What do you think/recommend? Discuss with me."'
 grep -qxF 'desktop omarchy/desktop' "$REPO_DIR/profiles/omarchy.conf" || fail 'native desktop closure is not final'
 grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu desktop is not validation-only'
 [[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f -printf '%P\n' | LC_ALL=C sort)" == \
-  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/input.lua\n.config/omarchy/extensions/omarchy-menu.jsonc\n.local/bin/dotfiles-omarchy-theme-switcher' && -f "$desktop_fragment" ]] ||
+  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/bindings.lua\n.config/dotfiles/omarchy/hypr/input.lua\n.config/dotfiles/omarchy/menu-shortcuts.jsonc\n.local/bin/dotfiles-omarchy-compose-shortcut\n.local/bin/dotfiles-omarchy-theme-switcher\n.local/bin/dotfiles-shortcuts\n.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images' && -f "$desktop_fragment" ]] ||
   fail 'desktop package payload inventory is not exact'
 [[ "$(< "$desktop_aliases")" == "$expected_desktop_aliases" ]] || fail 'desktop Compose aliases are not exact'
 [[ -f "$OMARCHY_THEME_SWITCHER" && ! -L "$OMARCHY_THEME_SWITCHER" && -x "$OMARCHY_THEME_SWITCHER" &&
   "$(stat -c %a "$OMARCHY_THEME_SWITCHER")" == 755 ]] || fail 'desktop theme selector is not an exact executable payload'
-[[ -f "$OMARCHY_MENU_EXTENSION" && ! -L "$OMARCHY_MENU_EXTENSION" ]] || fail 'desktop menu extension is not a regular payload'
+[[ -f "$OMARCHY_THEME_MENU_ADAPTER" && ! -L "$OMARCHY_THEME_MENU_ADAPTER" && -x "$OMARCHY_THEME_MENU_ADAPTER" &&
+  "$(stat -c %a "$OMARCHY_THEME_MENU_ADAPTER")" == 755 ]] || fail 'desktop theme image adapter is not an exact executable payload'
+[[ ! -e "$REPO_DIR/packages/omarchy/desktop/.config/omarchy/extensions/omarchy-menu.jsonc" ]] ||
+  fail 'desktop package still replaces the regular live menu extension'
 grep -qxF 'readonly -a HIDDEN_THEMES=(' "$OMARCHY_THEME_SWITCHER" || fail 'theme denylist is not readonly'
 expected_hidden=$'ethereal\nflexoki-light\nhackerman\nlast-horizon\nlumon\nlupine\nmiasma\nrose-pine\nvantablack\nwhite'
 actual_hidden="$(awk '/^readonly -a HIDDEN_THEMES=\($/{inside=1; next} inside && /^\)/{exit} inside {sub(/^[[:space:]]+/, ""); print}' "$OMARCHY_THEME_SWITCHER")"
 [[ "$actual_hidden" == "$expected_hidden" ]] || fail 'theme denylist names are not exact'
+[[ -x "$REPO_DIR/scripts/generate-desktop-shortcuts" ]] || fail 'desktop shortcut generator is not executable'
+[[ -x "$REPO_DIR/scripts/dotfiles-shortcuts" &&
+  -f "$SHORTCUTS_LAUNCHER" && ! -L "$SHORTCUTS_LAUNCHER" && -x "$SHORTCUTS_LAUNCHER" &&
+  "$(stat -c %a "$SHORTCUTS_LAUNCHER")" == 755 ]] ||
+  fail 'desktop shortcut manager or launcher is not executable'
+python3 "$REPO_DIR/tests/desktop_shortcuts_generator_test.py" || fail 'desktop shortcut generator contracts failed'
+python3 "$REPO_DIR/tests/desktop_shortcuts_cli_test.py" || fail 'desktop shortcut CLI contracts failed'
+"$REPO_DIR/scripts/generate-desktop-shortcuts" || fail 'desktop shortcut generated files are stale'
 jq -e '
-  keys == ["style.theme"] and
-  .["style.theme"] == {
-    "icon":"󰸌", "label":"Theme", "aliases":["theme", "themes"],
-    "action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""
-  }
-' "$OMARCHY_MENU_EXTENSION" >/dev/null || fail 'desktop menu theme routing is not exact'
+  .version == 2 and ._instructions == "After manual edits, run: dotfiles-shortcuts sync" and
+  .binding.keys == "SUPER + SHIFT + K" and
+  (.groups == [
+    {"id":"general", "name":"General", "prefix":"space"},
+    {"id":"prompts", "name":"Prompts", "prefix":"p"}
+  ]) and
+  ([.shortcuts[].id] == ["space-a", "space-e", "space-n", "space-space", "p-b", "p-d", "p-p", "p-t"]) and
+  ([.shortcuts[] | select(.source == "managed")] | length) == 5 and
+  ([.shortcuts[] | select(.source != "managed" and has("output"))] | length) == 0
+' "$REPO_DIR/manifests/desktop-shortcuts.json" >/dev/null || fail 'desktop shortcut manifest is not exact'
+grep -qxF 'real_omarchy_path="${DOTFILES_TEST_OMARCHY_ROOT:-/usr/share/omarchy}"' "$OMARCHY_THEME_SWITCHER" ||
+  fail 'theme selector production source root is not pinned'
+grep -qxF 'native_switcher="${DOTFILES_TEST_NATIVE_SELECTOR:-/usr/bin/omarchy-theme-switcher}"' "$OMARCHY_THEME_SWITCHER" ||
+  fail 'theme selector production executable is not pinned'
+grep -Fq 'style.theme' \
+  "$REPO_DIR/lib/areas/desktop.sh" || fail 'desktop guarded menu theme routing is not exact'
+grep -Fq 'after-exact 0644 true '\''{'\''' "$REPO_DIR/lib/areas/desktop.sh" || fail 'desktop menu attachment is not anchored after exact {'
 grep -Fq '|| "$1" == desktop' "$DOTFILES" || fail 'desktop is absent from lean dispatch'
 grep -Fq 'for file in "$(lean_state_dir)"/*.json' "$DOTFILES" || fail 'default removal does not inspect ownership state'
 ! grep -Eq 'add_area[[:space:]]+desktop' "$DOTFILES" || fail 'default removal selects desktop without ownership'

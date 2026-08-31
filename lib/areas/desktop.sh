@@ -4,9 +4,15 @@ readonly DESKTOP_INPUT='.config/hypr/input.lua'
 readonly DESKTOP_INPUT_FRAGMENT='.config/dotfiles/omarchy/hypr/input.lua'
 readonly DESKTOP_XCOMPOSE='.XCompose'
 readonly DESKTOP_XCOMPOSE_ALIASES='.config/dotfiles/omarchy/XCompose'
+readonly DESKTOP_BINDINGS='.config/hypr/bindings.lua'
+readonly DESKTOP_BINDINGS_FRAGMENT='.config/dotfiles/omarchy/hypr/bindings.lua'
 readonly DESKTOP_SHELL='.config/omarchy/shell.json'
 readonly DESKTOP_MENU_EXTENSION='.config/omarchy/extensions/omarchy-menu.jsonc'
+readonly DESKTOP_MENU_SHORTCUTS='.config/dotfiles/omarchy/menu-shortcuts.jsonc'
 readonly DESKTOP_THEME_SWITCHER='.local/bin/dotfiles-omarchy-theme-switcher'
+readonly DESKTOP_THEME_MENU_ADAPTER='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
+readonly DESKTOP_COMPOSE_SHORTCUT='.local/bin/dotfiles-omarchy-compose-shortcut'
+readonly DESKTOP_SHORTCUTS='.local/bin/dotfiles-shortcuts'
 readonly DESKTOP_INPUT_BEGIN='-- >>> dotfiles desktop input >>>'
 readonly DESKTOP_INPUT_END='-- <<< dotfiles desktop input <<<'
 readonly DESKTOP_INPUT_TOKEN='dotfiles desktop input'
@@ -27,32 +33,73 @@ readonly DESKTOP_XCOMPOSE_TOKEN='dotfiles desktop xcompose'
 readonly DESKTOP_XCOMPOSE_BLOCK="$DESKTOP_XCOMPOSE_BEGIN
 include \"%H/.config/dotfiles/omarchy/XCompose\"
 $DESKTOP_XCOMPOSE_END"
+readonly DESKTOP_BINDINGS_BEGIN='-- >>> dotfiles desktop bindings >>>'
+readonly DESKTOP_BINDINGS_END='-- <<< dotfiles desktop bindings <<<'
+readonly DESKTOP_BINDINGS_TOKEN='dotfiles desktop bindings'
+readonly DESKTOP_BINDINGS_BLOCK="$DESKTOP_BINDINGS_BEGIN
+local home = os.getenv(\"HOME\")
+if home and home ~= \"\" then
+  local fragment = home .. \"/$DESKTOP_BINDINGS_FRAGMENT\"
+  local handle = io.open(fragment, \"r\")
+  if handle then
+    handle:close()
+    dofile(fragment)
+  end
+end
+$DESKTOP_BINDINGS_END"
+readonly DESKTOP_MENU_BEGIN='  // >>> dotfiles desktop menu theme >>>'
+readonly DESKTOP_MENU_END='  // <<< dotfiles desktop menu theme <<<'
+readonly DESKTOP_MENU_TOKEN='dotfiles desktop menu theme'
+readonly DESKTOP_MENU_ACTION='theme=$("$HOME/.local/bin/dotfiles-omarchy-theme-switcher"); [[ -n $theme ]] && omarchy-theme-set "$theme"'
+
+desktop_menu_block() {
+  printf '%s\n' "$DESKTOP_MENU_BEGIN"
+  printf '%s\n' '  "style.theme": {"icon":"󰸌","label":"Theme","aliases":["theme","themes"],"action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""},'
+  cat "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_SHORTCUTS"
+  printf '%s\n' "$DESKTOP_MENU_END"
+}
 
 register_desktop_area() {
-  local package
+  local package menu_block
   load_profile_closure desktop
   lean_begin_area desktop "$SELECTED_PROFILE" "$PROFILE_ENTRY_KIND"
   for package in "${PACKAGES[@]}"; do lean_add_package "$package"; done
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    menu_block="$(desktop_menu_block)"
     lean_add_guarded_attachment desktop-input-v1 "$DESKTOP_INPUT" \
       "$DESKTOP_INPUT_BEGIN" "$DESKTOP_INPUT_END" "$DESKTOP_INPUT_TOKEN" \
       "$DESKTOP_INPUT_BLOCK" append 0644 true
     lean_add_guarded_attachment desktop-xcompose-v1 "$DESKTOP_XCOMPOSE" \
       "$DESKTOP_XCOMPOSE_BEGIN" "$DESKTOP_XCOMPOSE_END" "$DESKTOP_XCOMPOSE_TOKEN" \
       "$DESKTOP_XCOMPOSE_BLOCK" append 0644 true
+    lean_add_guarded_attachment desktop-menu-theme-v1 "$DESKTOP_MENU_EXTENSION" \
+      "$DESKTOP_MENU_BEGIN" "$DESKTOP_MENU_END" "$DESKTOP_MENU_TOKEN" \
+      "$menu_block" after-exact 0644 true '{'
+    lean_add_guarded_attachment desktop-bindings-v1 "$DESKTOP_BINDINGS" \
+      "$DESKTOP_BINDINGS_BEGIN" "$DESKTOP_BINDINGS_END" "$DESKTOP_BINDINGS_TOKEN" \
+      "$DESKTOP_BINDINGS_BLOCK" append 0644 true
     lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_shell_json \
       /idle/screensaver integer 600 /idle/lock integer 900
   fi
 }
 
-validate_desktop_xcompose_aliases() {
-  local path="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_XCOMPOSE_ALIASES"
-  local expected='<Multi_key> <space> <a> : "AGENTS.md"
-<Multi_key> <p> <b> : "Continue discussing with me briefly."
-<Multi_key> <p> <d> : "Continue discussing with me, focussing on points we have yet to agree on."
-<Multi_key> <p> <t> : "What do you think/recommend? Discuss with me."'
-  [[ -f "$path" && ! -L "$path" && "$(< "$path")" == "$expected" ]] ||
-    die 'desktop XCompose aliases are not the accepted exact bindings'
+validate_desktop_shortcuts() {
+  local package="$DOTFILES_DIR/packages/omarchy/desktop" helper fragment launcher menu
+  helper="$package/$DESKTOP_COMPOSE_SHORTCUT"
+  fragment="$package/$DESKTOP_BINDINGS_FRAGMENT"
+  launcher="$package/$DESKTOP_SHORTCUTS"
+  menu="$package/$DESKTOP_MENU_SHORTCUTS"
+  [[ -f "$helper" && ! -L "$helper" && -x "$helper" && "$(stat -c %a -- "$helper")" == 755 ]] ||
+    die 'desktop Compose shortcut helper is not an accepted executable payload'
+  bash -n "$helper" || die 'desktop Compose shortcut helper has invalid Bash syntax'
+  [[ -f "$fragment" && ! -L "$fragment" && "$(< "$fragment")" == \
+    'o.bind("SUPER + SHIFT + K", "Personal shortcuts", "omarchy-menu toggle shortcuts")' ]] ||
+    die 'desktop shortcut binding fragment is not exact'
+  [[ -f "$menu" && ! -L "$menu" ]] || die 'desktop shortcut menu fragment is missing or unsafe'
+  [[ -f "$launcher" && ! -L "$launcher" && -x "$launcher" && "$(stat -c %a -- "$launcher")" == 755 ]] ||
+    die 'desktop shortcut manager launcher is not an accepted executable payload'
+  bash -n "$launcher" || die 'desktop shortcut manager launcher has invalid Bash syntax'
+  "$DOTFILES_DIR/scripts/generate-desktop-shortcuts" || die 'desktop shortcut generated files are stale'
 }
 
 validate_desktop_fragment() {
@@ -92,34 +139,79 @@ validate_desktop_stock_input() {
 }
 
 validate_desktop_theme_filter() {
-  local package="$DOTFILES_DIR/packages/omarchy/desktop" menu selector hidden
-  menu="$package/$DESKTOP_MENU_EXTENSION"
+  local package="$DOTFILES_DIR/packages/omarchy/desktop" selector adapter hidden
   selector="$package/$DESKTOP_THEME_SWITCHER"
-  [[ -f "$menu" && ! -L "$menu" ]] || die 'desktop menu extension is missing or unsafe'
+  adapter="$package/$DESKTOP_THEME_MENU_ADAPTER"
   [[ -f "$selector" && ! -L "$selector" && -x "$selector" && "$(stat -c %a -- "$selector")" == 755 ]] ||
     die 'desktop theme selector is not an accepted executable payload'
   bash -n "$selector" || die 'desktop theme selector has invalid Bash syntax'
+  [[ -f "$adapter" && ! -L "$adapter" && -x "$adapter" && "$(stat -c %a -- "$adapter")" == 755 ]] ||
+    die 'desktop theme image adapter is not an accepted executable payload'
+  bash -n "$adapter" || die 'desktop theme image adapter has invalid Bash syntax'
   mapfile -t hidden < <(awk '/^readonly -a HIDDEN_THEMES=\($/{inside=1; next} inside && /^\)/{exit} inside {sub(/^[[:space:]]+/, ""); print}' "$selector")
   [[ "${hidden[*]}" == 'ethereal flexoki-light hackerman last-horizon lumon lupine miasma rose-pine vantablack white' ]] ||
     die 'desktop theme selector denylist is not exact'
-  jq -e '
-    keys == ["style.theme"] and
-    .["style.theme"].icon == "󰸌" and
-    .["style.theme"].label == "Theme" and
-    .["style.theme"].aliases == ["theme", "themes"] and
-    .["style.theme"].action == "theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""
-  ' "$menu" >/dev/null || die 'desktop menu extension routing is not exact'
 }
 
-desktop_require_adoptable_menu() {
+desktop_menu_json() {
+  jq -eRsc '
+    gsub("(?m)^\\s*//[^\\n]*(\\n|$)"; "") |
+    gsub(",(?<close>\\s*[}\\]])"; "\(.close)") |
+    fromjson
+  ' "$1"
+}
+
+validate_desktop_menu() {
   local path="$HOME/$DESKTOP_MENU_EXTENSION"
-  local stock="${HOST_ROOT:-}/usr/share/omarchy/config/omarchy/extensions/omarchy-menu.jsonc"
-  [[ -e "$path" || -L "$path" ]] || return 0
-  [[ ! -L "$path" ]] || return 0
-  if [[ -f "$path" && -f "$stock" && ! -L "$stock" ]] && cmp -s -- "$path" "$stock"; then
-    die "unchanged Omarchy menu extension requires one-time adoption; remove $path, then rerun: dotfiles.sh apply desktop"
+  local first last status
+  validate_home_parent_chain "$path"
+  if [[ "$MODE" == remove && ! -e "$path" && ! -L "$path" ]]; then return 0; fi
+  [[ -f "$path" && ! -L "$path" && "$(stat -c %u -- "$path")" == "$EUID" ]] ||
+    die "Omarchy menu extension is not an EUID-owned regular file: $path"
+  file_contains_nul "$path" && die "Omarchy menu extension contains NUL bytes: $path"
+  [[ "$(grep -cFx -- '{' "$path")" == 1 ]] || die "Omarchy menu extension has an ambiguous opening anchor: $path"
+  first="$(awk '!/^[[:space:]]*\/\// && NF {print; exit}' "$path")"
+  last="$(awk '!/^[[:space:]]*\/\// && NF {line=$0} END {print line}' "$path")"
+  [[ "$first" == '{' && "$last" == '}' ]] || die "Omarchy menu extension is not a top-level compatible JSONC object: $path"
+  desktop_menu_json "$path" | jq -e '
+    type == "object" and (has("items") | not) and
+    all(to_entries[]; .value | type == "object")
+  ' >/dev/null 2>&1 ||
+    die "Omarchy menu extension is malformed or incompatible: $path"
+  lean_inspect_attachment 2
+  status="$LEAN_ATTACHMENT_STATUS"
+  [[ "$status" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $path"
+  if [[ "$status" == exact ]]; then
+    desktop_menu_json "$path" | jq -e --arg action "$DESKTOP_MENU_ACTION" '
+      .["style.theme"] == {icon:"󰸌",label:"Theme",aliases:["theme","themes"],action:$action}
+    ' >/dev/null || die "managed Style > Theme action differs: $path"
+  else
+    desktop_menu_json "$path" | jq -e '
+      (has("style.theme") | not) and
+      (all(keys[]; . != "shortcuts" and (startswith("shortcuts.") | not)))
+    ' >/dev/null || die "Omarchy menu extension already has an unmanaged desktop route: $path"
   fi
-  die "menu extension contains user changes or is unexpected; manually merge $path before dotfiles.sh apply desktop"
+}
+
+desktop_require_bindings() {
+  local path="$HOME/$DESKTOP_BINDINGS" status
+  [[ -f "$path" && ! -L "$path" ]] || die "Omarchy bindings baseline is missing or not a regular file: $path"
+  lean_inspect_attachment 3
+  status="$LEAN_ATTACHMENT_STATUS"
+  [[ "$status" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $path"
+  if [[ "$status" == absent ]] && grep -Eq \
+    "^[[:space:]]*(o|hl)\\.bind[[:space:]]*\\([[:space:]]*[\"']SUPER[[:space:]]*\\+[[:space:]]*SHIFT[[:space:]]*\\+[[:space:]]*K[\"']" "$path"; then
+    die "Omarchy bindings already contain an unmanaged SUPER + SHIFT + K: $path"
+  fi
+}
+
+validate_desktop_stock_menu() {
+  local stock="${HOST_ROOT:-}/usr/share/omarchy/config/omarchy/extensions/omarchy-menu.jsonc" installed_identity stock_identity
+  [[ -f "$stock" && ! -L "$stock" ]] || die "Omarchy stock menu baseline is missing or unsafe: $stock"
+  installed_identity="$(omarchy_package_identity /usr/share/omarchy/version 2>/dev/null || true)"
+  stock_identity="$(omarchy_package_identity /usr/share/omarchy/config/omarchy/extensions/omarchy-menu.jsonc omarchy-settings 2>/dev/null || true)"
+  [[ -n "$stock_identity" && "${stock_identity#omarchy-settings }" == "${installed_identity#omarchy }" ]] ||
+    die 'Omarchy stock menu baseline package identity does not match authoritative Omarchy'
 }
 
 desktop_require_adoptable_input() {
@@ -136,6 +228,32 @@ desktop_require_xcompose() {
   local path="$HOME/$DESKTOP_XCOMPOSE"
   [[ -f "$path" && ! -L "$path" ]] ||
     die "Omarchy XCompose baseline is missing or not a regular file: $path"
+  grep -Eq '^[[:space:]]*include[[:space:]]+"/usr/share/omarchy/default/xcompose"[[:space:]]*$' "$path" ||
+    die "Omarchy XCompose baseline lacks its packaged default include: $path"
+}
+
+desktop_require_native_shortcuts() {
+  local source id multi prefix key path pattern
+  while IFS=$'\t' read -r source id multi prefix key; do
+    case "$source" in
+      host) path="$HOME/$DESKTOP_XCOMPOSE" ;;
+      omarchy) path="${HOST_ROOT:-}/usr/share/omarchy/default/xcompose" ;;
+      *) die "desktop shortcut manifest returned an unsupported native source: $source" ;;
+    esac
+    [[ -f "$path" && ! -L "$path" ]] ||
+      die "desktop shortcut native source is missing or unsafe for $id: $path"
+    pattern="^[[:space:]]*<$multi>[[:space:]]+<$prefix>[[:space:]]+<$key>[[:space:]]*:"
+    if [[ "$source" == host ]]; then
+      awk -v begin="$DESKTOP_XCOMPOSE_BEGIN" -v end="$DESKTOP_XCOMPOSE_END" '
+        $0 == begin { managed=1; next }
+        $0 == end { managed=0; next }
+        !managed
+      ' "$path" | grep -Eq "$pattern" ||
+        die "desktop shortcut native reference is missing outside the managed include: $id"
+    else
+      grep -Eq "$pattern" "$path" || die "desktop shortcut native reference is missing: $id"
+    fi
+  done < <("$DOTFILES_DIR/scripts/generate-desktop-shortcuts" --native-references)
 }
 
 validate_desktop_closure() {
@@ -143,8 +261,9 @@ validate_desktop_closure() {
     [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == 'omarchy/desktop' ]] ||
       die 'native desktop closure must contain only omarchy/desktop'
     validate_desktop_fragment
-    validate_desktop_xcompose_aliases
+    validate_desktop_shortcuts
     validate_desktop_theme_filter
+    if [[ "$MODE" != remove ]]; then validate_desktop_stock_menu; fi
   else
     [[ "$PROFILE_ENTRY_KIND" == validation-only && ${#PACKAGES[@]} -eq 0 ]] ||
       die 'Ubuntu desktop must be validation-only'
@@ -171,10 +290,14 @@ preflight_desktop() {
     desktop_managed_links_and_markers_absent; then
     return 0
   fi
-  if [[ "$SELECTED_PROFILE" == omarchy && "$MODE" != remove ]]; then
-    desktop_require_adoptable_input
-    desktop_require_xcompose
-    desktop_require_adoptable_menu
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    if [[ "$MODE" != remove ]]; then
+      desktop_require_adoptable_input
+      desktop_require_xcompose
+      desktop_require_native_shortcuts
+      desktop_require_bindings
+    fi
+    validate_desktop_menu
   fi
   lean_preflight_area "$MODE"
   if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
@@ -188,7 +311,9 @@ apply_desktop() {
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     desktop_require_adoptable_input
     desktop_require_xcompose
-    desktop_require_adoptable_menu
+    desktop_require_native_shortcuts
+    desktop_require_bindings
+    validate_desktop_menu
   fi
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
@@ -206,6 +331,7 @@ remove_desktop() {
     log 'desktop ownership is already absent; no changes made'
     return 0
   fi
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then validate_desktop_menu; fi
   lean_remove_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     log 'restored desktop shell idle values and removed exact desktop links and loaders'

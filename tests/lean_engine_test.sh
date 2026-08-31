@@ -68,6 +68,15 @@ register_attachment() {
     "$ATTACH_TOKEN" "$ATTACH_BLOCK" append 0644
 }
 
+register_expanded_attachment() {
+  lean_begin_area attached omarchy packages
+  lean_add_package common/one
+  lean_add_guarded_attachment bash-rc-v1 .bashrc "$ATTACH_BEGIN" "$ATTACH_END" \
+    "$ATTACH_TOKEN" "$ATTACH_BLOCK" append 0644
+  lean_add_guarded_attachment menu-v1 .menu '# >>> dotfiles menu >>>' '# <<< dotfiles menu <<<' \
+    'dotfiles menu' $'# >>> dotfiles menu >>>\n"managed": true,\n# <<< dotfiles menu <<<' after-exact 0644 true '{'
+}
+
 register_structured() {
   local profile="${1:-omarchy}"
   lean_begin_area structured "$profile" packages
@@ -121,6 +130,29 @@ expect_direct_failure 'refusing lean state write without guarded attachments' le
   "$(readlink -- "$HOME/.config/lean/two")" == "$two_link" ]] || fail 'lean check mutated managed objects'
 pass
 
+# Anchored registration expands existing valid state during apply only. The
+# exact anchor position and baseline bytes survive removal.
+reset_lean_home attachment-expansion
+printf 'native\n' > "$HOME/.bashrc"
+printf '%s\n' '{' '"unrelated": true' '}' > "$HOME/.menu"
+cp "$HOME/.menu" "$TEST_ROOT/menu-expansion.original"
+apply_attachment
+register_expanded_attachment
+expect_direct_failure 'attachment set differs' lean_check_area
+register_expanded_attachment
+expect_direct_failure 'attachment set differs' lean_remove_area
+register_expanded_attachment
+lean_apply_area
+[[ "$(grep -nFx '{' "$HOME/.menu" | cut -d: -f1)" == 1 &&
+  "$(grep -nFx '# >>> dotfiles menu >>>' "$HOME/.menu" | cut -d: -f1)" == 2 ]] ||
+  fail 'anchored attachment was not inserted immediately after its exact anchor'
+register_expanded_attachment
+lean_check_area
+register_expanded_attachment
+lean_remove_area
+assert_same "$HOME/.menu" "$TEST_ROOT/menu-expansion.original"
+pass
+
 # Existing guarded files retain exact host bytes and mode around the managed
 # block; apply and remove use atomic regular-file replacement.
 reset_lean_home attachment-lifecycle
@@ -133,6 +165,20 @@ lean_check_area
 remove_attachment
 assert_same "$HOME/.bashrc" "$TEST_ROOT/attachment.original"
 [[ "$(stat -c %a -- "$HOME/.bashrc")" == 640 ]] || fail 'attachment lifecycle changed the host file mode'
+pass
+
+# Repository package payload symlinks are rejected before Stow or state writes.
+reset_lean_home payload-symlink
+mkdir -p "$DOTFILES_DIR/packages/common/unsafe"
+ln -s "$DOTFILES_DIR/packages/common/one/.one" "$DOTFILES_DIR/packages/common/unsafe/.unsafe"
+register_unsafe() {
+  lean_begin_area unsafe omarchy packages
+  lean_add_package common/unsafe
+  lean_apply_area
+}
+expect_direct_failure 'package payload symlinks are not allowed' register_unsafe
+[[ ! -e "$HOME/.unsafe" && ! -e "$HOME/.local/state/dotfiles" ]] || fail 'unsafe repository payload wrote HOME or state'
+rm -r "$DOTFILES_DIR/packages/common/unsafe"
 pass
 
 # Every Stow simulation and attachment conflict check completes before state or

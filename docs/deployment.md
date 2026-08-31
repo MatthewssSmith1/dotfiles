@@ -66,11 +66,30 @@ without selector state.
 
 Native refresh-owned baselines remain regular files. Git, Bash, Neovim, and
 desktop use guarded attachments; desktop also owns only the two registered
-idle scalars in `shell.json`. Its package XCompose fragment provides four
-personal aliases; a guarded include attaches it to the regular Omarchy-owned
+idle scalars in `shell.json`. Its generated package XCompose fragment provides
+managed aliases; a guarded include attaches it to the regular Omarchy-owned
 `~/.XCompose` without replacing the default include, name, or email content.
-The desktop package also links the personal Omarchy menu extension and bundled
-theme-filter selector after explicit adoption of any regular menu template.
+The same manifest generates a `SUPER+SHIFT+K` binding fragment, static shortcut
+submenu rows, and a stable-ID helper that replays those Compose sequences with
+`wtype` without touching the clipboard or pressing Enter. A guarded loader
+attaches the binding fragment to the regular Omarchy-owned `bindings.lua`.
+The desktop package links the bundled-theme filter selector and guards only the
+managed theme and shortcut rows in the regular Omarchy menu extension. Anchored insertion
+preserves unrelated top-level, object-valued JSONC entries, including multiline
+partial overrides, submenus, providers, and target links; wrapped `items` form
+is deliberately refused. Apply alone may expand older valid area state to
+register the menu. Check/remove refuse incomplete state. Menu file watching
+normally makes refresh unnecessary. Background double-right-click remains
+native and unfiltered; hidden themes stay installed and directly selectable.
+The filter's private `omarchy-menu-images` adapter restores the real Omarchy
+root only for native image-selector IPC.
+
+The offline `dotfiles.sh` lifecycle deploys and checks repository state but
+does not activate shortcut runtime changes. `dotfiles-shortcuts manage` performs
+interactive CRUD, `dotfiles-shortcuts edit-manifest` opens the canonical
+manifest, and `dotfiles-shortcuts sync` explicitly regenerates, applies, and
+reloads XCompose/menu state. CRUD changes the repository manifest and generated
+artifacts so normal review and commits preserve it.
 tmux and Herdr are validation-only.
 Modified links or attachments refuse removal. Removal preserves application
 data, caches, sessions, credentials, and all Neovim runtime roots.
