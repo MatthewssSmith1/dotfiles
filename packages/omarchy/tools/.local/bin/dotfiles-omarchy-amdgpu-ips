@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly COMMAND_NAME='dotfiles-omarchy-amdgpu-ips'
+readonly MANAGED_PATH='/etc/limine-entry-tool.d/90-dotfiles-amdgpu-ips.conf'
+readonly EXPECTED_LINE='KERNEL_CMDLINE[default]+=" amdgpu.dcdebugmask=0x800"'
+readonly KERNEL_ARGUMENT='amdgpu.dcdebugmask=0x800'
+readonly DMI_VENDOR='Framework'
+readonly DMI_PRODUCT='Laptop 13 (AMD Ryzen AI 300 Series)'
+readonly DMI_BOARD='FRANMGCP09'
+readonly GPU_PCI_ID='1002:150e'
+
+SYSTEM_ROOT=''
+TEMP_DIR=''
+MUTATION_STARTED=false
+
+usage() {
+  printf 'usage: %s status|apply|remove\n' "$COMMAND_NAME" >&2
+}
+
+die() {
+  printf '%s: %s\n' "$COMMAND_NAME" "$*" >&2
+  exit 2
+}
+
+system_path() {
+  printf '%s%s' "$SYSTEM_ROOT" "$1"
+}
+
+cleanup() {
+  [[ -z "$TEMP_DIR" ]] || rm -rf -- "$TEMP_DIR"
+}
+
+handle_signal() {
+  local signal="$1" state='unknown'
+  if [[ "$MUTATION_STARTED" == true ]]; then
+    state="$(configuration_state 2>/dev/null || printf 'unknown')"
+  fi
+  printf '%s: interrupted by %s; configuration state is %s; do not reboot until inspected\n' \
+    "$COMMAND_NAME" "$signal" "$state" >&2
+  exit 130
+}
+
+read_exact_line() {
+  local path="$1" expected="$2"
+  [[ -r "$path" ]] || return 1
+  cmp -s -- "$path" <(printf '%s\n' "$expected")
+}
+
+validate_environment() {
+  local version
+
+  if [[ -n "${DOTFILES_TEST_SYSTEM_ROOT:-}" ]]; then
+    [[ "${DOTFILES_TESTING:-0}" == 1 ]] || die 'test system root requires DOTFILES_TESTING=1'
+    [[ "$DOTFILES_TEST_SYSTEM_ROOT" == /* && "$DOTFILES_TEST_SYSTEM_ROOT" != *'/../'* &&
+      "$DOTFILES_TEST_SYSTEM_ROOT" != */.. && "$DOTFILES_TEST_SYSTEM_ROOT" != *'/./'* ]] ||
+      die 'invalid test system root'
+    SYSTEM_ROOT="${DOTFILES_TEST_SYSTEM_ROOT%/}"
+  fi
+
+  ((EUID != 0)) || die 'must run as the desktop user, not root'
+  command -v omarchy >/dev/null 2>&1 || die 'requires native Omarchy v4'
+  version="$(omarchy version 2>/dev/null || true)"
+  [[ "$version" =~ ^4([.-]|$) ]] || die "requires native Omarchy v4, found ${version:-missing}"
+  command -v lspci >/dev/null 2>&1 || die 'requires lspci'
+  command -v limine-mkinitcpio >/dev/null 2>&1 || die 'requires limine-mkinitcpio'
+  [[ -d "$(system_path /etc/limine-entry-tool.d)" ]] ||
+    die 'requires /etc/limine-entry-tool.d'
+  [[ -r "$(system_path /proc/cmdline)" ]] || die 'cannot read /proc/cmdline'
+}
+
+validate_hardware() {
+  local path line pci_output matches=0
+
+  path="$(system_path /sys/class/dmi/id/sys_vendor)"
+  read_exact_line "$path" "$DMI_VENDOR" || die 'unsupported DMI system vendor'
+  path="$(system_path /sys/class/dmi/id/product_name)"
+  read_exact_line "$path" "$DMI_PRODUCT" || die 'unsupported DMI product name'
+  path="$(system_path /sys/class/dmi/id/board_name)"
+  read_exact_line "$path" "$DMI_BOARD" || die 'unsupported DMI board name'
+
+  pci_output="$(LC_ALL=C lspci -Dn 2>/dev/null)" || die 'could not inspect PCI devices'
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[^[:space:]]+[[:space:]]+(0300|0380):[[:space:]]+$GPU_PCI_ID([[:space:]]|$) ]] || continue
+    ((matches += 1))
+  done <<< "$pci_output"
+  ((matches == 1)) || die "requires exactly one AMD display device $GPU_PCI_ID"
+}
+
+managed_file_exact() {
+  local target metadata expected_owner
+  target="$(system_path "$MANAGED_PATH")"
+  [[ -f "$target" && ! -L "$target" ]] || return 1
+  cmp -s -- "$target" <(printf '%s\n' "$EXPECTED_LINE") || return 1
+  metadata="$(stat -c '%u:%g:%a' -- "$target" 2>/dev/null)" || return 1
+  if [[ -n "$SYSTEM_ROOT" ]]; then
+    expected_owner="$(id -u):$(id -g):644"
+  else
+    expected_owner='0:0:644'
+  fi
+  [[ "$metadata" == "$expected_owner" ]]
+}
+
+other_assignment_source() {
+  local target path line
+  local -a paths=()
+  target="$(system_path "$MANAGED_PATH")"
+  paths+=(
+    "$(system_path /etc/kernel/cmdline)"
+    "$(system_path /etc/default/limine)"
+    "$(system_path /etc/limine-entry-tool.conf)"
+  )
+  shopt -s nullglob
+  paths+=("$(system_path /etc/limine-entry-tool.d)"/*)
+  shopt -u nullglob
+
+  for path in "${paths[@]}"; do
+    [[ "$path" != "$target" ]] || continue
+    [[ -e "$path" || -L "$path" ]] || continue
+    if [[ ! -f "$path" || -L "$path" || ! -r "$path" ]]; then
+      printf '%s' "$path"
+      return 0
+    fi
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      if [[ "$line" == *'amdgpu.dcdebugmask='* ]]; then
+        printf '%s' "$path"
+        return 0
+      fi
+      if [[ "$path" == "$(system_path /etc/default/limine)" &&
+        "$line" =~ ^[[:space:]]*KERNEL_CMDLINE\[[^]]+\][[:space:]]*= ]]; then
+        printf '%s' "$path"
+        return 0
+      fi
+    done < "$path"
+  done
+  return 1
+}
+
+configuration_state() {
+  local target
+  target="$(system_path "$MANAGED_PATH")"
+  if other_assignment_source >/dev/null; then
+    printf 'conflicting'
+  elif [[ ! -e "$target" && ! -L "$target" ]]; then
+    printf 'absent'
+  elif managed_file_exact; then
+    printf 'exact'
+  else
+    printf 'conflicting'
+  fi
+}
+
+running_state() {
+  local token value count=0 exact=0
+  while IFS= read -r token; do
+    [[ "$token" == amdgpu.dcdebugmask=* ]] || continue
+    ((count += 1))
+    value="${token#*=}"
+    [[ "$value" == 0x800 ]] && ((exact += 1))
+  done < <(tr ' ' '\n' < "$(system_path /proc/cmdline)")
+
+  if ((count == 0)); then
+    printf 'disabled'
+  elif ((count == 1 && exact == 1)); then
+    printf 'enabled'
+  else
+    printf 'conflicting'
+  fi
+}
+
+show_status() {
+  local configuration running action rc
+  configuration="$(configuration_state)"
+  running="$(running_state)"
+  action='none'
+  rc=0
+
+  if [[ "$configuration" == conflicting || "$running" == conflicting ]]; then
+    action='remove-conflict'
+    rc=2
+  elif [[ "$configuration" == exact && "$running" == disabled ]]; then
+    action='required-reboot'
+    rc=1
+  elif [[ "$configuration" == absent && "$running" == enabled ]]; then
+    action='required-reboot'
+    rc=1
+  elif [[ "$configuration" == absent ]]; then
+    action='apply'
+    rc=1
+  fi
+
+  printf 'hardware: supported\n'
+  printf 'configuration: %s\n' "$configuration"
+  printf 'running-kernel: %s\n' "$running"
+  printf 'action: %s\n' "$action"
+  return "$rc"
+}
+
+prepare_expected_file() {
+  TEMP_DIR="$(mktemp -d)"
+  trap cleanup EXIT
+  printf '%s\n' "$EXPECTED_LINE" > "$TEMP_DIR/managed.conf"
+  chmod 0644 "$TEMP_DIR/managed.conf"
+}
+
+report_mixed_recovery() {
+  local desired="$1" target
+  target="$(system_path "$MANAGED_PATH")"
+  printf '%s: rollback failed; boot entries may be mixed, do not reboot\n' "$COMMAND_NAME" >&2
+  if [[ "$desired" == absent ]]; then
+    printf 'Recovery: sudo rm -- %q && limine-mkinitcpio\n' "$target" >&2
+  else
+    printf 'Recovery: rerun `%s apply`, then run `limine-mkinitcpio` if required.\n' "$COMMAND_NAME" >&2
+  fi
+}
+
+rebuild_entries() {
+  limine-mkinitcpio
+}
+
+apply_workaround() {
+  local target state running created=false rollback_ok=true
+  target="$(system_path "$MANAGED_PATH")"
+  state="$(configuration_state)"
+  [[ "$state" != conflicting ]] || die 'refusing conflicting AMDGPU or managed-file configuration'
+  prepare_expected_file
+
+  if [[ "$state" == absent ]]; then
+    MUTATION_STARTED=true
+    if ! sudo install -D -o root -g root -m 0644 -- "$TEMP_DIR/managed.conf" "$target"; then
+      if managed_file_exact; then
+        sudo rm -- "$target" || printf '%s: could not remove a partially installed exact file\n' "$COMMAND_NAME" >&2
+      fi
+      printf '%s: privileged installation failed; inspect %s before retrying\n' "$COMMAND_NAME" "$target" >&2
+      return 1
+    fi
+    created=true
+    if ! managed_file_exact; then
+      printf '%s: installed file failed verification; refusing to rebuild or overwrite it\n' "$COMMAND_NAME" >&2
+      return 1
+    fi
+  fi
+
+  MUTATION_STARTED=true
+  if rebuild_entries; then
+    if [[ "$(configuration_state)" != exact ]]; then
+      printf '%s: configuration changed during rebuild; do not reboot\n' "$COMMAND_NAME" >&2
+      return 1
+    fi
+    running="$(running_state)"
+    if [[ "$running" == enabled ]]; then
+      printf '%s is configured and already active.\n' "$KERNEL_ARGUMENT"
+    else
+      printf 'Configured %s. Reboot deliberately, then run `%s status`.\n' "$KERNEL_ARGUMENT" "$COMMAND_NAME"
+    fi
+    return 0
+  fi
+
+  printf '%s: Limine rebuild failed; attempting rollback\n' "$COMMAND_NAME" >&2
+  if [[ "$created" == true ]]; then
+    if managed_file_exact; then
+      sudo rm -- "$target" || rollback_ok=false
+    else
+      rollback_ok=false
+    fi
+    [[ ! -e "$target" && ! -L "$target" ]] || rollback_ok=false
+    [[ "$rollback_ok" == false ]] || rebuild_entries || rollback_ok=false
+  fi
+  if [[ "$created" == false ]]; then
+    printf '%s: existing configuration was left unchanged; boot-image consistency is unconfirmed\n' "$COMMAND_NAME" >&2
+  elif [[ "$rollback_ok" == false ]]; then
+    report_mixed_recovery absent
+  else
+    printf '%s: configuration and boot entries were rolled back\n' "$COMMAND_NAME" >&2
+  fi
+  return 1
+}
+
+remove_workaround() {
+  local target state rollback_ok=true
+  target="$(system_path "$MANAGED_PATH")"
+  state="$(configuration_state)"
+  [[ "$state" != conflicting ]] || die 'refusing conflicting AMDGPU or managed-file configuration'
+  if [[ "$state" == absent ]]; then
+    printf 'No managed AMDGPU IPS configuration is installed.\n'
+    return 0
+  fi
+
+  prepare_expected_file
+  MUTATION_STARTED=true
+  if ! sudo rm -- "$target"; then
+    if [[ ! -e "$target" && ! -L "$target" ]]; then
+      sudo install -D -o root -g root -m 0644 -- "$TEMP_DIR/managed.conf" "$target" || true
+    fi
+    printf '%s: privileged removal failed; inspect %s before retrying\n' "$COMMAND_NAME" "$target" >&2
+    return 1
+  fi
+  if [[ -e "$target" || -L "$target" ]]; then
+    printf '%s: target remains after removal; refusing to rebuild\n' "$COMMAND_NAME" >&2
+    return 1
+  fi
+  if rebuild_entries; then
+    if [[ "$(configuration_state)" != absent ]]; then
+      printf '%s: configuration changed during rebuild; do not reboot\n' "$COMMAND_NAME" >&2
+      return 1
+    fi
+    printf 'Removed %s. Reboot deliberately, then run `%s status`.\n' "$KERNEL_ARGUMENT" "$COMMAND_NAME"
+    return 0
+  fi
+
+  printf '%s: Limine rebuild failed; restoring the workaround\n' "$COMMAND_NAME" >&2
+  sudo install -D -o root -g root -m 0644 -- "$TEMP_DIR/managed.conf" "$target" || rollback_ok=false
+  managed_file_exact || rollback_ok=false
+  [[ "$rollback_ok" == false ]] || rebuild_entries || rollback_ok=false
+  [[ "$(configuration_state)" == exact ]] || rollback_ok=false
+  if [[ "$rollback_ok" == false ]]; then
+    report_mixed_recovery exact
+  else
+    printf '%s: workaround restored; original removal rebuild failed\n' "$COMMAND_NAME" >&2
+  fi
+  return 1
+}
+
+if (($# != 1)); then
+  usage
+  exit 2
+fi
+
+case "$1" in
+  status|apply|remove) ;;
+  *) usage; exit 2 ;;
+esac
+
+validate_environment
+validate_hardware
+trap 'handle_signal INT' INT
+trap 'handle_signal TERM' TERM
+
+case "$1" in
+  status) show_status ;;
+  apply) apply_workaround ;;
+  remove) remove_workaround ;;
+esac

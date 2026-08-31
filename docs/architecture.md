@@ -35,3 +35,9 @@ the host profile.
 apply/check/remove offline. Networked installation and Neovim restoration are
 explicit commands outside dotfiles. Windows Terminal remains a separate
 Windows-host concern.
+
+Privileged hardware workarounds follow the same boundary: dotfiles may deploy
+an inert, manually invoked helper, but lifecycle commands never execute it.
+Each helper owns one narrowly defined system file and refuses unsupported
+hardware or conflicting state. A general hardware-policy layer is deferred
+until more than one concrete workaround justifies it.

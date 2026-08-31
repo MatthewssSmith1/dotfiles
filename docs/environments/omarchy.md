@@ -32,6 +32,35 @@ never executed by dotfiles apply, check, or remove.
 Fresh installs, migrations, or `omarchy refresh applications` may restore these
 defaults. Rerun `dotfiles-omarchy-prune` explicitly when needed.
 
+## Hardware Workarounds
+
+Applying the tools area also installs `dotfiles-omarchy-amdgpu-ips`. This
+manual helper targets the Framework Laptop 13 AMD Ryzen AI 300 Series with
+board `FRANMGCP09` and AMD display device `1002:150e`; it refuses every other
+hardware tuple. It addresses the AMDGPU IPS/DMUB display-idle hard lock tracked
+in [Omarchy issue 6223](https://github.com/omacom/omarchy/issues/6223) by adding
+`amdgpu.dcdebugmask=0x800` to Limine's default kernel command line.
+
+Disabling IPS may increase idle power use. Normal dotfiles apply, check, and
+remove only deploy or remove the inert helper and never alter `/etc`, rebuild
+boot images, or apply the kernel argument.
+
+Inspect, configure, or remove the workaround explicitly:
+
+```bash
+dotfiles-omarchy-amdgpu-ips status
+dotfiles-omarchy-amdgpu-ips apply
+dotfiles-omarchy-amdgpu-ips remove
+```
+
+`apply` and `remove` manage only
+`/etc/limine-entry-tool.d/90-dotfiles-amdgpu-ips.conf`, refuse unexpected
+content or competing assignments, and rebuild Limine entries. They never
+reboot. After either mutation, reboot deliberately and run `status` again;
+success after apply is an exact managed configuration and exactly one active
+`amdgpu.dcdebugmask=0x800` token. Remove the workaround and reboot after an
+upstream kernel fix is confirmed.
+
 ## Desktop
 
 The desktop area owns natural touchpad scrolling in a private fragment, the

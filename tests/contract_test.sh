@@ -10,6 +10,7 @@ readonly TMUX_BASELINE="$REPO_DIR/packages/upstream/tmux/.config/dotfiles/upstre
 readonly TMUX_DISPATCHER="$REPO_DIR/packages/ubuntu/tmux/.config/tmux/tmux.conf"
 readonly TMUX_ADAPTER="$REPO_DIR/packages/ubuntu/tmux/.config/dotfiles/tmux/ubuntu.conf"
 readonly OMARCHY_PRUNE="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-prune"
+readonly OMARCHY_AMDGPU_IPS="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-amdgpu-ips"
 readonly OMARCHY_THEME_SWITCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-theme-switcher"
 readonly OMARCHY_MENU_EXTENSION="$REPO_DIR/packages/omarchy/desktop/.config/omarchy/extensions/omarchy-menu.jsonc"
 
@@ -35,12 +36,15 @@ done
 bash -n "${DOTFILES_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" \
   "$REPO_DIR/scripts/agent-skills" \
-  "$OMARCHY_PRUNE" "$OMARCHY_THEME_SWITCHER" || fail 'a dotfiles Bash file has invalid syntax'
+  "$OMARCHY_PRUNE" "$OMARCHY_AMDGPU_IPS" "$OMARCHY_THEME_SWITCHER" ||
+  fail 'a dotfiles Bash file has invalid syntax'
 grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missing'
 [[ -x "$DOTFILES" && ! -e "$REPO_DIR/bootstrap.sh" ]] || fail 'root command rename is incomplete'
 [[ -x "$REPO_DIR/packages/common/tools/.local/bin/dotfiles" ]] || fail 'dotfiles launcher is not executable'
 [[ -f "$OMARCHY_PRUNE" && ! -L "$OMARCHY_PRUNE" && -x "$OMARCHY_PRUNE" ]] ||
   fail 'Omarchy prune command is not a regular executable payload'
+[[ -f "$OMARCHY_AMDGPU_IPS" && ! -L "$OMARCHY_AMDGPU_IPS" && -x "$OMARCHY_AMDGPU_IPS" ]] ||
+  fail 'Omarchy AMDGPU IPS command is not a regular executable payload'
 pass
 
 # Production topology has exactly the native Omarchy and supported Ubuntu
@@ -143,7 +147,9 @@ pass
 grep -qxF 'git upstream/git,ubuntu/git,common/git' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Git closure is not final'
 grep -qxF 'tools common/tools,omarchy/tools' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tools closure is not final'
 grep -qxF 'tools common/tools,ubuntu/tools' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu tools closure is not final'
-[[ "$(find "$REPO_DIR/packages/omarchy/tools" -type f | wc -l)" == 1 ]] || fail 'native tools package payload inventory is not exact'
+[[ "$(find "$REPO_DIR/packages/omarchy/tools" -type f -printf '%P\n' | LC_ALL=C sort)" == \
+  $'.local/bin/dotfiles-omarchy-amdgpu-ips\n.local/bin/dotfiles-omarchy-prune' ]] ||
+  fail 'native tools package payload inventory is not exact'
 grep -qxF 'readonly -a PACKAGES=(' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not declared'
 grep -qxF 'omarchy pkg drop "${PACKAGES[@]}"' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not used safely'
 grep -qxF 'readonly -a WEBAPPS=(' "$OMARCHY_PRUNE" || fail 'Omarchy prune web-app inventory is not declared'
@@ -154,6 +160,23 @@ grep -qxF '  OMARCHY_REMOVE_NOTIFY=false omarchy webapp remove "$webapp"' "$OMAR
   fail 'Omarchy prune directly performs privileged, destructive, or interactive work'
 ! grep -Eq 'omarchy[[:space:]]+(hook|refresh|restart|update)' "$OMARCHY_PRUNE" ||
   fail 'Omarchy prune installs automation or invokes refresh/restart/update'
+grep -qxF "readonly MANAGED_PATH='/etc/limine-entry-tool.d/90-dotfiles-amdgpu-ips.conf'" "$OMARCHY_AMDGPU_IPS" ||
+  fail 'AMDGPU IPS managed path is not exact'
+grep -qxF "readonly KERNEL_ARGUMENT='amdgpu.dcdebugmask=0x800'" "$OMARCHY_AMDGPU_IPS" ||
+  fail 'AMDGPU IPS kernel argument is not exact'
+for value in Framework 'Laptop 13 (AMD Ryzen AI 300 Series)' FRANMGCP09 1002:150e; do
+  grep -Fq "$value" "$OMARCHY_AMDGPU_IPS" || fail "AMDGPU IPS hardware gate is missing: $value"
+done
+! grep -Eq '(product_serial|product_uuid|board_serial|machine-id)' "$OMARCHY_AMDGPU_IPS" ||
+  fail 'AMDGPU IPS helper uses a unique machine identifier'
+grep -Fq 'sudo install -D -o root -g root -m 0644 --' "$OMARCHY_AMDGPU_IPS" ||
+  fail 'AMDGPU IPS helper does not use the narrow install boundary'
+grep -Fq 'sudo rm -- "$target"' "$OMARCHY_AMDGPU_IPS" ||
+  fail 'AMDGPU IPS helper does not use the narrow removal boundary'
+! grep -Eq 'sudo[[:space:]]+(sh|bash|limine-mkinitcpio)' "$OMARCHY_AMDGPU_IPS" ||
+  fail 'AMDGPU IPS helper uses an unsafe privileged shell or wraps Limine in sudo'
+! grep -Eq '^[[:space:]]*(reboot|shutdown|pacman|curl|wget)([;&|[:space:]]|$)' "$OMARCHY_AMDGPU_IPS" ||
+  fail 'AMDGPU IPS helper invokes reboot, package, or network commands'
 [[ ! -e "$REPO_DIR/packages/generic/git/.empty-package" && ! -e "$REPO_DIR/packages/generic/git/.stow-local-ignore" ]] ||
   fail 'retired generic Git adapter remains'
 [[ ! -e "$REPO_DIR/.gitconfig" ]] || fail 'retired root Git migration source remains'
