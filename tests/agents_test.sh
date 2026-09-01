@@ -36,6 +36,12 @@ readonly MANAGED_SKILL_FILES=(
   writing-for-agents/SKILL.md
   writing-for-agents/agents/openai.yaml
 )
+readonly CLAUDE_SKILLS=(
+  codex-subagent
+)
+readonly CLAUDE_SKILL_FILES=(
+  codex-subagent/SKILL.md
+)
 
 run_agents_area() {
   local home="$1" operation="$2"
@@ -74,18 +80,34 @@ expected_skills="$(printf '%s\n' "${MANAGED_SKILLS[@]}" | LC_ALL=C sort)"
 actual_skill_files="$(find "$skill_root" -type f -printf '%P\n' | LC_ALL=C sort)"
 expected_skill_files="$(printf '%s\n' "${MANAGED_SKILL_FILES[@]}" | LC_ALL=C sort)"
 [[ "$actual_skill_files" == "$expected_skill_files" ]] || fail 'managed skill file inventory is not exact'
+claude_skill_root="$REPO_DIR/packages/common/agents/.claude/skills"
+actual_claude_skills="$(find "$claude_skill_root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | LC_ALL=C sort)"
+expected_claude_skills="$(printf '%s\n' "${CLAUDE_SKILLS[@]}" | LC_ALL=C sort)"
+[[ "$actual_claude_skills" == "$expected_claude_skills" ]] || fail 'Claude skill inventory is not exact'
+actual_claude_skill_files="$(find "$claude_skill_root" -type f -printf '%P\n' | LC_ALL=C sort)"
+expected_claude_skill_files="$(printf '%s\n' "${CLAUDE_SKILL_FILES[@]}" | LC_ALL=C sort)"
+[[ "$actual_claude_skill_files" == "$expected_claude_skill_files" ]] || fail 'Claude skill file inventory is not exact'
 fixture="$(copy_repo_fixture agents-invalid-package)"
 printf 'invalid direct entry\n' > "$fixture/packages/common/agents/.agents/skills/UNDECLARED"
 if TEST_OUTPUT="$("$fixture/scripts/agent-skills" verify 2>&1)"; then
   fail 'verification accepted an undeclared direct skill entry'
 fi
 assert_contains "$TEST_OUTPUT" 'direct skill entry is not a directory'
+fixture="$(copy_repo_fixture agents-colliding-skill)"
+mkdir -p "$fixture/packages/common/agents/.claude/skills/grilling"
+cp "$fixture/packages/common/agents/.agents/skills/grilling/SKILL.md" \
+  "$fixture/packages/common/agents/.claude/skills/grilling/SKILL.md"
+if TEST_OUTPUT="$("$fixture/scripts/agent-skills" verify 2>&1)"; then
+  fail 'verification accepted a Claude skill that conflicts with a universal skill'
+fi
+assert_contains "$TEST_OUTPUT" 'Claude skill conflicts with universal skill: grilling'
 pass
 
 # Apply deploys the exact package closure and bridges without state, preserves
 # native Omarchy skills, and is idempotent.
 home="$(new_home agents-lifecycle)"
-mkdir -p "$home/.agents/skills/unrelated" "$home/.config/opencode" "$home/.claude"
+mkdir -p "$home/.agents/skills/unrelated" "$home/.config/opencode" \
+  "$home/.claude/skills/unrelated" "$home/.claude/skills/synced"
 native_root="$host/usr/share/omarchy/default/agents/skills"
 mkdir -p "$native_root/omarchy" "$native_root/diagnose-crash"
 printf 'native omarchy\n' > "$native_root/omarchy/SKILL.md"
@@ -95,6 +117,8 @@ ln -s "$native_root/diagnose-crash" "$home/.agents/skills/diagnose-crash"
 printf 'keep skill\n' > "$home/.agents/skills/unrelated/KEEP"
 printf 'keep opencode\n' > "$home/.config/opencode/settings.json"
 printf 'keep claude\n' > "$home/.claude/settings.json"
+printf 'keep Claude skill\n' > "$home/.claude/skills/unrelated/KEEP"
+printf 'keep synced skill\n' > "$home/.claude/skills/synced/KEEP"
 
 assert_native_skills() {
   [[ -L "$home/.agents/skills/omarchy" &&
@@ -113,6 +137,19 @@ assert_native_skills
   "$REPO_DIR/packages/common/agents/.agents/AGENTS.md" ]] || fail 'canonical instructions are not package-owned'
 for skill_file in "${MANAGED_SKILL_FILES[@]}"; do
   [[ -L "$home/.agents/skills/$skill_file" ]] || fail "missing skill package link: $skill_file"
+done
+for skill in "${MANAGED_SKILLS[@]}"; do
+  [[ -L "$home/.claude/skills/$skill" &&
+    "$(readlink -- "$home/.claude/skills/$skill")" == "../../.agents/skills/$skill" &&
+    "$(realpath "$home/.claude/skills/$skill/SKILL.md")" == \
+      "$REPO_DIR/packages/common/agents/.agents/skills/$skill/SKILL.md" ]] ||
+    fail "Claude alias is not exact: $skill"
+done
+for skill_file in "${CLAUDE_SKILL_FILES[@]}"; do
+  [[ -L "$home/.claude/skills/$skill_file" &&
+    "$(realpath "$home/.claude/skills/$skill_file")" == \
+      "$REPO_DIR/packages/common/agents/.claude/skills/$skill_file" ]] ||
+    fail "missing Claude skill package link: $skill_file"
 done
 [[ "$(readlink -- "$home/.config/opencode/AGENTS.md")" == '../../.agents/AGENTS.md' ]] || fail 'OpenCode bridge is not exact'
 [[ "$(readlink -- "$home/.claude/CLAUDE.md")" == '../.agents/AGENTS.md' ]] || fail 'Claude bridge is not exact'
@@ -152,9 +189,19 @@ expect_agents_failure 'personal directory conflicts with managed skill' "$confli
 printf 'extra\n' > "$home/.agents/skills/grilling/EXTRA"
 expect_agents_failure 'extra file in managed skill directory' "$home" check
 rm "$home/.agents/skills/grilling/EXTRA"
+conflict_home="$(new_home agents-claude-alias-conflict)"
+mkdir -p "$conflict_home/.claude/skills/grilling"
+expect_agents_failure 'unrelated destination conflict' "$conflict_home" apply
 pass
 
 # Removal refuses a changed bridge before touching package links, then removes only exact ownership.
+rm "$home/.claude/skills/handoff"
+ln -s ../foreign "$home/.claude/skills/handoff"
+expect_agents_failure 'unrelated destination conflict' "$home" remove
+[[ -L "$home/.agents/AGENTS.md" && "$(readlink "$home/.claude/skills/handoff")" == ../foreign ]] ||
+  fail 'refused removal changed Claude skill ownership'
+rm "$home/.claude/skills/handoff"
+ln -s ../../.agents/skills/handoff "$home/.claude/skills/handoff"
 rm "$home/.config/opencode/AGENTS.md"
 ln -s ../foreign "$home/.config/opencode/AGENTS.md"
 expect_agents_failure 'unrelated destination conflict' "$home" remove
@@ -167,13 +214,21 @@ assert_native_skills
 for skill in "${MANAGED_SKILLS[@]}"; do
   [[ ! -e "$home/.agents/skills/$skill" && ! -L "$home/.agents/skills/$skill" ]] ||
     fail "managed skill survived removal: $skill"
+  [[ ! -e "$home/.claude/skills/$skill" && ! -L "$home/.claude/skills/$skill" ]] ||
+    fail "managed Claude alias survived removal: $skill"
+done
+for skill in "${CLAUDE_SKILLS[@]}"; do
+  [[ ! -e "$home/.claude/skills/$skill" && ! -L "$home/.claude/skills/$skill" ]] ||
+    fail "managed Claude skill survived removal: $skill"
 done
 [[ ! -e "$home/.agents/AGENTS.md" && ! -L "$home/.agents/AGENTS.md" ]] || fail 'canonical link survived removal'
 [[ ! -e "$home/.config/opencode/AGENTS.md" && ! -L "$home/.config/opencode/AGENTS.md" ]] || fail 'OpenCode bridge survived removal'
 [[ ! -e "$home/.claude/CLAUDE.md" && ! -L "$home/.claude/CLAUDE.md" ]] || fail 'Claude bridge survived removal'
 [[ "$(< "$home/.agents/skills/unrelated/KEEP")" == 'keep skill' && \
   "$(< "$home/.config/opencode/settings.json")" == 'keep opencode' && \
-  "$(< "$home/.claude/settings.json")" == 'keep claude' ]] || fail 'removal changed unrelated content'
+  "$(< "$home/.claude/settings.json")" == 'keep claude' && \
+  "$(< "$home/.claude/skills/unrelated/KEEP")" == 'keep Claude skill' && \
+  "$(< "$home/.claude/skills/synced/KEEP")" == 'keep synced skill' ]] || fail 'removal changed unrelated content'
 pass
 
 # Legacy state is refused with cleanup guidance and never adopted or rewritten.

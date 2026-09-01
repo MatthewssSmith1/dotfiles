@@ -33,11 +33,26 @@ agents_managed_skill_destinations() {
   local target relative
   declare -A destinations=()
   for target in "${LEAN_TARGET_PATHS[@]}"; do
-    [[ "$target" == .agents/skills/*/* ]] || continue
-    relative="${target#.agents/skills/}"
-    destinations[".agents/skills/${relative%%/*}"]=1
+    if [[ "$target" == .agents/skills/*/* ]]; then
+      relative="${target#.agents/skills/}"
+      destinations[".agents/skills/${relative%%/*}"]=1
+    elif [[ "$target" == .claude/skills/*/* ]]; then
+      relative="${target#.claude/skills/}"
+      destinations[".claude/skills/${relative%%/*}"]=1
+    fi
   done
   printf '%s\n' "${!destinations[@]}"
+}
+
+agents_universal_skill_names() {
+  local target relative
+  declare -A names=()
+  for target in "${LEAN_TARGET_PATHS[@]}"; do
+    [[ "$target" == .agents/skills/*/* ]] || continue
+    relative="${target#.agents/skills/}"
+    names["${relative%%/*}"]=1
+  done
+  printf '%s\n' "${!names[@]}"
 }
 
 validate_agents_closure() {
@@ -50,7 +65,8 @@ validate_agents_closure() {
   array_contains '.agents/AGENTS.md' "${LEAN_TARGET_PATHS[@]}" || die 'Agents package is missing canonical instructions'
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     relative="${LEAN_TARGET_PATHS[index]}"; source="${LEAN_TARGET_SOURCES[index]}"
-    [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/* ]] ||
+    [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/* ||
+      "$relative" == .claude/skills/* ]] ||
       die "Agents package has an out-of-area target: $relative"
     [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Agents payload mode: $relative"
   done
@@ -129,12 +145,33 @@ preflight_agents_bridges() {
   done
 }
 
+agents_skill_alias_is_exact() {
+  local name="$1" path="$HOME/.claude/skills/$name"
+  [[ -L "$path" && "$(stat -c %u -- "$path")" == "$EUID" &&
+    "$(readlink -- "$path")" == "../../.agents/skills/$name" &&
+    "$(resolve_link "$path")" == "$HOME/.agents/skills/$name" ]]
+}
+
+preflight_agents_skill_aliases() {
+  local mode="$1" name path
+  while IFS= read -r name; do
+    path="$HOME/.claude/skills/$name"
+    validate_home_parent_chain "$path"
+    if [[ -e "$path" || -L "$path" ]]; then
+      agents_skill_alias_is_exact "$name" || die "unrelated destination conflict: $path"
+    elif [[ "$mode" == check ]]; then
+      die "managed Claude skill alias is absent: $path"
+    fi
+  done < <(agents_universal_skill_names)
+}
+
 preflight_agents() {
   register_agents_area
   validate_agents_closure
   preflight_agents_skill_boundaries "$MODE"
   lean_preflight_area "$MODE"
   preflight_agents_bridges "$MODE"
+  preflight_agents_skill_aliases "$MODE"
 }
 
 apply_agents_bridges() {
@@ -151,21 +188,40 @@ apply_agents_bridges() {
   done
 }
 
+apply_agents_skill_aliases() {
+  local name path
+  lean_ensure_directory "$HOME/.claude/skills"
+  while IFS= read -r name; do
+    agents_target_is_exact ".agents/skills/$name/SKILL.md" ||
+      die "universal skill is not package-owned: $name"
+    agents_skill_alias_is_exact "$name" && continue
+    path="$HOME/.claude/skills/$name"
+    ln -sT -- "../../.agents/skills/$name" "$path" 2>/dev/null ||
+      die "Claude skill alias destination appeared concurrently; refusing to overwrite: $path"
+    agents_skill_alias_is_exact "$name" || die "Claude skill alias did not converge: $path"
+  done < <(agents_universal_skill_names)
+}
+
 apply_agents() {
   preflight_agents
   lean_apply_area
   apply_agents_bridges
+  apply_agents_skill_aliases
   "$DOTFILES_DIR/scripts/agent-skills" verify >/dev/null || die 'managed agent skills changed during apply'
   log "applied Agents area for profile '$SELECTED_PROFILE'"
 }
 
 remove_agents() {
-  local index path
+  local index name path
   register_agents_area
   validate_agents_closure
   preflight_agents_skill_boundaries remove
   lean_preflight_area remove
   preflight_agents_bridges remove
+  preflight_agents_skill_aliases remove
+  while IFS= read -r name; do
+    agents_skill_alias_is_exact "$name" && rm -- "$HOME/.claude/skills/$name"
+  done < <(agents_universal_skill_names)
   for index in "${!AGENTS_BRIDGE_PATHS[@]}"; do
     path="$HOME/${AGENTS_BRIDGE_PATHS[index]}"
     agents_bridge_is_exact "$index" && rm -- "$path"

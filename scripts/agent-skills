@@ -83,7 +83,9 @@ verify_repo_skills() {
 
 verify() {
   local agents_root="$PACKAGE_ROOT/.agents" skills_root="$PACKAGE_ROOT/.agents/skills"
-  local entry relative skill name file_count=0 skill_count=0
+  local claude_root="$PACKAGE_ROOT/.claude" claude_skills_root="$PACKAGE_ROOT/.claude/skills"
+  local entry relative skill name file_count=0 skill_count=0 claude_skill_count=0
+  declare -A universal_skills=()
 
   [[ -d "$PACKAGE_ROOT" && ! -L "$PACKAGE_ROOT" ]] || die 'package root is missing or not a directory'
   [[ -d "$agents_root" && ! -L "$agents_root" ]] || die 'package .agents is missing or not a directory'
@@ -99,9 +101,24 @@ verify() {
     [[ -f "$entry/SKILL.md" && ! -L "$entry/SKILL.md" ]] || die "missing or non-regular skill file: .agents/skills/$skill/SKILL.md"
     name="$(frontmatter_name "$entry/SKILL.md")" || die "invalid SKILL.md frontmatter: .agents/skills/$skill/SKILL.md"
     [[ "$name" == "$skill" ]] || die "frontmatter name does not match skill directory: $skill"
+    universal_skills["$skill"]=1
     ((skill_count += 1))
   done
   ((skill_count > 0)) || die 'package must contain at least one direct skill directory'
+
+  [[ -d "$claude_root" && ! -L "$claude_root" ]] || die 'package .claude is missing or not a directory'
+  [[ -d "$claude_skills_root" && ! -L "$claude_skills_root" ]] || die 'package .claude/skills is missing or not a directory'
+  for entry in "$claude_skills_root"/*; do
+    [[ -d "$entry" && ! -L "$entry" ]] || die "direct Claude skill entry is not a directory: ${entry#"$PACKAGE_ROOT"/}"
+    skill="${entry##*/}"
+    [[ "$skill" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && "$skill" != synced ]] || die "invalid Claude skill directory name: $skill"
+    [[ -z "${universal_skills[$skill]+x}" ]] || die "Claude skill conflicts with universal skill: $skill"
+    [[ -f "$entry/SKILL.md" && ! -L "$entry/SKILL.md" ]] || die "missing or non-regular skill file: .claude/skills/$skill/SKILL.md"
+    name="$(frontmatter_name "$entry/SKILL.md")" || die "invalid SKILL.md frontmatter: .claude/skills/$skill/SKILL.md"
+    [[ "$name" == "$skill" ]] || die "frontmatter name does not match Claude skill directory: $skill"
+    ((claude_skill_count += 1))
+  done
+  ((claude_skill_count > 0)) || die 'package must contain at least one direct Claude skill directory'
 
   shopt -s globstar
   for entry in "$PACKAGE_ROOT"/**; do
@@ -110,10 +127,12 @@ verify() {
     if [[ -L "$entry" ]]; then
       die "package payload symlink is forbidden: $relative"
     elif [[ -d "$entry" ]]; then
-      [[ "$relative" == .agents || "$relative" == .agents/skills || "$relative" == .agents/skills/* ]] ||
-        die "package payload is outside .agents: $relative"
+      [[ "$relative" == .agents || "$relative" == .agents/skills || "$relative" == .agents/skills/* ||
+        "$relative" == .claude || "$relative" == .claude/skills || "$relative" == .claude/skills/* ]] ||
+        die "package payload is outside managed skill roots: $relative"
     elif [[ -f "$entry" ]]; then
-      [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/*/* ]] ||
+      [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/*/* ||
+        "$relative" == .claude/skills/*/* ]] ||
         die "package file is outside managed Agents payload: $relative"
       [[ "$(stat -c '%a' -- "$entry")" == 644 ]] || die "unexpected package file mode: $relative"
       ((file_count += 1))
@@ -123,7 +142,8 @@ verify() {
   done
   shopt -u dotglob nullglob globstar
 
-  printf '[%s] verified %s managed skills and %s package files\n' "$SCRIPT_NAME" "$skill_count" "$file_count"
+  printf '[%s] verified %s universal skills, %s Claude skills, and %s package files\n' \
+    "$SCRIPT_NAME" "$skill_count" "$claude_skill_count" "$file_count"
 }
 
 case "${1:-}" in
