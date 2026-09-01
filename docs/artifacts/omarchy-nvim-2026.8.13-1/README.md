@@ -8,7 +8,7 @@ The stable database, `omarchy-nvim-2026.8.13-1-any.pkg.tar.zst`, and its detache
 
 The package SHA-256 matched stable `%SHA256SUM%`. GnuPG verified the detached Ed25519 signature made at `2026-08-13T12:58:49Z` by fingerprint `40DFB630FF42BCFFB047046CF0134EE680CAC571`, identity `Omarchy <pkgs@omarchy.org>`. The public key is unchanged from the key blob at `pkgbuilds/omarchy-keyring/omarchy.gpg` in selected `omarchy-pkgs` commit `f20649b0a41ccc700e41d8a1d402b337a0f75cd4`; no external Web-of-Trust claim is made.
 
-The preserved `.BUILDINFO` PKGBUILD SHA-256, `c91107a63b402fd58c1a614fe67e2d9c8f9fe5da2638233b3eccbbd126c4b106`, matches that commit. The package build date is `2026-08-13T12:50:48Z`, 19 minutes after the package commit. The PKGBUILD starter checksum `d865d50211358358d3c3c1e356773c1e3de1e8964215d85eb1b4c77521e17488` matches the archive for immutable LazyVim starter commit `803bc181d7c0d6d5eeba9274d9be49b287294d99`.
+The preserved `.BUILDINFO` PKGBUILD SHA-256, `c91107a63b402fd58c1a614fe67e2d9c8f9fe5da2638233b3eccbbd126c4b106`, matches that commit. The package build date is `2026-08-13T12:50:48Z`, 19 minutes after the package commit. The PKGBUILD starter checksum recorded in `SHA256SUMS` as `lazyvim-starter-803bc181d7c0d6d5eeba9274d9be49b287294d99.tar.gz` matches the archive for that immutable LazyVim starter commit; `scripts/upstream verify` asserts the recorded line.
 
 `config.sha256` records every regular member below `usr/share/omarchy-nvim/config`. The packaged and committed `lazy-lock.json` hash to `f8693f2607088055adef508221e288b378a8df97411e0d726cbdb672d963a8ca` and contain 51 plugin pins.
 

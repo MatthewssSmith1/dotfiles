@@ -32,7 +32,7 @@ readonly LOCK_SHA256='f8693f2607088055adef508221e288b378a8df97411e0d726cbdb672d9
 # Local override: these tests exercise arbitrary commands (scripts/upstream,
 # sync_checkout) with a description argument, unlike the harness expect_failure
 # that drives dotfiles captures.
-expect_failure() {
+expect_command_failure() {
   local description="$1"
   local expected="$2"
   local output
@@ -59,8 +59,10 @@ copy_fixture() {
     "$destination/lib" \
     "$destination/packages" \
     "$destination/docs/artifacts"
+  mkdir -p "$destination/lib/upstream"
   cp -p "$REPO_DIR/scripts/upstream" "$destination/scripts/upstream"
   cp -p "$REPO_DIR/lib/common.sh" "$destination/lib/common.sh"
+  cp -p "$REPO_DIR/lib/upstream/verify.sh" "$destination/lib/upstream/verify.sh"
   cp -p "$REPO_DIR/schemas/source-manifest.schema.json" "$destination/schemas/"
   cp -p "$REPO_DIR/manifests/sources.json" "$destination/manifests/"
   cp -a "$REPO_DIR/packages/upstream" "$destination/packages/upstream"
@@ -149,6 +151,8 @@ seed_active_checkout() {
     "$checkout/manifests" "$checkout/packages/upstream/git/.config/git" \
     "$checkout/packages/upstream/nvim/.config/nvim"
   cp -p "$REPO_DIR/scripts/upstream" "$checkout/scripts/upstream"
+  mkdir -p "$checkout/lib/upstream"
+  cp -p "$REPO_DIR/lib/upstream/verify.sh" "$checkout/lib/upstream/verify.sh"
   cp -p "$REPO_DIR/lib/common.sh" "$checkout/lib/common.sh"
   cp -p "$REPO_DIR/schemas/source-manifest.schema.json" "$checkout/schemas/"
   cp -p "$LOCK_SOURCE" "$checkout/packages/upstream/nvim/.config/nvim/lazy-lock.json"
@@ -343,26 +347,26 @@ fi
 # Content, evidence, payload, and provenance drift are each detected.
 new_fixture 'content-drift'
 printf '\ndrift\n' >> "$FIXTURE/packages/upstream/git/.config/git/config"
-expect_failure 'content drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'content drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'artifact-evidence-drift'
 printf 'drift\n' >> "$FIXTURE/$NVIM_EVIDENCE_REL/config.sha256"
-expect_failure 'artifact evidence drift' \
+expect_command_failure 'artifact evidence drift' \
   'committed Neovim snapshot differs from the signed-package extraction record' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'bash-reference-drift'
 printf '\ndrift\n' >> "$FIXTURE/$BASH_REFERENCE_ROOT/shell"
-expect_failure 'Bash reference drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'Bash reference drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'bash-payload-drift'
 printf '\ndrift\n' >> "$FIXTURE/$BASH_PAYLOAD_ROOT/shell"
-expect_failure 'Bash payload drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'Bash payload drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'bash-copy-provenance-drift'
 rewrite_manifest "$FIXTURE" \
   '(.sources[] | select(.id == "omarchy-bash-deployable-shell").release) = "other"'
-expect_failure 'Bash copy provenance drift' 'deployable Bash source mapping is invalid' \
+expect_command_failure 'Bash copy provenance drift' 'deployable Bash source mapping is invalid' \
   "$FIXTURE/scripts/upstream" verify
 
 # Verification ignores unrelated user Git configuration.
@@ -375,58 +379,58 @@ HOME="$TEMP_ROOT/malformed-home" "$FIXTURE/scripts/upstream" verify >/dev/null |
 # Manifest, schema, and path-safety corruption is refused.
 new_fixture 'manifest-blob-drift'
 rewrite_manifest "$FIXTURE" '.sources[0].source.blob = "0000000000000000000000000000000000000000"'
-expect_failure 'manifest blob drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'manifest blob drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'mode-drift'
 chmod 0755 "$FIXTURE/packages/upstream/git/.config/git/config"
-expect_failure 'mode drift' 'snapshot mode drift' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'mode drift' 'snapshot mode drift' "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'malformed-manifest'
 printf '{\n' > "$FIXTURE/manifests/sources.json"
-expect_failure 'malformed manifest' 'source manifest is malformed' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'malformed manifest' 'source manifest is malformed' "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'newer-schema-version'
 rewrite_manifest "$FIXTURE" '.schema_version = 2'
-expect_failure 'newer schema version' 'does not conform to schema version 1' \
+expect_command_failure 'newer schema version' 'does not conform to schema version 1' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'malformed-schema'
 printf '{\n' > "$FIXTURE/schemas/source-manifest.schema.json"
-expect_failure 'malformed schema' 'source manifest schema is malformed' \
+expect_command_failure 'malformed schema' 'source manifest schema is malformed' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'unknown-manifest-key'
 rewrite_manifest "$FIXTURE" '.unexpected = true'
-expect_failure 'unknown manifest key' 'does not conform to schema version 1' \
+expect_command_failure 'unknown manifest key' 'does not conform to schema version 1' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'malicious-destination'
 rewrite_manifest "$FIXTURE" '.sources[0].destination.path = "../outside"'
-expect_failure 'malicious destination path' 'unsafe home-relative destination path' \
+expect_command_failure 'malicious destination path' 'unsafe home-relative destination path' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'malicious-empty-path-segment'
 rewrite_manifest "$FIXTURE" '.sources[0].destination.path = ".config//outside"'
-expect_failure 'empty destination path segment' 'unsafe home-relative destination path' \
+expect_command_failure 'empty destination path segment' 'unsafe home-relative destination path' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'malicious-source'
 rewrite_manifest "$FIXTURE" '.sources[0].source.path = "/etc/passwd"'
-expect_failure 'malicious source path' 'unsafe source path' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'malicious source path' 'unsafe source path' "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'malicious-snapshot'
 rewrite_manifest "$FIXTURE" '.sources[0].snapshot = "packages/upstream/../outside"'
-expect_failure 'malicious snapshot path' 'unsafe snapshot path' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'malicious snapshot path' 'unsafe snapshot path' "$FIXTURE/scripts/upstream" verify
 
 # Snapshot inventory is exact: no extra, unmanifested, missing, or symlinked entries.
 new_fixture 'extra-inventory'
 printf 'extra\n' > "$FIXTURE/packages/upstream/git/.config/git/extra"
-expect_failure 'extra snapshot inventory' 'undeclared snapshot inventory path' \
+expect_command_failure 'extra snapshot inventory' 'undeclared snapshot inventory path' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'unmanifested-bash-payload'
 printf 'excluded\n' > "$FIXTURE/$BASH_PAYLOAD_ROOT/completions"
-expect_failure 'unmanifested Bash payload' 'undeclared snapshot inventory path' \
+expect_command_failure 'unmanifested Bash payload' 'undeclared snapshot inventory path' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'framework-markers'
@@ -435,24 +439,24 @@ printf '^/\\.empty-package$\n' > "$FIXTURE/packages/upstream/git/.stow-local-ign
 "$FIXTURE/scripts/upstream" verify >/dev/null || \
   fail 'top-level framework package markers were not accepted'
 printf 'nested\n' > "$FIXTURE/packages/upstream/git/.config/.empty-package"
-expect_failure 'nested framework marker' 'undeclared snapshot inventory path' \
+expect_command_failure 'nested framework marker' 'undeclared snapshot inventory path' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'missing-inventory'
 rm -- "$FIXTURE/packages/upstream/git/.config/git/config"
-expect_failure 'missing snapshot inventory' 'missing or non-regular snapshot' \
+expect_command_failure 'missing snapshot inventory' 'missing or non-regular snapshot' \
   "$FIXTURE/scripts/upstream" verify
 
 new_fixture 'symlink-snapshot'
 rm -- "$FIXTURE/packages/upstream/git/.config/git/config"
 ln -s /etc/passwd "$FIXTURE/packages/upstream/git/.config/git/config"
-expect_failure 'symlink snapshot' 'missing or non-regular snapshot' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'symlink snapshot' 'missing or non-regular snapshot' "$FIXTURE/scripts/upstream" verify
 
 # Command-line usage errors are reported.
-expect_failure 'missing command' 'usage: upstream verify' "$UPSTREAM"
-expect_failure 'incomplete sync command' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" sync
-expect_failure 'unknown command' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" unknown
-expect_failure 'extra argument' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" verify extra
+expect_command_failure 'missing command' 'usage: upstream verify' "$UPSTREAM"
+expect_command_failure 'incomplete sync command' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" sync
+expect_command_failure 'unknown command' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" unknown
+expect_command_failure 'extra argument' 'usage: upstream verify | sync --proposal <file>' "$UPSTREAM" verify extra
 
 # Append transforms replay exactly, including recorded byte ordering.
 new_fixture 'append-replay'
@@ -465,7 +469,7 @@ rewrite_manifest "$FIXTURE" --arg source_blob "$source_blob" --arg output_blob "
    .sources[0].transform = {type:"append", appended:"append-one\nappend-two\n", output_blob:$output_blob}'
 "$FIXTURE/scripts/upstream" verify >/dev/null || fail 'append transform did not replay'
 rewrite_manifest "$FIXTURE" '.sources[0].transform.appended = "append-two\nappend-one\n"'
-expect_failure 'append ordering' 'recorded appended bytes' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'append ordering' 'recorded appended bytes' "$FIXTURE/scripts/upstream" verify
 
 # Accepted artifacts verify by hash and detect drift.
 new_fixture 'artifact-hash'
@@ -480,14 +484,14 @@ rewrite_manifest "$FIXTURE" --arg hash 'f8693f2607088055adef508221e288b378a8df97
       extracted:"/usr/share/omarchy-nvim/config/lazy-lock.json", trust:"accepted", record:"fixture"}}]'
 "$FIXTURE/scripts/upstream" verify >/dev/null || fail 'accepted artifact did not verify'
 printf '\ncorrupt\n' >> "$FIXTURE/packages/upstream/nvim/.config/nvim/lazy-lock.json"
-expect_failure 'artifact hash drift' 'artifact hash drift' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'artifact hash drift' 'artifact hash drift' "$FIXTURE/scripts/upstream" verify
 
 # Overwrite transforms with unsafe replaced provenance are refused.
 new_fixture 'unsafe-overwrite-provenance'
 rewrite_manifest "$FIXTURE" '.sources[0].transform = {type:"overwrite", replaces:{
   repository:"https://example.invalid/replaced", commit:"1111111111111111111111111111111111111111",
   path:"../outside", blob:"2222222222222222222222222222222222222222", mode:"100644"}}'
-expect_failure 'unsafe overwrite provenance' 'unsafe replaced source path' "$FIXTURE/scripts/upstream" verify
+expect_command_failure 'unsafe overwrite provenance' 'unsafe replaced source path' "$FIXTURE/scripts/upstream" verify
 
 printf 'PASS: pinned upstream source verification checks\n'
 
@@ -504,19 +508,19 @@ write_proposal "$PROPOSAL"
 
 # Malformed, version-only, unknown, missing, and non-HTTPS proposals are refused.
 printf '{\n' > "$TEMP_ROOT/malformed.json"
-expect_failure 'malformed proposal' 'source proposal is malformed' \
+expect_command_failure 'malformed proposal' 'source proposal is malformed' \
   sync_checkout "$BASE" "$TEMP_ROOT/malformed.json"
 jq '.pins[0].commit = "v-fixture"' "$PROPOSAL" > "$TEMP_ROOT/version-only.json"
-expect_failure 'version-only proposal' 'version-only inputs are refused' \
+expect_command_failure 'version-only proposal' 'version-only inputs are refused' \
   sync_checkout "$BASE" "$TEMP_ROOT/version-only.json"
 jq '.pins[0].id = "unknown"' "$PROPOSAL" > "$TEMP_ROOT/unknown.json"
-expect_failure 'unknown proposal pin' "unknown proposal pin 'unknown'" \
+expect_command_failure 'unknown proposal pin' "unknown proposal pin 'unknown'" \
   sync_checkout "$BASE" "$TEMP_ROOT/unknown.json"
 jq 'del(.pins[2])' "$PROPOSAL" > "$TEMP_ROOT/missing.json"
-expect_failure 'missing proposal pin' "missing 'omarchy-pkgs'" \
+expect_command_failure 'missing proposal pin' "missing 'omarchy-pkgs'" \
   sync_checkout "$BASE" "$TEMP_ROOT/missing.json"
 jq '.pins[0].repository = "file:///tmp/omarchy"' "$PROPOSAL" > "$TEMP_ROOT/non-https.json"
-expect_failure 'non-HTTPS proposal repository' 'unexpected repository' \
+expect_command_failure 'non-HTTPS proposal repository' 'unexpected repository' \
   sync_checkout "$BASE" "$TEMP_ROOT/non-https.json"
 
 # A happy sync verifies, converges on repetition, and leaves no staging residue.
@@ -580,7 +584,7 @@ git -C "$REPO_DIR" ls-files --error-unmatch packages/upstream/nvim/.config/nvim/
 UNREACHABLE="$TEMP_ROOT/unreachable"
 cp -a "$BASE" "$UNREACHABLE"
 write_proposal "$TEMP_ROOT/unreachable.json" '0000000000000000000000000000000000000000'
-expect_failure 'unreachable commit' 'unable to fetch commit' \
+expect_command_failure 'unreachable commit' 'unable to fetch commit' \
   sync_checkout "$UNREACHABLE" "$TEMP_ROOT/unreachable.json"
 
 write_file "$OMARCHY_REPO/config/git/config" $'[fixture]\n\tsource = later\n'
@@ -589,7 +593,7 @@ MISSING_COMMIT="$(commit_repo "$OMARCHY_REPO" 'missing required path')"
 MISSING="$TEMP_ROOT/missing-path"
 cp -a "$BASE" "$MISSING"
 write_proposal "$TEMP_ROOT/missing-path.json" "$MISSING_COMMIT"
-expect_failure 'missing source path' "missing source path in pin 'omarchy': config/tmux/tmux.conf" \
+expect_command_failure 'missing source path' "missing source path in pin 'omarchy': config/tmux/tmux.conf" \
   sync_checkout "$MISSING" "$TEMP_ROOT/missing-path.json"
 
 ln -s target "$OMARCHY_REPO/config/tmux/tmux.conf"
@@ -597,7 +601,7 @@ SYMLINK_COMMIT="$(commit_repo "$OMARCHY_REPO" 'symlink required path')"
 SYMLINK="$TEMP_ROOT/symlink"
 cp -a "$BASE" "$SYMLINK"
 write_proposal "$TEMP_ROOT/symlink.json" "$SYMLINK_COMMIT"
-expect_failure 'symlink source refusal' 'unsupported source mode 120000' \
+expect_command_failure 'symlink source refusal' 'unsupported source mode 120000' \
   sync_checkout "$SYMLINK" "$TEMP_ROOT/symlink.json"
 
 # Corruption of extracted staging content is detected and never reaches the
@@ -633,7 +637,7 @@ for point in sync-proposal sync-fetch sync-enumerate sync-assemble sync-artifact
   fixture="$TEMP_ROOT/fault-$point"
   cp -a "$BASE" "$fixture"
   before="$(fingerprint_active "$fixture")"
-  expect_failure "$point fault" "injected test failure at $point" \
+  expect_command_failure "$point fault" "injected test failure at $point" \
     sync_checkout "$fixture" "$PROPOSAL" DOTFILES_TEST_FAIL_AT="$point"
   [[ "$(fingerprint_active "$fixture")" == "$before" ]] || fail "$point changed active content"
   assert_no_staging "$fixture"
