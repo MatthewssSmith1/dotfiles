@@ -19,8 +19,6 @@ Treat Omarchy as the reference Linux environment: preserve its reviewed behavior
 ## Workflows
 
 - Follow `.agents/skills/applying-dotfiles/SKILL.md` for configuration changes.
-- GitHub: before PAT or credential setup, remote writes, pull-request or
-  protected-branch work, or token rotation/revocation, follow
-  `docs/tools/github-access.md`.
+- GitHub: before PAT or credential setup, remote writes, pull-request or protected-branch work, or token rotation/revocation, follow `docs/tools/github-access.md`.
 - Follow the `updating-dependencies` skill for upstream pin refreshes.
 - Changes under `windows/` also follow `windows/AGENTS.md`.

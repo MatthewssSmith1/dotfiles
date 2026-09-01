@@ -27,9 +27,4 @@ dotfiles.sh apply agents
 scripts/agent-skills verify
 ```
 
-The canonical instruction file is regular package content. Stow creates its
-home link and all skill-file links with `--no-folding`; the area creates the two
-bridges without clobbering existing paths. Exact bridge text and resolution are
-derivable ownership, so Agents writes no state. Apply adopts an already exact
-bridge, check requires both exact bridges, and removal deletes only exact
-bridges before removing the package closure.
+The canonical instruction file is regular package content. Stow creates its home link and all skill-file links with `--no-folding`; the area creates the two bridges without clobbering existing paths. Exact bridge text and resolution are derivable ownership, so Agents writes no state. Apply adopts an already exact bridge, check requires both exact bridges, and removal deletes only exact bridges before removing the package closure.

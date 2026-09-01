@@ -16,7 +16,5 @@
 ## Template
 
 ```md
-**Term**:
-One or two sentences defining what the Term is.
-_Avoid_: rejected synonym, other rejected synonym
+**Term**: One or two sentences defining what the Term is. _Avoid_: rejected synonym, other rejected synonym
 ```

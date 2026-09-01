@@ -14,15 +14,11 @@ The tmux area uses `~/.config/tmux/tmux.conf` as an XDG dispatcher and keeps the
 
 - A VPS or other standalone Ubuntu host: `ubuntu` profile.
 - WSL: refused before any write.
-- When connecting to any of these from Windows Terminal (including SSH into
-  a VPS), the client-side guidance in
-  [Windows Terminal](windows-terminal.md) applies — tmux runs on the host,
-  but the keys are intercepted or encoded by the client terminal.
+- When connecting to any of these from Windows Terminal (including SSH into a VPS), the client-side guidance in [Windows Terminal](windows-terminal.md) applies — tmux runs on the host, but the keys are intercepted or encoded by the client terminal.
 
 ## Manual Package Step
 
-Dotfiles checks and reports dependencies but never invokes `sudo`; review and
-run its exact manual package or mise guidance separately, then repeat check.
+Dotfiles checks and reports dependencies but never invokes `sudo`; review and run its exact manual package or mise guidance separately, then repeat check.
 
 ```bash
 ./dotfiles.sh check
@@ -46,10 +42,7 @@ curl -fsSL https://chatgpt.com/codex/install.sh | sh
 
 The installer and later `codex login` remain outside dotfiles. Codex absence is not drift, and `~/.codex` configuration, credentials, sessions, and logs remain host-owned.
 
-Optional child-only injection from persistent, host-owned environment bundles
-is documented in [Local environment bundles](../tools/secrets.md). The launcher
-is offline and read-only; dotfiles does not create, inspect, or remove real
-bundles or application wrappers.
+Optional child-only injection from persistent, host-owned environment bundles is documented in [Local environment bundles](../tools/secrets.md). The launcher is offline and read-only; dotfiles does not create, inspect, or remove real bundles or application wrappers.
 
 ## Validated Environments
 
@@ -61,12 +54,9 @@ Acceptance covered:
 
 - Migration of legacy repository-root Stow links into independent areas.
 - Exact distro ownership for `zoxide`, `eza`, `bat`/`batcat`, and `fd`/`fdfind`.
-- Pre-cutover Node 24.18.0, pnpm 11.13.1, Claude Code 2.1.212,
-  Worktrunk 0.68.0, tmux, Neovim 0.12.4, and Starship 1.26.0.
+- Pre-cutover Node 24.18.0, pnpm 11.13.1, Claude Code 2.1.212, Worktrunk 0.68.0, tmux, Neovim 0.12.4, and Starship 1.26.0.
 - Offline area checks and two ordinary configuration-only applies.
-- Bash interactive startup, Git identity and
-  credential layering, an isolated and default tmux server, pinned Neovim
-  plugin restore, and headless `:checkhealth`.
+- Bash interactive startup, Git identity and credential layering, an isolated and default tmux server, pinned Neovim plugin restore, and headless `:checkhealth`.
 
 Ubuntu's AppArmor 4 policy had `kernel.apparmor_restrict_unprivileged_userns=1`, so the denied-network validation sandboxes required a persistent executable-scoped profile for `/usr/bin/unshare` with `flags=(unconfined) { userns, }`. This is narrower than disabling the kernel restriction globally, but applies to every caller of that executable rather than only this repository or account.
 

@@ -48,8 +48,7 @@ A future portable selector could choose from the synchronized catalog and invoke
 Possible adapter responsibilities are:
 
 - Neovim selects the corresponding LazyVim colorscheme specification.
-- tmux derives status, border, message, and mode colors without changing the
-  interaction model.
+- tmux derives status, border, message, and mode colors without changing the interaction model.
 - Starship derives colors without changing prompt structure or symbols.
 - fzf derives foreground, background, selection, border, and highlight colors.
 - Lazygit derives its UI palette without changing Git behavior or keybindings.
@@ -64,10 +63,8 @@ Selecting the same theme on an Omarchy desktop and an Ubuntu VPS should yield a 
 
 The managed-settings mechanism shipped for theming: `windows/terminal/managed-settings.json` plus `windows/terminal/apply.ps1` upsert shared defaults and the Omarchy color scheme (see [windows/README.md](../windows/README.md)). Still deferred:
 
-- Extending the managed surface to the unbind actions currently documented as
-  manual steps (see [Windows Terminal](environments/windows-terminal.md)).
+- Extending the managed surface to the unbind actions currently documented as manual steps (see [Windows Terminal](environments/windows-terminal.md)).
 
 Do not assume terminal or tmux upgrades restore extended keys before testing. Current protocol analysis predicts that the targeted versions will not negotiate them. Record tested versions and observed input, then revisit the affected bindings if either implementation changes.
 
-Dotfiles never patches Windows Terminal `settings.json`; host-side settings
-remain an explicit user action.
+Dotfiles never patches Windows Terminal `settings.json`; host-side settings remain an explicit user action.

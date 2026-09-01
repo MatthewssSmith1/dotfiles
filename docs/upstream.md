@@ -12,33 +12,15 @@ Use one active tracked baseline. Git history provides rollback; do not retain a 
 
 ## Active Pins
 
-Three sources are pinned: Omarchy core, the LazyVim starter, and the Omarchy
-Neovim overlay in `omarchy-pkgs`. Exact repositories, immutable commits,
-release identities, blob IDs, transforms, and artifact hashes live in
-[`manifests/sources.json`](../manifests/sources.json); the accepted proposal is
-[`manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json`](../manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json).
-Core is pinned to annotated tag `v4.0.1`'s peeled commit. The independently
-selected stable package is `omarchy-nvim 2026.8.13-1`; its package identity is
-recorded on the two Neovim inputs and is not a claim that it matches the core
-release.
+Three sources are pinned: Omarchy core, the LazyVim starter, and the Omarchy Neovim overlay in `omarchy-pkgs`. Exact repositories, immutable commits, release identities, blob IDs, transforms, and artifact hashes live in [`manifests/sources.json`](../manifests/sources.json); the accepted proposal is [`manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json`](../manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json). Core is pinned to annotated tag `v4.0.1`'s peeled commit. The independently selected stable package is `omarchy-nvim 2026.8.13-1`; its package identity is recorded on the two Neovim inputs and is not a claim that it matches the core release.
 
 There is no standalone Omarchy Neovim repository. The released configuration is assembled from three inputs:
 
-1. The LazyVim starter tree at the pinned commit. The release's PKGBUILD pins
-   this input by tarball checksum; the pinned commit was verified equal
-   to that checksum.
-2. The overlay files tracked in `omarchy-pkgs` under `pkgbuilds/omarchy-nvim/`
-   at the pinned commit (`lua/`, `plugin/`, `lazyvim.json`).
-3. Overlay `lua/config/options.lua`, which replaces the starter file. The
-   manifest records the replaced starter blob as overwrite provenance.
+1. The LazyVim starter tree at the pinned commit. The release's PKGBUILD pins this input by tarball checksum; the pinned commit was verified equal to that checksum.
+2. The overlay files tracked in `omarchy-pkgs` under `pkgbuilds/omarchy-nvim/` at the pinned commit (`lua/`, `plugin/`, `lazyvim.json`).
+3. Overlay `lua/config/options.lua`, which replaces the starter file. The manifest records the replaced starter blob as overwrite provenance.
 
-The pinned package commit predates the recorded package build by 19 minutes.
-Its PKGBUILD's starter archive checksum resolves to the recorded immutable
-starter commit. The build-generated `lazy-lock.json` is committed at
-[`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../packages/upstream/nvim/.config/nvim/lazy-lock.json).
-On 2026-08-26 the stable database, package, and detached signature were
-retrieved and the signature, repository checksum, PKGBUILD identity, starter
-archive, package metadata, and complete packaged configuration were verified.
+The pinned package commit predates the recorded package build by 19 minutes. Its PKGBUILD's starter archive checksum resolves to the recorded immutable starter commit. The build-generated `lazy-lock.json` is committed at [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../packages/upstream/nvim/.config/nvim/lazy-lock.json). On 2026-08-26 the stable database, package, and detached signature were retrieved and the signature, repository checksum, PKGBUILD identity, starter archive, package metadata, and complete packaged configuration were verified.
 
 ## Manifest
 
@@ -49,8 +31,7 @@ The active [`manifests/sources.json`](../manifests/sources.json) records one ent
 - Human-readable release identity where applicable.
 - Source path, Git blob ID, and file mode.
 - Destination path and mode.
-- Deterministic append or overwrite assembly metadata, including replaced input
-  identity or exact appended bytes.
+- Deterministic append or overwrite assembly metadata, including replaced input identity or exact appended bytes.
 - Output Git blob ID for transformed files.
 - The committed `lazy-lock.json` snapshot path, hash, and provenance record.
 
@@ -62,29 +43,12 @@ Source blob IDs are practical verification records, not a claim that the manifes
 
 The single active snapshot root is `packages/upstream`. It contains:
 
-- `git/.config/git/config` and `starship/.config/starship.toml`, mapped to their
-  XDG home destinations. Git comes from the immutable source commit even when
-  an installed v4 tree does not expose the desired baseline.
-- `tmux/.config/dotfiles/upstream/tmux/tmux.conf`, the byte-identical Omarchy
-  tmux input mapped to private managed
-  `~/.config/dotfiles/upstream/tmux/tmux.conf`. The separate Ubuntu package
-  owns the public `~/.config/tmux/tmux.conf` dispatcher, so the upstream
-  snapshot is never modified to become a loader.
-- `nvim/.config/nvim/`, the assembled Neovim configuration and released
-  `lazy-lock.json`.
-- `reference/omarchy/config/herdr/config.toml`, the complete
-  `reference/omarchy/default/bash/` tree (including Herdr helpers), and Tokyo
-  Night's `colors.toml`, legacy `neovim.lua`, and v4
-  `default/themed/neovim.lua.tpl`. These are exact reference inputs, not home
-  payloads.
+- `git/.config/git/config` and `starship/.config/starship.toml`, mapped to their XDG home destinations. Git comes from the immutable source commit even when an installed v4 tree does not expose the desired baseline.
+- `tmux/.config/dotfiles/upstream/tmux/tmux.conf`, the byte-identical Omarchy tmux input mapped to private managed `~/.config/dotfiles/upstream/tmux/tmux.conf`. The separate Ubuntu package owns the public `~/.config/tmux/tmux.conf` dispatcher, so the upstream snapshot is never modified to become a loader.
+- `nvim/.config/nvim/`, the assembled Neovim configuration and released `lazy-lock.json`.
+- `reference/omarchy/config/herdr/config.toml`, the complete `reference/omarchy/default/bash/` tree (including Herdr helpers), and Tokyo Night's `colors.toml`, legacy `neovim.lua`, and v4 `default/themed/neovim.lua.tpl`. These are exact reference inputs, not home payloads.
 
-Omarchy v4 installs settings below `/usr/share/omarchy`; live files there were
-used for host comparison, while immutable Git blobs are the recorded source.
-The Ubuntu Bash payload selects only four files. Shell and Readline remain
-exact; aliases and tmux helpers use the replayable
-`ubuntu-bash-portability-policy` transform to omit `omarchy-agent`, omit the
-desktop-only `tds` helper, and repair upstream's undefined focus target. The
-complete reference tree remains byte-exact.
+Omarchy v4 installs settings below `/usr/share/omarchy`; live files there were used for host comparison, while immutable Git blobs are the recorded source. The Ubuntu Bash payload selects only four files. Shell and Readline remain exact; aliases and tmux helpers use the replayable `ubuntu-bash-portability-policy` transform to omit `omarchy-agent`, omit the desktop-only `tds` helper, and repair upstream's undefined focus target. The complete reference tree remains byte-exact.
 
 Do not commit the complete Omarchy repository or any Neovim plugin cache.
 
@@ -103,18 +67,14 @@ The proposal records every requested human-readable version, immutable commit, r
 
 `sync` is the only baseline operation allowed to use the network. It accepts only the three exact HTTPS repositories above and fetches proposal commits by immutable 40-character ID with tags disabled, prompts disabled, object checking enabled, and HTTPS as the only production Git protocol. It creates `.upstream-staging.*` beside the active snapshot, verifies each selected Git path, blob, and mode, assembles a candidate snapshot and manifest, preserves the fixed-hash lockfile artifact, and runs offline candidate verification before replacement. Failures before or during candidate verification remove staging and leave the active baseline unchanged. If replacement is interrupted, cleanup restores the old snapshot and manifest together; failed restoration preserves staging and reports its path for manual recovery.
 
-The active baseline has two Ubuntu Bash portability transforms, two Neovim
-offline-bootstrap policy transforms, and one overlay overwrite for
-`lua/config/options.lua`. The starter has no `lazyvim.json`, so the overlay adds
-that file without a collision.
+The active baseline has two Ubuntu Bash portability transforms, two Neovim offline-bootstrap policy transforms, and one overlay overwrite for `lua/config/options.lua`. The starter has no `lazyvim.json`, so the overlay adds that file without a collision.
 
 Synchronization must never:
 
 - Deploy configuration.
 - Invoke Stow.
 - Update runtime plugins.
-- Touch files under `$HOME` outside the resolved checkout and its
-  same-filesystem staging directory.
+- Touch files under `$HOME` outside the resolved checkout and its same-filesystem staging directory.
 - Run during dotfiles apply/check/remove or shell startup.
 
 This is consistent with the canonical operation matrix in [Deployment](deployment.md#network-boundaries): dotfiles apply/check/remove is always offline and never synchronizes baselines.
@@ -125,10 +85,8 @@ Selected upstream files are committed directly so ordinary Git diffs show baseli
 
 1. Select explicit stable core and Neovim versions.
 2. Resolve and review each version-to-commit mapping before invoking sync.
-3. For a Neovim package update, download the exact package and signature while
-   available; preserve package metadata and the extraction procedure.
-4. Fetch immutable commits over HTTPS into same-filesystem staging beside the
-   checkout content that will be replaced.
+3. For a Neovim package update, download the exact package and signature while available; preserve package metadata and the extraction procedure.
+4. Fetch immutable commits over HTTPS into same-filesystem staging beside the checkout content that will be replaced.
 5. Verify Git path/blob relationships and package evidence.
 6. Assemble only the documented inventory with deterministic transforms.
 7. Generate the candidate manifest, including source and output blob IDs.
@@ -154,17 +112,11 @@ Selected upstream files are committed directly so ordinary Git diffs show baseli
 
 ## Acceptance Criteria
 
-- Every active snapshot file is listed with source path, commit, blob identity,
-  destination, mode, and any transform.
-- The tmux snapshot retains source blob
-  `d73c42ea4efe4379ea1051a0eefbe5ef2cdb2e57` byte-for-byte at its private
-  managed path.
-- Offline verification succeeds without network access and proves the snapshot
-  matches the accepted manifest.
-- Sync rejects source paths or blobs that do not belong to the supplied
-  immutable commits.
+- Every active snapshot file is listed with source path, commit, blob identity, destination, mode, and any transform.
+- The tmux snapshot retains source blob `d73c42ea4efe4379ea1051a0eefbe5ef2cdb2e57` byte-for-byte at its private managed path.
+- Offline verification succeeds without network access and proves the snapshot matches the accepted manifest.
+- Sync rejects source paths or blobs that do not belong to the supplied immutable commits.
 - A failed sync leaves the active snapshot unchanged.
 - Snapshot changes produce readable Git diffs.
 - Dotfiles apply/check/remove and startup cannot trigger synchronization.
-- The committed `lazy-lock.json` snapshot and its provenance record are
-  preserved through sync operations.
+- The committed `lazy-lock.json` snapshot and its provenance record are preserved through sync operations.
