@@ -251,7 +251,12 @@ def add_alias(data, group_id, key, label, text):
 
 def edit_alias(data, shortcut_id, key=None, label=None, text=None):
     item = require_shortcut(data, shortcut_id, managed=True)
-    if key is not None:
+    if key is not None and key != item["key"]:
+        group = require_group(data, item["group"])
+        new_id = slug(f"{group['prefix']}-{key}", "shortcut ID")
+        if new_id != item["id"] and any(other["id"] == new_id for other in data["shortcuts"]):
+            raise ShortcutError(f"shortcut ID already exists: {new_id}")
+        item["id"] = new_id
         item["key"] = key
     if label is not None:
         item["label"] = label

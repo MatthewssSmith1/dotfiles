@@ -107,7 +107,12 @@ class DesktopShortcutsCliTest(unittest.TestCase):
         self.assertEqual(self.run_cli("edit", "space-q", "--key", "z", "--label", "z · Changed", "--text", "changed")[0], 0)
         changed = self.manifest()["shortcuts"][-1]
         self.assertEqual((changed["id"], changed["key"], changed["label"], changed["output"]),
-                         ("space-q", "z", "z · Changed", "changed"))
+                         ("space-z", "z", "z · Changed", "changed"))
+        status, _, stderr = self.run_cli("edit", "space-z", "--key", "a")
+        self.assertNotEqual(status, 0)
+        self.assertIn("shortcut ID already exists: space-a", stderr)
+        unchanged = self.manifest()["shortcuts"][-1]
+        self.assertEqual((unchanged["id"], unchanged["key"]), ("space-z", "z"))
 
     def test_native_changes_and_unconfirmed_deletion_are_refused(self):
         original = self.bytes()
