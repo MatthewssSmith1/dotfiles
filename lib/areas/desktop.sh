@@ -51,6 +51,16 @@ readonly DESKTOP_MENU_BEGIN='  // >>> dotfiles desktop menu theme >>>'
 readonly DESKTOP_MENU_END='  // <<< dotfiles desktop menu theme <<<'
 readonly DESKTOP_MENU_TOKEN='dotfiles desktop menu theme'
 readonly DESKTOP_MENU_ACTION='theme=$("$HOME/.local/bin/dotfiles-omarchy-theme-switcher"); [[ -n $theme ]] && omarchy-theme-set "$theme"'
+readonly DESKTOP_MENU_LEGACY_BLOCK='  // >>> dotfiles desktop menu theme >>>
+  "style.theme": {"icon":"󰸌","label":"Theme","aliases":["theme","themes"],"action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""},
+  "shortcuts": {"icon":"󰌌","label":"Shortcuts","aliases":["shortcut","shortcuts"]},
+  "shortcuts.space": {"label":"Space"},
+  "shortcuts.space.a": {"label":"a · AGENTS.md","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" space-a"},
+  "shortcuts.prompts": {"label":"p · Prompts"},
+  "shortcuts.prompts.b": {"label":"b · Continue briefly","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-b"},
+  "shortcuts.prompts.d": {"label":"d · Discuss unresolved points","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-d"},
+  "shortcuts.prompts.t": {"label":"t · Ask for recommendation","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-t"},
+  // <<< dotfiles desktop menu theme <<<'
 
 desktop_menu_block() {
   printf '%s\n' "$DESKTOP_MENU_BEGIN"
@@ -74,7 +84,7 @@ register_desktop_area() {
       "$DESKTOP_XCOMPOSE_BLOCK" append 0644 true
     lean_add_guarded_attachment desktop-menu-theme-v1 "$DESKTOP_MENU_EXTENSION" \
       "$DESKTOP_MENU_BEGIN" "$DESKTOP_MENU_END" "$DESKTOP_MENU_TOKEN" \
-      "$menu_block" after-exact 0644 true '{'
+      "$menu_block" after-exact 0644 true '{' "$DESKTOP_MENU_LEGACY_BLOCK"
     lean_add_guarded_attachment desktop-bindings-v1 "$DESKTOP_BINDINGS" \
       "$DESKTOP_BINDINGS_BEGIN" "$DESKTOP_BINDINGS_END" "$DESKTOP_BINDINGS_TOKEN" \
       "$DESKTOP_BINDINGS_BLOCK" append 0644 true
@@ -99,7 +109,25 @@ validate_desktop_shortcuts() {
   [[ -f "$launcher" && ! -L "$launcher" && -x "$launcher" && "$(stat -c %a -- "$launcher")" == 755 ]] ||
     die 'desktop shortcut manager launcher is not an accepted executable payload'
   bash -n "$launcher" || die 'desktop shortcut manager launcher has invalid Bash syntax'
-  "$DOTFILES_DIR/scripts/generate-desktop-shortcuts" || die 'desktop shortcut generated files are stale'
+  if [[ "${DOTFILES_SHORTCUTS_MIGRATE_STATE:-}" != 1 ]] || ! desktop_hashless_state_migration_allowed; then
+    "$DOTFILES_DIR/scripts/generate-desktop-shortcuts" || die 'desktop shortcut generated files are stale'
+  fi
+}
+
+desktop_hashless_state_migration_allowed() {
+  local index relative recorded_id status
+  [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] || return 1
+  lean_validate_state_file "$LEAN_STATE"
+  [[ "$(jq -r .version "$LEAN_STATE")" =~ ^[12]$ ]] || return 1
+  [[ "$(jq '.attachments | length' "$LEAN_STATE")" == "${#LEAN_ATTACHMENT_PATHS[@]}" ]] || return 1
+  for index in "${!LEAN_ATTACHMENT_PATHS[@]}"; do
+    relative="${LEAN_ATTACHMENT_PATHS[index]}"
+    recorded_id="$(jq -er --arg path "$relative" '.attachments[$path].id' "$LEAN_STATE" 2>/dev/null)" || return 1
+    [[ "$recorded_id" == "${LEAN_ATTACHMENT_IDS[index]}" ]] || return 1
+    lean_inspect_attachment "$index"
+    status="$LEAN_ATTACHMENT_STATUS"
+    [[ "$status" == hashless ]] || return 1
+  done
 }
 
 validate_desktop_fragment() {
@@ -181,7 +209,13 @@ validate_desktop_menu() {
   lean_inspect_attachment 2
   status="$LEAN_ATTACHMENT_STATUS"
   [[ "$status" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $path"
-  if [[ "$status" == exact ]]; then
+  if [[ "$status" == legacy ]]; then
+    [[ "$MODE" == apply || "$MODE" == remove ]] || die "guarded attachment differs from the current managed version: $path"
+  elif [[ "$status" == deployed || "$status" == pending || "$status" == transitioned ]]; then
+    [[ "$MODE" != check ]] || die "guarded attachment differs from the current managed version: $path"
+  fi
+  if [[ "$status" == exact || "$status" == hashless || "$status" == legacy || "$status" == deployed ||
+    "$status" == pending || "$status" == transitioned ]]; then
     desktop_menu_json "$path" | jq -e --arg action "$DESKTOP_MENU_ACTION" '
       .["style.theme"] == {icon:"󰸌",label:"Theme",aliases:["theme","themes"],action:$action}
     ' >/dev/null || die "managed Style > Theme action differs: $path"

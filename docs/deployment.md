@@ -56,13 +56,19 @@ dotfiles has no deployment transaction, journal, backup, or rollback layer.
 
 Lean package links are derived from the active profile and therefore need no
 state. Ownership records live under `~/.local/state/dotfiles/v2/`: record
-format 1 stores attachments, while format 2 adds fixed JSON scalar fields.
-Both formats may coexist for one profile and format-1 records are not rewritten
-merely because they were read. The retired `~/.local/state/dotfiles/v1/`
-namespace is refused with manual cleanup guidance. Native validation-only and
-package-only areas write no state. Default removal still derives optional
-package-only ownership, so an omitted area list removes deployed OpenCode links
-without selector state.
+formats 1 and 2 are accepted read-only compatibility inputs. Every successful
+apply writes format 3, which unifies attachments and fixed JSON scalar fields.
+Each attachment records its last deployed block hash and a nullable pending
+target hash. Apply atomically publishes `managed=A,pending=B` before replacing
+A with B, then publishes `managed=B,pending=null`; an interrupted transition is
+therefore recoverable without treating arbitrary desired bytes as owned. A
+hashless format-1/2 record migrates only when its live block exactly matches the
+current desired or known legacy block. Check does not migrate state. The state
+directory name remains `v2` because that is the active lean-engine namespace;
+the retired `~/.local/state/dotfiles/v1/` namespace is refused with manual
+cleanup guidance. Native validation-only and package-only areas write no state.
+Default removal still derives optional package-only ownership, so an omitted
+area list removes deployed OpenCode links without selector state.
 
 Native refresh-owned baselines remain regular files. Git, Bash, Neovim, and
 desktop use guarded attachments; desktop also owns only the two registered

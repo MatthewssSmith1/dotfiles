@@ -28,6 +28,9 @@ readonly ATTACH_TOKEN='dotfiles lean fixture'
 readonly ATTACH_BLOCK="$ATTACH_BEGIN
 source \"\$HOME/.config/lean/personal.bash\"
 $ATTACH_END"
+readonly ATTACH_LEGACY_BLOCK="$ATTACH_BEGIN
+source \"\$HOME/.config/lean/legacy.bash\"
+$ATTACH_END"
 
 reset_lean_home() {
   local name="$1"
@@ -66,6 +69,30 @@ register_attachment() {
   lean_add_package common/one
   lean_add_guarded_attachment bash-rc-v1 .bashrc "$ATTACH_BEGIN" "$ATTACH_END" \
     "$ATTACH_TOKEN" "$ATTACH_BLOCK" append 0644
+}
+
+register_legacy_attachment() {
+  lean_begin_area attached omarchy packages
+  lean_add_package common/one
+  lean_add_guarded_attachment bash-rc-v1 .bashrc "$ATTACH_BEGIN" "$ATTACH_END" \
+    "$ATTACH_TOKEN" "$ATTACH_BLOCK" append 0644 false '' "$ATTACH_LEGACY_BLOCK"
+}
+
+register_evolved_attachment() {
+  local block="$ATTACH_BEGIN
+source \"\$HOME/.config/lean/evolved.bash\"
+$ATTACH_END"
+  lean_begin_area attached omarchy packages
+  lean_add_package common/one
+  lean_add_guarded_attachment bash-rc-v1 .bashrc "$ATTACH_BEGIN" "$ATTACH_END" \
+    "$ATTACH_TOKEN" "$block" append 0644
+}
+
+downgrade_attachment_state_v1() {
+  local state="$HOME/.local/state/dotfiles/v2/attached.json"
+  jq '{version:1,profile,area,attachments:(.attachments | map_values({id,origin,before_sha256}))}' \
+    "$state" > "$HOME/v1-state.json"
+  mv -fT "$HOME/v1-state.json" "$state"
 }
 
 register_expanded_attachment() {
@@ -153,6 +180,56 @@ lean_remove_area
 assert_same "$HOME/.menu" "$TEST_ROOT/menu-expansion.original"
 pass
 
+# Legacy migration is permitted only when preflight approved that exact object
+# and content, not when an exact or absent attachment becomes legacy afterward.
+reset_lean_home legacy-preflight-binding
+apply_attachment
+register_legacy_attachment
+lean_preflight_area apply
+printf 'native\n%s\n' "$ATTACH_LEGACY_BLOCK" > "$HOME/.bashrc"
+expect_direct_failure 'changed after preflight' lean_write_attachment 0
+[[ "$(< "$HOME/.bashrc")" == $'native\n'"$ATTACH_LEGACY_BLOCK" ]] ||
+  fail 'exact-to-legacy refusal changed attachment bytes'
+
+rm "$HOME/.bashrc"
+register_legacy_attachment
+lean_preflight_area apply
+printf 'native\n%s\n' "$ATTACH_LEGACY_BLOCK" > "$HOME/.bashrc"
+expect_direct_failure 'changed after preflight' lean_write_attachment 0
+[[ "$(< "$HOME/.bashrc")" == $'native\n'"$ATTACH_LEGACY_BLOCK" ]] ||
+  fail 'absent-to-legacy refusal changed attachment bytes'
+
+register_legacy_attachment
+downgrade_attachment_state_v1
+lean_apply_area
+lean_inspect_attachment 0
+[[ "$LEAN_ATTACHMENT_STATUS" == exact ]] || fail 'preflight-approved legacy attachment did not migrate'
+pass
+
+# A known legacy block in owned state is removable without first migrating it.
+reset_lean_home legacy-remove
+printf 'native\n' > "$HOME/.bashrc"
+apply_attachment
+downgrade_attachment_state_v1
+printf 'native\n%s\n' "$ATTACH_LEGACY_BLOCK" > "$HOME/.bashrc"
+register_legacy_attachment
+lean_remove_area
+[[ "$(< "$HOME/.bashrc")" == native ]] || fail 'legacy removal lost unrelated attachment content'
+pass
+
+# Legacy definitions do not bypass v3 managed/pending authorization.
+reset_lean_home legacy-v3-refusal
+printf 'native\n' > "$HOME/.bashrc"
+apply_attachment
+printf 'native\n%s\n' "$ATTACH_LEGACY_BLOCK" > "$HOME/.bashrc"
+cp "$HOME/.bashrc" "$TEST_ROOT/legacy-v3.manual"
+for operation in lean_check_area lean_apply_area lean_remove_area; do
+  register_legacy_attachment
+  expect_direct_failure 'partial, malformed' "$operation"
+  assert_same "$HOME/.bashrc" "$TEST_ROOT/legacy-v3.manual"
+done
+pass
+
 # Existing guarded files retain exact host bytes and mode around the managed
 # block; apply and remove use atomic regular-file replacement.
 reset_lean_home attachment-lifecycle
@@ -165,6 +242,102 @@ lean_check_area
 remove_attachment
 assert_same "$HOME/.bashrc" "$TEST_ROOT/attachment.original"
 [[ "$(stat -c %a -- "$HOME/.bashrc")" == 640 ]] || fail 'attachment lifecycle changed the host file mode'
+pass
+
+# State records the last successfully deployed block. Arbitrary repeated
+# desired evolution is owned drift for check, replaceable by apply, removable
+# afterward, and never authorizes manual block edits.
+reset_lean_home attachment-evolution
+printf 'native\n' > "$HOME/.bashrc"
+apply_attachment
+attachment_state="$HOME/.local/state/dotfiles/v2/attached.json"
+jq -e '.attachments[".bashrc"].managed_sha256 | test("^[0-9a-f]{64}$")' "$attachment_state" >/dev/null ||
+  fail 'apply did not record the deployed attachment hash'
+register_evolved_attachment
+expect_direct_failure 'differs from the current managed version' lean_check_area
+sed -i 's|personal.bash|evolved.bash|' "$HOME/.bashrc"
+cp "$HOME/.bashrc" "$TEST_ROOT/manually-installed-desired"
+register_evolved_attachment
+expect_direct_failure 'partial, malformed' lean_apply_area
+assert_same "$HOME/.bashrc" "$TEST_ROOT/manually-installed-desired"
+sed -i 's|evolved.bash|personal.bash|' "$HOME/.bashrc"
+register_evolved_attachment
+lean_apply_area
+grep -Fq 'evolved.bash' "$HOME/.bashrc" || fail 'apply did not replace the recorded deployed block'
+register_attachment
+expect_direct_failure 'differs from the current managed version' lean_check_area
+register_attachment
+lean_apply_area
+register_attachment
+lean_apply_area
+sed -i 's|personal.bash|manual.bash|' "$HOME/.bashrc"
+register_evolved_attachment
+expect_direct_failure 'partial, malformed' lean_apply_area
+sed -i 's|manual.bash|personal.bash|' "$HOME/.bashrc"
+register_evolved_attachment
+lean_apply_area
+register_attachment
+lean_remove_area
+[[ "$(< "$HOME/.bashrc")" == native ]] || fail 'evolved attachment removal lost unrelated content'
+pass
+
+# A crash after attachment publication leaves durable A -> B intent. Retry
+# settles B as managed, after which another evolution remains safe.
+reset_lean_home attachment-transition-crash
+printf 'native\n' > "$HOME/.bashrc"
+apply_attachment
+hold="$TEST_ROOT/attachment-transition-hold"
+mkdir "$hold"
+HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$DOTFILES_DIR" PATH="$PATH" FAKE_STOW_TRACE="$FAKE_STOW_TRACE" \
+  DOTFILES_TESTING=1 DOTFILES_TEST_HOLD_AT=lean-before-final-state-write DOTFILES_TEST_HOLD_DIR="$hold" \
+  SCRIPT_NAME=lean-transition-child bash -c '
+    set -Eeuo pipefail
+    source "'$REPO_DIR'/lib/common.sh"
+    source "'$REPO_DIR'/lib/lean_engine.sh"
+    begin="# >>> dotfiles lean fixture >>>"; end="# <<< dotfiles lean fixture <<<"
+    block="$begin
+source \"\$HOME/.config/lean/evolved.bash\"
+$end"
+    lean_begin_area attached omarchy packages
+    lean_add_package common/one
+    lean_add_guarded_attachment bash-rc-v1 .bashrc "$begin" "$end" "dotfiles lean fixture" "$block" append 0644
+    lean_apply_area
+  ' > "$TEST_ROOT/attachment-transition-child.log" 2>&1 &
+child=$!
+wait_for_file "$hold/lean-before-final-state-write.ready"
+grep -Fq 'evolved.bash' "$HOME/.bashrc" || fail 'held transition did not publish target attachment'
+jq -e '.version == 3 and
+  (.attachments[".bashrc"].managed_sha256 | test("^[0-9a-f]{64}$")) and
+  (.attachments[".bashrc"].pending_sha256 | test("^[0-9a-f]{64}$")) and
+  .attachments[".bashrc"].managed_sha256 != .attachments[".bashrc"].pending_sha256' \
+  "$HOME/.local/state/dotfiles/v2/attached.json" >/dev/null || fail 'transition intent was not durable before attachment publication'
+kill -TERM "$child"
+if wait "$child"; then fail 'held transition unexpectedly survived termination'; fi
+register_attachment
+lean_apply_area
+jq -e '.attachments[".bashrc"].pending_sha256 == null' "$HOME/.local/state/dotfiles/v2/attached.json" >/dev/null ||
+  fail 'transition retry did not settle pending state'
+grep -Fq 'personal.bash' "$HOME/.bashrc" || fail 'recovery did not advance directly from pending content'
+register_evolved_attachment
+lean_apply_area
+grep -Fq 'evolved.bash' "$HOME/.bashrc" || fail 'post-recovery evolution did not converge'
+pass
+
+# Hashless deployed state migrates only while live content exactly equals the
+# current desired block; apply writes metadata without changing managed bytes.
+reset_lean_home attachment-hash-migration
+printf 'native\n' > "$HOME/.bashrc"
+apply_attachment
+attachment_state="$HOME/.local/state/dotfiles/v2/attached.json"
+jq '{version:1,profile,area,attachments:(.attachments | map_values({id,origin,before_sha256}))}' \
+  "$attachment_state" > "$HOME/hashless.json"
+mv -fT "$HOME/hashless.json" "$attachment_state"
+attachment_hash="$(sha256_file "$HOME/.bashrc")"
+apply_attachment
+[[ "$(sha256_file "$HOME/.bashrc")" == "$attachment_hash" ]] || fail 'hash metadata migration changed the attachment'
+jq -e '.version == 3 and (.attachments[".bashrc"].managed_sha256 | test("^[0-9a-f]{64}$")) and
+  .attachments[".bashrc"].pending_sha256 == null' "$attachment_state" >/dev/null ||
+  fail 'no-op apply did not migrate hashless attachment state'
 pass
 
 # Repository package payload symlinks are rejected before Stow or state writes.
@@ -270,19 +443,21 @@ HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$DOTFILES_DIR" PATH="$PATH
     LEAN_ATTACHMENT_PATHS=(.bashrc)
     LEAN_ATTACHMENT_ORIGINS=(created)
     LEAN_ATTACHMENT_BEFORE_HASHES=("")
+    LEAN_ATTACHMENT_MANAGED_HASHES=(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
     LEAN_ATTACHMENT_IDS+=(bash-login-v1)
     LEAN_ATTACHMENT_PATHS+=(.profile)
     LEAN_ATTACHMENT_ORIGINS+=(created)
     LEAN_ATTACHMENT_BEFORE_HASHES+=("")
+    LEAN_ATTACHMENT_MANAGED_HASHES+=(bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
     lean_write_state_atomic
   ' > "$TEST_ROOT/state-child.log" 2>&1 &
 child=$!
 wait_for_file "$hold/lean-before-state-rename.ready"
-jq -e '.version == 1 and (.attachments | length) == 1' "$HOME/.local/state/dotfiles/v2/attached.json" >/dev/null ||
+jq -e '.version == 3 and (.attachments | length) == 1' "$HOME/.local/state/dotfiles/v2/attached.json" >/dev/null ||
   fail 'state replacement exposed a partial destination before atomic rename'
 : > "$hold/lean-before-state-rename.release"
 wait "$child" || fail 'atomic state child failed'
-jq -e '.version == 1 and .area == "attached" and (.attachments | length) == 2' \
+jq -e '.version == 3 and .area == "attached" and (.attachments | length) == 2' \
   "$HOME/.local/state/dotfiles/v2/attached.json" >/dev/null ||
   fail 'atomically published state is malformed'
 
@@ -299,17 +474,32 @@ HOME="$HOME" TARGET_ROOT="$TARGET_ROOT" DOTFILES_DIR="$DOTFILES_DIR" PATH="$PATH
     LEAN_ATTACHMENT_PATHS=(.bashrc .profile .bash_profile)
     LEAN_ATTACHMENT_ORIGINS=(created created created)
     LEAN_ATTACHMENT_BEFORE_HASHES=("" "" "")
+    LEAN_ATTACHMENT_MANAGED_HASHES=(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc)
     lean_write_state_atomic
   ' > "$TEST_ROOT/state-interrupt.log" 2>&1 &
 child=$!
 wait_for_file "$hold/lean-before-state-rename.ready"
 kill -TERM "$child"
 if wait "$child"; then fail 'interrupted state publication unexpectedly succeeded'; fi
-jq -e '.version == 1 and (.attachments | length) == 2' "$HOME/.local/state/dotfiles/v2/attached.json" >/dev/null ||
+jq -e '.version == 3 and (.attachments | length) == 2' "$HOME/.local/state/dotfiles/v2/attached.json" >/dev/null ||
   fail 'interrupted state publication changed the destination'
 if compgen -G "$HOME/.local/state/dotfiles/v2/.attached.json.tmp.*" >/dev/null; then
   fail 'interrupted state publication retained a temporary file'
 fi
+pass
+
+# The first intent publication is bound to the state object observed during
+# preflight, even when a concurrent replacement is semantically identical.
+reset_lean_home preflight-state-binding
+printf 'native\n' > "$HOME/.bashrc"
+apply_attachment
+register_attachment
+lean_preflight_area apply
+state="$HOME/.local/state/dotfiles/v2/attached.json"
+jq . "$state" > "$HOME/reformatted-state.json"
+mv -fT "$HOME/reformatted-state.json" "$state"
+expect_direct_failure 'state changed concurrently' lean_write_state_atomic
+grep -Fq 'source "$HOME/.config/lean/personal.bash"' "$HOME/.bashrc" || fail 'state race changed attachment bytes'
 pass
 
 # A resource-bearing first apply records complete attachment and JSON origins
@@ -324,21 +514,22 @@ lean_preflight_area apply
 lean_write_state_atomic
 structured_state="$HOME/.local/state/dotfiles/v2/structured.json"
 jq -e '
-  .version == 2 and (.attachments | keys) == [".bashrc"] and
+  .version == 3 and (.attachments | keys) == [".bashrc"] and
+  (.attachments[".bashrc"].managed_sha256 == null) and
+  (.attachments[".bashrc"].pending_sha256 | test("^[0-9a-f]{64}$")) and
   (.resources | keys) == [".config/lean/app.json"] and
   .resources[".config/lean/app.json"].fields["/idle/screensaver"].original == 150 and
   .resources[".config/lean/app.json"].fields["/idle/lock"].original == 300
-' "$structured_state" >/dev/null || fail 'complete version-2 origins were not persisted before writes'
+' "$structured_state" >/dev/null || fail 'complete version-3 intent was not persisted before writes'
 assert_same "$HOME/.config/lean/app.json" "$TEST_ROOT/structured.original"
 [[ ! -e "$HOME/.one" && "$(< "$HOME/.bashrc")" == native ]] || fail 'intent-state publication changed a managed object'
-state_identity="$(stat -c '%d:%i' "$structured_state")"
 apply_structured
 [[ "$(jq -r '.idle.screensaver, .idle.lock' "$HOME/.config/lean/app.json" | tr '\n' ' ')" == '600 900 ' ]] ||
   fail 'structured apply did not install managed values'
 if compgen -G "$HOME/.config/lean/.app.json.tmp.*" >/dev/null; then fail 'successful JSON apply retained a temporary file'; fi
-[[ "$(stat -c '%d:%i' "$structured_state")" == "$state_identity" ]] || fail 'repeated apply replaced recorded origins'
+state_identity="$(stat -c '%d:%i' "$structured_state")"
 apply_structured
-[[ "$(stat -c '%d:%i' "$structured_state")" == "$state_identity" ]] || fail 'idempotent apply rewrote version-2 state'
+[[ "$(stat -c '%d:%i' "$structured_state")" == "$state_identity" ]] || fail 'idempotent apply rewrote version-3 state'
 pass
 
 # JSON replacement is semantic and preserves unrelated values and mode. Check
@@ -377,41 +568,59 @@ remove_structured
 assert_contains "$(< "$HOME/.bashrc")" native
 pass
 
-# Existing attachment-only version-1 records remain byte/inode stable, and
-# valid version-1 and version-2 records coexist only for one profile.
+# Stable v3 records are idempotent. Prior v1 attachment and v2 resource state
+# remain valid inputs and migrate to v3 on apply.
 reset_lean_home state-versions
 printf 'native\n' > "$HOME/.bashrc"
 apply_attachment
-v1_state="$HOME/.local/state/dotfiles/v2/attached.json"
-v1_identity="$(stat -c '%d:%i' "$v1_state")"
+attached_state="$HOME/.local/state/dotfiles/v2/attached.json"
+v3_identity="$(stat -c '%d:%i' "$attached_state")"
 apply_attachment
-[[ "$(jq -r .version "$v1_state")" == 1 && "$(stat -c '%d:%i' "$v1_state")" == "$v1_identity" ]] ||
-  fail 'version-1 state was migrated or rewritten'
+[[ "$(jq -r .version "$attached_state")" == 3 && "$(stat -c '%d:%i' "$attached_state")" == "$v3_identity" ]] ||
+  fail 'stable version-3 state was rewritten'
+jq '{version:1,profile,area,attachments:(.attachments | map_values({id,origin,before_sha256}))}' \
+  "$attached_state" > "$HOME/v1.json"
+mv -fT "$HOME/v1.json" "$attached_state"
+apply_attachment
+[[ "$(jq -r .version "$attached_state")" == 3 ]] || fail 'version-1 attachment state was not migrated'
 write_fixture_json
 printf 'native\n' > "$HOME/.bashrc.structured"
 register_json_only
 lean_apply_area
+jq '.version = 2' "$HOME/.local/state/dotfiles/v2/json-only.json" > "$HOME/v2.json"
+mv -fT "$HOME/v2.json" "$HOME/.local/state/dotfiles/v2/json-only.json"
 lean_begin_area mixed omarchy packages
-[[ "$(jq -r .version "$v1_state")" == 1 && "$(jq -r .version "$HOME/.local/state/dotfiles/v2/json-only.json")" == 2 ]] ||
-  fail 'mixed valid state versions were not accepted'
+[[ "$(jq -r .version "$attached_state")" == 3 && "$(jq -r .version "$HOME/.local/state/dotfiles/v2/json-only.json")" == 2 ]] ||
+  fail 'prior valid state versions were not accepted'
 cp "$HOME/.local/state/dotfiles/v2/json-only.json" "$TEST_ROOT/v2.valid"
 jq '.profile = "ubuntu"' "$TEST_ROOT/v2.valid" > "$HOME/.local/state/dotfiles/v2/json-only.json"
 expect_direct_failure "existing v2 state uses profile 'ubuntu'" lean_begin_area mixed omarchy packages
 cp "$TEST_ROOT/v2.valid" "$HOME/.local/state/dotfiles/v2/json-only.json"
+register_json_only
+lean_apply_area
+[[ "$(jq -r .version "$HOME/.local/state/dotfiles/v2/json-only.json")" == 3 ]] || fail 'version-2 resource state was not migrated'
 pass
 
-# Version-2 state is strict about its version, keys, field scalar types, pointer
+# Version-3 state is strict about its version, keys, transition hashes, field scalar types, pointer
 # syntax, and required resource set.
+cp "$HOME/.local/state/dotfiles/v2/json-only.json" "$TEST_ROOT/v3.valid"
 for mutation in \
-  '.version = 3' \
+  '.version = 4' \
   '.extra = true' \
   'del(.resources)' \
   '.resources[".config/lean/app.json"].fields["/idle/lock"].original = "300"' \
   '.resources[".config/lean/app.json"].fields["idle/lock"] = .resources[".config/lean/app.json"].fields["/idle/lock"] | del(.resources[".config/lean/app.json"].fields["/idle/lock"])'; do
-  jq "$mutation" "$TEST_ROOT/v2.valid" > "$HOME/.local/state/dotfiles/v2/json-only.json"
+  jq "$mutation" "$TEST_ROOT/v3.valid" > "$HOME/.local/state/dotfiles/v2/json-only.json"
   expect_direct_failure 'malformed or unknown lean deployment state' lean_validate_state_file "$HOME/.local/state/dotfiles/v2/json-only.json"
 done
-cp "$TEST_ROOT/v2.valid" "$HOME/.local/state/dotfiles/v2/json-only.json"
+cp "$TEST_ROOT/v3.valid" "$HOME/.local/state/dotfiles/v2/json-only.json"
+for mutation in \
+  '.attachments[".bashrc"].managed_sha256 = "bad"' \
+  '.attachments[".bashrc"].managed_sha256 = null | .attachments[".bashrc"].pending_sha256 = null' \
+  'del(.attachments[".bashrc"].pending_sha256)'; do
+  jq "$mutation" "$attached_state" > "$HOME/invalid-attached.json"
+  expect_direct_failure 'malformed or unknown lean deployment state' lean_validate_state_file "$HOME/invalid-attached.json"
+done
 pass
 
 # Malformed JSON, caller-rejected schema, wrong registered scalar type, and a

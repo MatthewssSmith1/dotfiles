@@ -96,8 +96,15 @@ class DesktopShortcutsGeneratorTest(unittest.TestCase):
     def test_route_and_source_validation(self):
         self.assert_invalid(lambda data: data["groups"][0].update(prefix="bad key"), "group prefix")
         self.assert_invalid(lambda data: data["shortcuts"][0].update(key="bad-key"), "shortcut key")
-        self.assert_invalid(lambda data: data["groups"][0].update(prefix="Return"), "group prefix")
-        self.assert_invalid(lambda data: data["shortcuts"][0].update(key="underscore"), "shortcut key")
+        for unsupported in ("_", "underscore", "Return", "F1", "dead_acute"):
+            self.assert_invalid(
+                lambda data, value=unsupported: data["groups"][0].update(prefix=value),
+                "group prefix",
+            )
+            self.assert_invalid(
+                lambda data, value=unsupported: data["shortcuts"][0].update(key=value),
+                "shortcut key",
+            )
         for supported in ("space", "a", "Z", "0"):
             candidate = copy.deepcopy(self.manifest)
             candidate["shortcuts"][0]["key"] = supported

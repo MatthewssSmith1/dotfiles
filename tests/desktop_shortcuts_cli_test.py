@@ -44,6 +44,19 @@ def concurrent_add(root, key, started, entered, release, result):
         result.put(repr(error))
 
 
+def concurrent_sync(root, entered, release, result):
+    def hold_sync(_root):
+        entered.set()
+        release.wait(5)
+
+    try:
+        with mock.patch.object(CLI, "_sync", side_effect=hold_sync):
+            CLI.sync(Path(root))
+        result.put(None)
+    except Exception as error:
+        result.put(repr(error))
+
+
 class DesktopShortcutsCliTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -157,6 +170,12 @@ class DesktopShortcutsCliTest(unittest.TestCase):
         self.assertIn("space-q", [item["id"] for item in self.manifest()["shortcuts"]])
         self.assertEqual(subprocess.run([str(self.root / CLI.GENERATOR_REL)]).returncode, 0)
 
+    def test_apply_failure_stderr_reaches_error(self):
+        failed = subprocess.CompletedProcess([], 23, "", "guarded menu conflict\n")
+        with mock.patch.object(CLI.subprocess, "run", return_value=failed):
+            with self.assertRaisesRegex(CLI.ShortcutError, "guarded menu conflict"):
+                CLI.run_checked(["fake-apply"], self.root, capture=True)
+
     def test_concurrent_crud_is_serialized_without_repository_lock_file(self):
         context = multiprocessing.get_context("fork")
         first_started, first_entered = context.Event(), context.Event()
@@ -184,6 +203,35 @@ class DesktopShortcutsCliTest(unittest.TestCase):
         keys = {item["key"] for item in self.manifest()["shortcuts"]}
         self.assertTrue({"x", "y"}.issubset(keys))
         self.assertFalse(CLI.lock_path(self.root).is_relative_to(self.root))
+
+    def test_standalone_sync_serializes_with_crud(self):
+        context = multiprocessing.get_context("fork")
+        sync_entered, crud_started, crud_entered = context.Event(), context.Event(), context.Event()
+        release, results = context.Event(), context.Queue()
+        syncing = context.Process(target=concurrent_sync, args=(self.root, sync_entered, release, results))
+        crud = context.Process(
+            target=concurrent_add,
+            args=(self.root, "x", crud_started, crud_entered, None, results),
+        )
+        syncing.start()
+        self.assertTrue(sync_entered.wait(5))
+        crud.start()
+        self.assertTrue(crud_started.wait(5))
+        self.assertFalse(crud_entered.wait(0.3))
+        release.set()
+        syncing.join(5)
+        crud.join(5)
+        self.assertFalse(syncing.is_alive())
+        self.assertFalse(crud.is_alive())
+        self.assertEqual([results.get(timeout=1), results.get(timeout=1)], [None, None])
+        self.assertIn("x", {item["key"] for item in self.manifest()["shortcuts"]})
+
+    def test_lock_refuses_repository_runtime_directory_without_creating_files(self):
+        runtime = self.root / "runtime"
+        with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": str(runtime)}):
+            with self.assertRaisesRegex(CLI.ShortcutError, "inside repository"):
+                CLI.lock_path(self.root)
+        self.assertFalse(runtime.exists())
 
     def test_manage_cancellation_changes_nothing(self):
         before = self.bytes()
@@ -217,6 +265,10 @@ class DesktopShortcutsCliTest(unittest.TestCase):
             self.assertEqual(self.run_cli("manage")[0], 1)
             self.assertIn("shell IPC failed", notify.call_args.args[0])
             self.assertTrue(notify.call_args.kwargs["failure"])
+        failed_with_cancel_status = subprocess.CompletedProcess([], 1, "", "shell IPC failed\n")
+        with mock.patch.object(CLI.subprocess, "run", return_value=failed_with_cancel_status):
+            with self.assertRaisesRegex(CLI.ShortcutError, "shell IPC failed"):
+                CLI.menu_input("Type")
         with mock.patch.object(CLI.subprocess, "run", side_effect=FileNotFoundError("omarchy")):
             with self.assertRaisesRegex(CLI.ShortcutError, "menu command unavailable"):
                 CLI.menu_input("Type")

@@ -5,15 +5,26 @@
     "id": "shortcuts",
     "icon": "󰌌",
     "label": "Shortcuts",
-    "aliases": ["shortcut", "shortcuts"]
+    "aliases": [
+      "shortcut",
+      "shortcuts"
+    ]
   },
   "binding": {
     "keys": "SUPER + SHIFT + K",
     "description": "Personal shortcuts"
   },
   "groups": [
-    {"id": "general", "name": "General", "prefix": "space"},
-    {"id": "prompts", "name": "Prompts", "prefix": "p"}
+    {
+      "id": "general",
+      "name": "General",
+      "prefix": "space"
+    },
+    {
+      "id": "prompts",
+      "name": "Prompts",
+      "prefix": "p"
+    }
   ],
   "shortcuts": [
     {

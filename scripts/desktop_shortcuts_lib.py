@@ -20,7 +20,7 @@ def output_paths(root=ROOT):
 OUTPUTS = output_paths()
 
 SAFE_SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
-COMPOSE_KEY = re.compile(r"(?:[A-Za-z0-9]|space)")
+SUPPORTED_COMPOSE_KEYS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") | {"space"}
 SOURCES = {"managed", "host", "omarchy"}
 
 
@@ -40,7 +40,7 @@ def _safe_slug(value, description):
 
 
 def _compose_key(value, description):
-    if not isinstance(value, str) or not COMPOSE_KEY.fullmatch(value):
+    if not isinstance(value, str) or value not in SUPPORTED_COMPOSE_KEYS:
         raise ValueError(f"invalid {description}; use 'space' or one ASCII letter/digit")
 
 

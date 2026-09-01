@@ -233,13 +233,86 @@ read -r old_host old_home < <(prepare_native_desktop old-state-expansion)
 expect_success "$old_home" "$old_host" "$DOTFILES" apply desktop
 old_state="$old_home/.local/state/dotfiles/v2/desktop.json"
 cp "$old_host/usr/share/omarchy/config/omarchy/extensions/omarchy-menu.jsonc" "$old_home/$MENU_REL"
-jq 'del(.attachments[".config/omarchy/extensions/omarchy-menu.jsonc"])' "$old_state" > "$old_home/old-state.json"
+jq '.version = 2 | .attachments |= map_values({id,origin,before_sha256}) |
+  del(.attachments[".config/omarchy/extensions/omarchy-menu.jsonc"])' "$old_state" > "$old_home/old-state.json"
 mv -fT "$old_home/old-state.json" "$old_state"
 expect_failure 'attachment set differs' "$old_home" "$old_host" "$DOTFILES" check desktop
 expect_failure 'attachment set differs' "$old_home" "$old_host" "$DOTFILES" remove desktop
 expect_success "$old_home" "$old_host" "$DOTFILES" apply desktop
-jq -e '.version == 2 and (.attachments | length) == 4' "$old_state" >/dev/null || fail 'apply did not expand old desktop state'
+jq -e '.version == 3 and (.attachments | length) == 4' "$old_state" >/dev/null || fail 'apply did not expand old desktop state'
 expect_success "$old_home" "$old_host" "$DOTFILES" check desktop
+pass
+
+# An exactly generated version-1 menu remains owned drift: check reports it,
+# apply upgrades only its managed block, and unrelated bytes survive.
+legacy_menu_repo="$(copy_repo_fixture desktop-legacy-menu)"
+read -r legacy_menu_host legacy_menu_home < <(prepare_native_desktop legacy-menu)
+expect_success "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" apply desktop
+legacy_menu_state="$legacy_menu_home/.local/state/dotfiles/v2/desktop.json"
+jq '.version = 2 | .attachments |= map_values({id,origin,before_sha256})' "$legacy_menu_state" > "$legacy_menu_home/v2-state.json"
+mv -fT "$legacy_menu_home/v2-state.json" "$legacy_menu_state"
+cat > "$legacy_menu_home/$MENU_REL" <<'JSONC'
+{
+  // >>> dotfiles desktop menu theme >>>
+  "style.theme": {"icon":"󰸌","label":"Theme","aliases":["theme","themes"],"action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""},
+  "shortcuts": {"icon":"󰌌","label":"Shortcuts","aliases":["shortcut","shortcuts"]},
+  "shortcuts.space": {"label":"Space"},
+  "shortcuts.space.a": {"label":"a · AGENTS.md","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" space-a"},
+  "shortcuts.prompts": {"label":"p · Prompts"},
+  "shortcuts.prompts.b": {"label":"b · Continue briefly","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-b"},
+  "shortcuts.prompts.d": {"label":"d · Discuss unresolved points","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-d"},
+  "shortcuts.prompts.t": {"label":"t · Ask for recommendation","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-t"},
+  // <<< dotfiles desktop menu theme <<<
+  "unrelated.keep": {"action":"keep"}
+}
+JSONC
+cp -a "$legacy_menu_home/$MENU_REL" "$TEST_ROOT/legacy-menu.exact"
+legacy_generated_menu="$legacy_menu_repo/packages/omarchy/desktop/$MENU_FRAGMENT_REL"
+cp -a "$legacy_generated_menu" "$TEST_ROOT/legacy-generated-menu.valid"
+sed -i 's/AGENTS.md/Tampered generated target/' "$legacy_generated_menu"
+legacy_live_hash="$(sha256sum "$legacy_menu_home/$MENU_REL")"
+DOTFILES_SHORTCUTS_MIGRATE_STATE=1 capture "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" apply desktop
+((TEST_RC != 0)) || fail 'legacy live attachment activated stale-generator migration relaxation'
+assert_contains "$TEST_OUTPUT" 'desktop shortcut generated files are stale'
+[[ "$(sha256sum "$legacy_menu_home/$MENU_REL")" == "$legacy_live_hash" ]] ||
+  fail 'legacy stale-generator misuse changed the live menu'
+cp -a "$TEST_ROOT/legacy-generated-menu.valid" "$legacy_generated_menu"
+expect_failure 'differs from the current managed version' "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" check desktop
+expect_success "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" apply desktop
+grep -Fq '"shortcuts.manage"' "$legacy_menu_home/$MENU_REL" || fail 'legacy menu was not upgraded'
+grep -Fq '"unrelated.keep"' "$legacy_menu_home/$MENU_REL" || fail 'legacy menu upgrade lost unrelated content'
+expect_success "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" check desktop
+cp "$TEST_ROOT/legacy-menu.exact" "$legacy_menu_home/$MENU_REL"
+sed -i 's/"label":"Space"/"label":"Changed"/' "$legacy_menu_home/$MENU_REL"
+cp -a "$legacy_menu_home/$MENU_REL" "$TEST_ROOT/legacy-menu.modified"
+expect_failure 'partial, malformed, duplicate, or modified' "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" apply desktop
+assert_same "$legacy_menu_home/$MENU_REL" "$TEST_ROOT/legacy-menu.modified"
+pass
+
+# Exact known legacy menu content with ownership state is removable directly.
+read -r legacy_remove_host legacy_remove_home < <(prepare_native_desktop legacy-menu-remove)
+expect_success "$legacy_remove_home" "$legacy_remove_host" "$DOTFILES" apply desktop
+legacy_remove_state="$legacy_remove_home/.local/state/dotfiles/v2/desktop.json"
+jq '.version = 2 | .attachments |= map_values({id,origin,before_sha256})' "$legacy_remove_state" > "$legacy_remove_home/v2-state.json"
+mv -fT "$legacy_remove_home/v2-state.json" "$legacy_remove_state"
+cat > "$legacy_remove_home/$MENU_REL" <<'JSONC'
+{
+  // >>> dotfiles desktop menu theme >>>
+  "style.theme": {"icon":"󰸌","label":"Theme","aliases":["theme","themes"],"action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""},
+  "shortcuts": {"icon":"󰌌","label":"Shortcuts","aliases":["shortcut","shortcuts"]},
+  "shortcuts.space": {"label":"Space"},
+  "shortcuts.space.a": {"label":"a · AGENTS.md","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" space-a"},
+  "shortcuts.prompts": {"label":"p · Prompts"},
+  "shortcuts.prompts.b": {"label":"b · Continue briefly","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-b"},
+  "shortcuts.prompts.d": {"label":"d · Discuss unresolved points","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-d"},
+  "shortcuts.prompts.t": {"label":"t · Ask for recommendation","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-t"},
+  // <<< dotfiles desktop menu theme <<<
+  "unrelated.legacy-remove": {"action":"keep"}
+}
+JSONC
+expect_success "$legacy_remove_home" "$legacy_remove_host" "$DOTFILES" remove desktop
+grep -Fq '"unrelated.legacy-remove"' "$legacy_remove_home/$MENU_REL" || fail 'legacy menu removal lost unrelated content'
+! grep -Fq "$MENU_BEGIN" "$legacy_remove_home/$MENU_REL" || fail 'legacy menu removal retained managed markers'
 pass
 
 # Native XCompose with Omarchy's include/name/email must remain a regular host
@@ -340,7 +413,7 @@ expect_success "$home" "$native" "$DOTFILES" apply desktop
 state="$home/.local/state/dotfiles/v2/desktop.json"
 assert_file "$state"
 jq -e '
-  .version == 2 and .area == "desktop" and .profile == "omarchy" and
+  .version == 3 and .area == "desktop" and .profile == "omarchy" and
   (.attachments | keys) == [".XCompose", ".config/hypr/bindings.lua", ".config/hypr/input.lua", ".config/omarchy/extensions/omarchy-menu.jsonc"] and
   .resources[".config/omarchy/shell.json"].fields["/idle/screensaver"].original == 150 and
   .resources[".config/omarchy/shell.json"].fields["/idle/lock"].original == 300
@@ -519,7 +592,7 @@ for retained in links markers; do
   fi
   input_before="$(sha256sum "$lost_home/$INPUT_REL")"
   xcompose_before="$(sha256sum "$lost_home/$XCOMPOSE_REL")"
-  expect_failure 'lean ownership state is absent' "$lost_home" "$lost_host" "$DOTFILES" remove desktop
+  expect_failure 'partial, malformed, duplicate, or modified' "$lost_home" "$lost_host" "$DOTFILES" remove desktop
   [[ "$(sha256sum "$lost_home/$INPUT_REL")" == "$input_before" &&
     "$(sha256sum "$lost_home/$XCOMPOSE_REL")" == "$xcompose_before" ]] ||
     fail "missing-state $retained removal changed guarded files"
@@ -862,6 +935,101 @@ after="$(find "$ubuntu_home" -mindepth 1 -printf '%P\n')"
 expect_success "$ubuntu_home" "$ubuntu" "$DOTFILES" remove
 [[ ! -e "$ubuntu_home/.local/state/dotfiles/v2/desktop.json" ]] || fail 'Ubuntu default remove invented desktop state'
 assert_not_contains "$TEST_OUTPUT" 'desktop'
+pass
+
+# The real shortcuts CLI repeatedly evolves generated menu content against an
+# isolated deployed desktop. Hashless v2 state bootstraps before repository
+# mutation; every apply/check converges and removal restores unrelated bytes.
+shortcuts_repo="$(copy_repo_fixture desktop-shortcuts-cli)"
+read -r shortcuts_host shortcuts_home < <(prepare_native_desktop shortcuts-cli)
+printf '%s\n' '{' '  "unrelated.cli": {"action":"preserve"}' '}' > "$shortcuts_home/$MENU_REL"
+cp -a "$shortcuts_home/$MENU_REL" "$TEST_ROOT/shortcuts-cli-menu.original"
+expect_success "$shortcuts_home" "$shortcuts_host" "$shortcuts_repo/dotfiles.sh" apply desktop
+shortcuts_state="$shortcuts_home/.local/state/dotfiles/v2/desktop.json"
+jq '.version = 2 | .attachments |= map_values({id,origin,before_sha256})' "$shortcuts_state" > "$shortcuts_home/hashless-state.json"
+mv -fT "$shortcuts_home/hashless-state.json" "$shortcuts_state"
+shortcuts_bin="$TEST_ROOT/shortcuts-cli-bin"
+mkdir "$shortcuts_bin"
+cp "$REPO_DIR/tests/fixtures/fake-stow" "$shortcuts_bin/stow"
+cat > "$shortcuts_bin/omarchy" <<'SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SCRIPT
+cat > "$shortcuts_bin/hyprctl" <<'SCRIPT'
+#!/usr/bin/env bash
+exit 0
+SCRIPT
+chmod 0755 "$shortcuts_bin/stow" "$shortcuts_bin/omarchy" "$shortcuts_bin/hyprctl"
+shortcuts_runtime="$TEST_ROOT/shortcuts-runtime"
+mkdir "$shortcuts_runtime"
+chmod 0700 "$shortcuts_runtime"
+run_shortcuts_cli() {
+  local output
+  if ! output="$(HOME="$shortcuts_home" PATH="$shortcuts_bin:$PATH" XDG_RUNTIME_DIR="$shortcuts_runtime" \
+    DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$shortcuts_host" FAKE_STOW_TRACE="$FAKE_STOW_TRACE" \
+    "$shortcuts_repo/scripts/dotfiles-shortcuts" "$@" 2>&1)"; then
+    TEST_OUTPUT="$output"
+    fail "desktop shortcuts CLI failed: $*"
+  fi
+}
+jq '.groups += [{"id":"manual-sync","name":"Manual sync","prefix":"m"}]' \
+  "$shortcuts_repo/manifests/desktop-shortcuts.json" > "$shortcuts_repo/manifests/manual-sync.json"
+mv -fT "$shortcuts_repo/manifests/manual-sync.json" "$shortcuts_repo/manifests/desktop-shortcuts.json"
+if "$shortcuts_repo/scripts/generate-desktop-shortcuts" >/dev/null 2>&1; then fail 'manual manifest edit did not make generated files stale'; fi
+run_shortcuts_cli sync
+grep -Fq '"shortcuts.manual-sync": {"label":"Manual sync (m)"}' "$shortcuts_home/$MENU_REL" ||
+  fail 'standalone sync did not migrate hashless state before generated changes'
+jq '.shortcuts += [{"id":"m-x","group":"manual-sync","key":"x","label":"x · Pending","source":"managed","output":"pending"}]' \
+  "$shortcuts_repo/manifests/desktop-shortcuts.json" > "$shortcuts_repo/manifests/pending.json"
+mv -fT "$shortcuts_repo/manifests/pending.json" "$shortcuts_repo/manifests/desktop-shortcuts.json"
+"$shortcuts_repo/scripts/generate-desktop-shortcuts" --write
+pending_hold="$TEST_ROOT/shortcuts-pending-hold"
+mkdir "$pending_hold"
+HOME="$shortcuts_home" PATH="$shortcuts_bin:$PATH" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$shortcuts_host" \
+  DOTFILES_TEST_HOLD_AT=lean-before-final-state-write DOTFILES_TEST_HOLD_DIR="$pending_hold" FAKE_STOW_TRACE="$FAKE_STOW_TRACE" \
+  "$shortcuts_repo/dotfiles.sh" apply desktop > "$TEST_ROOT/shortcuts-pending.log" 2>&1 &
+child=$!
+wait_for_file "$pending_hold/lean-before-final-state-write.ready"
+grep -Fq '"shortcuts.manual-sync.x": {"label":"x · Pending"' "$shortcuts_home/$MENU_REL" ||
+  fail 'pending desktop apply did not publish generated target'
+jq -e '.version == 3 and
+  (.attachments[".config/omarchy/extensions/omarchy-menu.jsonc"].pending_sha256 | test("^[0-9a-f]{64}$"))' \
+  "$shortcuts_state" >/dev/null || fail 'pending desktop transition was not durable'
+kill -TERM "$child"
+: > "$pending_hold/lean-before-final-state-write.release"
+if wait "$child"; then fail 'pending desktop apply unexpectedly completed'; fi
+jq '(.shortcuts[] | select(.id == "m-x")) |= (.label = "x · Recovered" | .output = "recovered")' \
+  "$shortcuts_repo/manifests/desktop-shortcuts.json" > "$shortcuts_repo/manifests/recovered.json"
+mv -fT "$shortcuts_repo/manifests/recovered.json" "$shortcuts_repo/manifests/desktop-shortcuts.json"
+if "$shortcuts_repo/scripts/generate-desktop-shortcuts" >/dev/null 2>&1; then fail 'pending recovery manifest did not leave generated files stale'; fi
+run_shortcuts_cli sync
+grep -Fq '"shortcuts.manual-sync.x": {"label":"x · Recovered"' "$shortcuts_home/$MENU_REL" ||
+  fail 'standalone sync did not advance a pending v3 transition'
+jq -e 'all(.attachments[]; .pending_sha256 == null)' "$shortcuts_state" >/dev/null ||
+  fail 'standalone sync did not settle pending v3 state'
+shortcuts_generated_menu="$shortcuts_repo/packages/omarchy/desktop/$MENU_FRAGMENT_REL"
+cp -a "$shortcuts_generated_menu" "$TEST_ROOT/shortcuts-generated-menu.valid"
+sed -i 's/Manual sync (m)/Tampered generated menu/' "$shortcuts_generated_menu"
+shortcuts_live_hash="$(sha256sum "$shortcuts_home/$MENU_REL")"
+DOTFILES_SHORTCUTS_MIGRATE_STATE=1 capture "$shortcuts_home" "$shortcuts_host" "$shortcuts_repo/dotfiles.sh" apply desktop
+((TEST_RC != 0)) || fail 'caller-controlled migration flag bypassed v3 generated-file validation'
+assert_contains "$TEST_OUTPUT" 'desktop shortcut generated files are stale'
+[[ "$(sha256sum "$shortcuts_home/$MENU_REL")" == "$shortcuts_live_hash" ]] ||
+  fail 'migration flag misuse changed the live v3 menu'
+cp -a "$TEST_ROOT/shortcuts-generated-menu.valid" "$shortcuts_generated_menu"
+run_shortcuts_cli group add --name Snippets --prefix s --id snippets
+run_shortcuts_cli add --group snippets --key x --label 'x · First' --text first
+run_shortcuts_cli group rename snippets --name 'Changed snippets'
+run_shortcuts_cli edit s-x --label 'x · Second' --text second
+expect_success "$shortcuts_home" "$shortcuts_host" "$shortcuts_repo/dotfiles.sh" check desktop
+grep -Fq '"shortcuts.snippets.x": {"label":"x · Second"' "$shortcuts_home/$MENU_REL" ||
+  fail 'repeated CLI evolution did not deploy the final generated menu'
+grep -Fq '"unrelated.cli"' "$shortcuts_home/$MENU_REL" || fail 'CLI evolution lost unrelated menu content'
+jq -e '.version == 3 and all(.attachments[];
+  (.managed_sha256 | test("^[0-9a-f]{64}$")) and .pending_sha256 == null)' "$shortcuts_state" >/dev/null ||
+  fail 'CLI evolution did not migrate attachment hashes'
+expect_success "$shortcuts_home" "$shortcuts_host" "$shortcuts_repo/dotfiles.sh" remove desktop
+assert_same "$shortcuts_home/$MENU_REL" "$TEST_ROOT/shortcuts-cli-menu.original"
 pass
 
 # Default selection includes Ubuntu validation and native desktop ownership;

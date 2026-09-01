@@ -15,10 +15,16 @@ LEAN_ATTACHMENT_BEGINS=()
 LEAN_ATTACHMENT_ENDS=()
 LEAN_ATTACHMENT_TOKENS=()
 LEAN_ATTACHMENT_BLOCKS=()
+LEAN_ATTACHMENT_LEGACY_BLOCKS=()
 LEAN_ATTACHMENT_PLACEMENTS=()
 LEAN_ATTACHMENT_MODES=()
 LEAN_ATTACHMENT_ORIGINS=()
 LEAN_ATTACHMENT_BEFORE_HASHES=()
+LEAN_ATTACHMENT_MANAGED_HASHES=()
+LEAN_ATTACHMENT_PENDING_HASHES=()
+LEAN_ATTACHMENT_PREFLIGHT_STATUSES=()
+LEAN_ATTACHMENT_PREFLIGHT_IDENTITIES=()
+LEAN_ATTACHMENT_PREFLIGHT_HASHES=()
 LEAN_ATTACHMENT_REFRESHES=()
 LEAN_ATTACHMENT_ANCHORS=()
 LEAN_JSON_IDS=()
@@ -232,7 +238,7 @@ lean_validate_state_file() {
   [[ -f "$file" && ! -L "$file" ]] || die "lean deployment state is not a regular file: $file"
   [[ "$(stat -c %u -- "$file")" == "$EUID" ]] || die "lean deployment state has an unsafe owner: $file"
   jq -e '
-    def attachment_map($allow_empty):
+    def old_attachment_map($allow_empty):
       type == "object" and ($allow_empty or length > 0) and all(to_entries[];
       (.key | type == "string" and length > 0) and
       (.value | type == "object" and keys == ["before_sha256","id","origin"]) and
@@ -241,6 +247,17 @@ lean_validate_state_file() {
        .value.origin == "existing-final-newline" or .value.origin == "existing-no-final-newline") and
        (.value.before_sha256 == null or
         (.value.before_sha256 | type == "string" and test("^[0-9a-f]{64}$"))));
+    def hash_or_null: . == null or (type == "string" and test("^[0-9a-f]{64}$"));
+    def v3_attachment_map:
+      type == "object" and all(to_entries[];
+      (.key | type == "string" and length > 0) and
+      (.value | type == "object" and keys == ["before_sha256","id","managed_sha256","origin","pending_sha256"]) and
+      (.value.id | type == "string" and test("^[a-z0-9][a-z0-9.-]*$")) and
+      (.value.origin == "created" or .value.origin == "existing-empty" or
+       .value.origin == "existing-final-newline" or .value.origin == "existing-no-final-newline") and
+      (.value.before_sha256 | hash_or_null) and (.value.managed_sha256 | hash_or_null) and
+      (.value.pending_sha256 | hash_or_null) and
+      (.value.managed_sha256 != null or .value.pending_sha256 != null));
     def scalar_type($kind):
       if $kind == "integer" then type == "number" and floor == .
       elif $kind == "number" then type == "number"
@@ -248,15 +265,8 @@ lean_validate_state_file() {
       elif $kind == "boolean" then type == "boolean"
       elif $kind == "null" then . == null
       else false end;
-    def base:
-      (.area | type == "string" and test("^[a-z0-9-]+$")) and
-      (.profile == "omarchy" or .profile == "ubuntu");
-    type == "object" and base and
-    ((keys == ["area","attachments","profile","version"] and .version == 1 and
-      (.attachments | attachment_map(false))) or
-     (keys == ["area","attachments","profile","resources","version"] and .version == 2 and
-      (.attachments | attachment_map(true)) and
-      (.resources | type == "object" and length > 0 and all(to_entries[];
+    def resource_map($allow_empty):
+      type == "object" and ($allow_empty or length > 0) and all(to_entries[];
         (.key | type == "string" and length > 0) and
         (.value | type == "object" and keys == ["fields","id","kind"]) and
         .value.kind == "json-scalar-fields" and
@@ -268,13 +278,24 @@ lean_validate_state_file() {
            .value.type == "boolean" or .value.type == "null") and
           (.value.type as $field_type |
             (.value.managed | scalar_type($field_type)) and
-            (.value.original | scalar_type($field_type)))))))))
+            (.value.original | scalar_type($field_type))))));
+    def base:
+      (.area | type == "string" and test("^[a-z0-9-]+$")) and
+      (.profile == "omarchy" or .profile == "ubuntu");
+    type == "object" and base and
+    ((keys == ["area","attachments","profile","version"] and .version == 1 and
+      (.attachments | old_attachment_map(false))) or
+     (keys == ["area","attachments","profile","resources","version"] and .version == 2 and
+      (.attachments | old_attachment_map(true)) and (.resources | resource_map(false))) or
+     (keys == ["area","attachments","profile","resources","version"] and .version == 3 and
+      ((.attachments | length) + (.resources | length) > 0) and
+      (.attachments | v3_attachment_map) and (.resources | resource_map(true))))
   ' "$file" >/dev/null || die "malformed or unknown lean deployment state: $file"
   [[ "${file##*/}" == "$(jq -r .area "$file").json" ]] || die "lean state area does not match filename: $file"
   while IFS= read -r value; do
     safe_relative_path "$value" || die "unsafe attachment path in lean state: $value"
   done < <(jq -r '.attachments | keys[]' "$file")
-  if [[ "$(jq -r .version "$file")" == 2 ]]; then
+  if [[ "$(jq -r .version "$file")" != 1 ]]; then
     while IFS= read -r value; do
       safe_relative_path "$value" || die "unsafe JSON resource path in lean state: $value"
     done < <(jq -r '.resources | keys[]' "$file")
@@ -315,10 +336,16 @@ lean_begin_area() {
   LEAN_ATTACHMENT_ENDS=()
   LEAN_ATTACHMENT_TOKENS=()
   LEAN_ATTACHMENT_BLOCKS=()
+  LEAN_ATTACHMENT_LEGACY_BLOCKS=()
   LEAN_ATTACHMENT_PLACEMENTS=()
   LEAN_ATTACHMENT_MODES=()
   LEAN_ATTACHMENT_ORIGINS=()
   LEAN_ATTACHMENT_BEFORE_HASHES=()
+  LEAN_ATTACHMENT_MANAGED_HASHES=()
+  LEAN_ATTACHMENT_PENDING_HASHES=()
+  LEAN_ATTACHMENT_PREFLIGHT_STATUSES=()
+  LEAN_ATTACHMENT_PREFLIGHT_IDENTITIES=()
+  LEAN_ATTACHMENT_PREFLIGHT_HASHES=()
   LEAN_ATTACHMENT_REFRESHES=()
   LEAN_ATTACHMENT_ANCHORS=()
   LEAN_JSON_IDS=()
@@ -331,6 +358,9 @@ lean_begin_area() {
   LEAN_JSON_FIELD_MANAGED=()
   LEAN_JSON_FIELD_ORIGINALS=()
   LEAN_TARGET_OWNER=()
+  LEAN_APPLY_STATE_IDENTITY=""
+  LEAN_APPLY_STATE_HASH=""
+  LEAN_APPLY_STATE_EXPECTED=false
   lean_refuse_v1_state
   lean_validate_all_state
 }
@@ -345,7 +375,7 @@ lean_add_package() {
 
 lean_add_guarded_attachment() {
   local id="$1" relative="$2" begin="$3" end="$4" token="$5" block="$6"
-  local placement="$7" mode="$8" refresh="${9:-false}" anchor="${10:-}" existing
+  local placement="$7" mode="$8" refresh="${9:-false}" anchor="${10:-}" legacy="${11:-}" existing
   [[ "$LEAN_ENTRY_KIND" == packages ]] || die 'validation-only areas cannot register attachments'
   [[ "$id" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || die "invalid attachment ID: $id"
   safe_relative_path "$relative" || die "unsafe guarded attachment path: $relative"
@@ -358,6 +388,8 @@ lean_add_guarded_attachment() {
   [[ -n "$begin" && -n "$end" && -n "$token" && "$begin" != "$end" &&
     "$begin" == *"$token"* && "$end" == *"$token"* &&
     "$block" == "$begin"$'\n'* && "$block" == *$'\n'"$end" ]] || die 'invalid guarded attachment definition'
+  [[ -z "$legacy" || ( "$legacy" != "$block" && "$legacy" == "$begin"$'\n'* && "$legacy" == *$'\n'"$end" ) ]] ||
+    die 'invalid guarded attachment legacy definition'
   for existing in "${LEAN_ATTACHMENT_PATHS[@]:-}" "${LEAN_JSON_PATHS[@]:-}"; do
     [[ -n "$existing" ]] || continue
     [[ "$existing" != "$relative" ]] || die "duplicate guarded attachment path: $relative"
@@ -368,6 +400,7 @@ lean_add_guarded_attachment() {
   LEAN_ATTACHMENT_ENDS+=("$end")
   LEAN_ATTACHMENT_TOKENS+=("$token")
   LEAN_ATTACHMENT_BLOCKS+=("$block")
+  LEAN_ATTACHMENT_LEGACY_BLOCKS+=("$legacy")
   LEAN_ATTACHMENT_PLACEMENTS+=("$placement")
   LEAN_ATTACHMENT_MODES+=("$mode")
   LEAN_ATTACHMENT_REFRESHES+=("$refresh")
@@ -502,11 +535,12 @@ lean_run_stow_preflight() {
 
 lean_inspect_attachment() {
   local index="$1" path line inside=false line_number=0 anchor_line=0 begin_line=0
-  local begin_count=0 end_count=0 anchor_count=0 found=""
+  local begin_count=0 end_count=0 anchor_count=0 found="" found_hash="" managed="" pending="" version="" state_has=false
   path="$HOME/${LEAN_ATTACHMENT_PATHS[index]}"
   LEAN_ATTACHMENT_STATUS=absent
   LEAN_ATTACHMENT_CURRENT_ORIGIN=created
   LEAN_ATTACHMENT_CURRENT_HASH=""
+  LEAN_ATTACHMENT_FOUND_BLOCK=""
   if [[ ! -e "$path" && ! -L "$path" ]]; then return 0; fi
   [[ -f "$path" && ! -L "$path" ]] || die "guarded attachment is not a regular file: $path"
   [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "guarded attachment has an unsafe owner: $path"
@@ -541,11 +575,36 @@ lean_inspect_attachment() {
     LEAN_ATTACHMENT_STATUS=malformed
   elif ((begin_count == 0)); then
     LEAN_ATTACHMENT_STATUS=absent
-  elif [[ "$found" == "${LEAN_ATTACHMENT_BLOCKS[index]}" ]]; then
-    LEAN_ATTACHMENT_STATUS=exact
   else
-    LEAN_ATTACHMENT_STATUS=malformed
+    found_hash="$(sha256_string "$found")"
+    if [[ -f "$LEAN_STATE" ]]; then
+      version="$(jq -r '.version' "$LEAN_STATE" 2>/dev/null)"
+      if jq -e --arg path "${LEAN_ATTACHMENT_PATHS[index]}" '.attachments | has($path)' "$LEAN_STATE" >/dev/null 2>&1; then
+        state_has=true
+        if [[ "$version" == 3 ]]; then
+          managed="$(jq -r --arg path "${LEAN_ATTACHMENT_PATHS[index]}" '.attachments[$path].managed_sha256 // ""' "$LEAN_STATE")"
+          pending="$(jq -r --arg path "${LEAN_ATTACHMENT_PATHS[index]}" '.attachments[$path].pending_sha256 // ""' "$LEAN_STATE")"
+        fi
+      fi
+    fi
+    if [[ "$found" == "${LEAN_ATTACHMENT_BLOCKS[index]}" && "$managed" == "$found_hash" ]]; then
+      LEAN_ATTACHMENT_STATUS=exact
+    elif [[ "$found" == "${LEAN_ATTACHMENT_BLOCKS[index]}" && "$pending" == "$found_hash" ]]; then
+      LEAN_ATTACHMENT_STATUS=pending
+    elif [[ "$found" == "${LEAN_ATTACHMENT_BLOCKS[index]}" && "$state_has" == true && "$version" != 3 ]]; then
+      LEAN_ATTACHMENT_STATUS=hashless
+    elif [[ "$state_has" == true && "$version" != 3 && -n "${LEAN_ATTACHMENT_LEGACY_BLOCKS[index]}" &&
+      "$found" == "${LEAN_ATTACHMENT_LEGACY_BLOCKS[index]}" ]]; then
+      LEAN_ATTACHMENT_STATUS=legacy
+    elif [[ -n "$pending" && "$pending" == "$found_hash" ]]; then
+      LEAN_ATTACHMENT_STATUS=transitioned
+    elif [[ -n "$managed" && "$managed" == "$found_hash" ]]; then
+      LEAN_ATTACHMENT_STATUS=deployed
+    else
+      LEAN_ATTACHMENT_STATUS=malformed
+    fi
   fi
+  LEAN_ATTACHMENT_FOUND_BLOCK="$found"
 }
 
 lean_state_attachment_field() {
@@ -554,9 +613,15 @@ lean_state_attachment_field() {
 }
 
 lean_preflight_attachments() {
-  local mode="$1" index relative recorded_id recorded_origin recorded_hash state_count state_path registered state_has
+  local mode="$1" index relative path recorded_id recorded_origin recorded_hash state_count state_path registered state_has
+  local state_version managed pending desired_hash found_hash
   LEAN_ATTACHMENT_ORIGINS=()
   LEAN_ATTACHMENT_BEFORE_HASHES=()
+  LEAN_ATTACHMENT_MANAGED_HASHES=()
+  LEAN_ATTACHMENT_PENDING_HASHES=()
+  LEAN_ATTACHMENT_PREFLIGHT_STATUSES=()
+  LEAN_ATTACHMENT_PREFLIGHT_IDENTITIES=()
+  LEAN_ATTACHMENT_PREFLIGHT_HASHES=()
   if [[ -f "$LEAN_STATE" ]]; then
     state_count="$(jq '.attachments | length' "$LEAN_STATE")"
     if ((state_count != ${#LEAN_ATTACHMENT_PATHS[@]})); then
@@ -571,10 +636,19 @@ lean_preflight_attachments() {
   fi
   for index in "${!LEAN_ATTACHMENT_PATHS[@]}"; do
     relative="${LEAN_ATTACHMENT_PATHS[index]}"
+    path="$HOME/$relative"
     lean_inspect_attachment "$index"
     [[ "$LEAN_ATTACHMENT_STATUS" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $HOME/$relative"
+    capture_path_object_identity "$path" || die "could not inspect guarded attachment identity: $path"
+    [[ "$PATH_OBJECT_IDENTITY" == absent || "$(sha256_file "$path")" == "$LEAN_ATTACHMENT_CURRENT_HASH" ]] ||
+      die "guarded attachment changed during preflight: $path"
+    LEAN_ATTACHMENT_PREFLIGHT_STATUSES+=("$LEAN_ATTACHMENT_STATUS")
+    LEAN_ATTACHMENT_PREFLIGHT_IDENTITIES+=("$PATH_OBJECT_IDENTITY")
+    LEAN_ATTACHMENT_PREFLIGHT_HASHES+=("$LEAN_ATTACHMENT_CURRENT_HASH")
     state_has=false
     if [[ -f "$LEAN_STATE" ]] && jq -e --arg path "$relative" '.attachments | has($path)' "$LEAN_STATE" >/dev/null; then state_has=true; fi
+    [[ "$LEAN_ATTACHMENT_STATUS" != legacy || ( ( "$mode" == apply || "$mode" == remove ) && "$state_has" == true ) ]] ||
+      die "guarded attachment differs from the current managed version: $HOME/$relative"
     if [[ "$state_has" == true ]]; then
       recorded_id="$(lean_state_attachment_field "$relative" id)" || die "lean state is missing attachment ownership: $relative"
       recorded_origin="$(lean_state_attachment_field "$relative" origin)"
@@ -582,9 +656,32 @@ lean_preflight_attachments() {
       [[ "$recorded_id" == "${LEAN_ATTACHMENT_IDS[index]}" ]] || die "lean attachment identity changed: $relative"
       LEAN_ATTACHMENT_ORIGINS+=("$recorded_origin")
       LEAN_ATTACHMENT_BEFORE_HASHES+=("$recorded_hash")
+      state_version="$(jq -r '.version' "$LEAN_STATE")"
+      managed=""; pending=""
+      if [[ "$state_version" == 3 ]]; then
+        managed="$(jq -r --arg path "$relative" '.attachments[$path].managed_sha256 // ""' "$LEAN_STATE")"
+        pending="$(jq -r --arg path "$relative" '.attachments[$path].pending_sha256 // ""' "$LEAN_STATE")"
+      fi
+      desired_hash="$(sha256_string "${LEAN_ATTACHMENT_BLOCKS[index]}")"
+      found_hash="$(sha256_string "$LEAN_ATTACHMENT_FOUND_BLOCK")"
+      case "$LEAN_ATTACHMENT_STATUS" in
+        hashless) managed="$desired_hash"; pending="" ;;
+        legacy) managed="$found_hash"; [[ "$mode" != apply ]] || pending="$desired_hash" ;;
+        deployed) [[ "$mode" != apply ]] || pending="$desired_hash" ;;
+        transitioned) managed="$found_hash"; [[ "$mode" != apply ]] || pending="$desired_hash" ;;
+        absent) [[ "$mode" != apply ]] || pending="$desired_hash" ;;
+      esac
+      LEAN_ATTACHMENT_MANAGED_HASHES+=("$managed")
+      LEAN_ATTACHMENT_PENDING_HASHES+=("$pending")
       if [[ "$mode" == remove ]]; then
-        [[ "$LEAN_ATTACHMENT_STATUS" == exact || ( "$LEAN_ATTACHMENT_STATUS" == absent && ! -e "$HOME/$relative" && ! -L "$HOME/$relative" ) ]] ||
+        [[ "$LEAN_ATTACHMENT_STATUS" == exact || "$LEAN_ATTACHMENT_STATUS" == deployed ||
+          "$LEAN_ATTACHMENT_STATUS" == pending || "$LEAN_ATTACHMENT_STATUS" == transitioned ||
+          "$LEAN_ATTACHMENT_STATUS" == hashless || "$LEAN_ATTACHMENT_STATUS" == legacy ||
+          ( "$LEAN_ATTACHMENT_STATUS" == absent && ! -e "$HOME/$relative" && ! -L "$HOME/$relative" ) ]] ||
           die "recorded guarded attachment is modified or absent from a retained file: $HOME/$relative"
+      elif [[ "$LEAN_ATTACHMENT_STATUS" == deployed || "$LEAN_ATTACHMENT_STATUS" == pending ||
+        "$LEAN_ATTACHMENT_STATUS" == transitioned || "$LEAN_ATTACHMENT_STATUS" == legacy ]]; then
+        [[ "$mode" == apply ]] || die "guarded attachment differs from the current managed version: $HOME/$relative"
       elif [[ "$LEAN_ATTACHMENT_STATUS" == absent ]]; then
         [[ "$mode" == apply ]] || die "recorded guarded attachment is absent: $HOME/$relative"
         if [[ "${LEAN_ATTACHMENT_REFRESHES[index]}" == true ]]; then
@@ -600,6 +697,8 @@ lean_preflight_attachments() {
       [[ "$LEAN_ATTACHMENT_STATUS" == absent ]] || die "exact guarded attachment exists without v2 ownership state: $HOME/$relative"
       LEAN_ATTACHMENT_ORIGINS+=("$LEAN_ATTACHMENT_CURRENT_ORIGIN")
       LEAN_ATTACHMENT_BEFORE_HASHES+=("$LEAN_ATTACHMENT_CURRENT_HASH")
+      LEAN_ATTACHMENT_MANAGED_HASHES+=("")
+      LEAN_ATTACHMENT_PENDING_HASHES+=("$(sha256_string "${LEAN_ATTACHMENT_BLOCKS[index]}")")
     fi
   done
 }
@@ -637,7 +736,8 @@ lean_preflight_json_resources() {
   LEAN_JSON_STATUSES=()
   ((${#LEAN_JSON_PATHS[@]} > 0)) || return 0
   if [[ -f "$LEAN_STATE" ]]; then
-    [[ "$(jq -r .version "$LEAN_STATE")" == 2 ]] || die "lean state has no JSON resource ownership for area '$LEAN_AREA'"
+    [[ "$(jq -r .version "$LEAN_STATE")" == 2 || "$(jq -r .version "$LEAN_STATE")" == 3 ]] ||
+      die "lean state has no JSON resource ownership for area '$LEAN_AREA'"
     state_count="$(jq '.resources | length' "$LEAN_STATE")"
     ((state_count == ${#LEAN_JSON_PATHS[@]})) || die "lean state JSON resource set differs for area '$LEAN_AREA'"
   fi
@@ -707,10 +807,20 @@ lean_preflight_area() {
   lean_scan_packages
   if ((${#LEAN_ATTACHMENT_PATHS[@]} > 0 || ${#LEAN_JSON_PATHS[@]} > 0)); then
     if [[ -e "$LEAN_STATE" || -L "$LEAN_STATE" ]]; then
+      if [[ "$mode" == apply ]]; then
+        capture_path_object_identity "$LEAN_STATE" || die "could not inspect lean state identity: $LEAN_STATE"
+        LEAN_APPLY_STATE_IDENTITY="$PATH_OBJECT_IDENTITY"
+        LEAN_APPLY_STATE_HASH="$(sha256_file "$LEAN_STATE")"
+        LEAN_APPLY_STATE_EXPECTED=true
+      fi
       lean_validate_state_file "$LEAN_STATE"
       [[ "$(jq -r .profile "$LEAN_STATE")" == "$LEAN_PROFILE" ]] || die "profile mismatch for area '$LEAN_AREA'"
     elif [[ "$mode" != apply ]]; then
       die "lean ownership state is absent for area '$LEAN_AREA'"
+    else
+      LEAN_APPLY_STATE_IDENTITY=absent
+      LEAN_APPLY_STATE_HASH=""
+      LEAN_APPLY_STATE_EXPECTED=true
     fi
   elif [[ -e "$LEAN_STATE" || -L "$LEAN_STATE" ]]; then
     die "package-only area must not have lean ownership state: $LEAN_STATE"
@@ -741,21 +851,22 @@ lean_ensure_directory() {
 }
 
 lean_build_state_json() {
-  local attachments='{}' resources='{}' fields id path index field before version=1
+  local attachments='{}' resources='{}' fields id path index field before managed pending
   for index in "${!LEAN_ATTACHMENT_PATHS[@]}"; do
     before="${LEAN_ATTACHMENT_BEFORE_HASHES[index]}"
+    managed="${LEAN_ATTACHMENT_MANAGED_HASHES[index]:-}"
+    pending="${LEAN_ATTACHMENT_PENDING_HASHES[index]:-}"
     if [[ -n "$before" ]]; then
       attachments="$(jq -c --arg path "${LEAN_ATTACHMENT_PATHS[index]}" --arg id "${LEAN_ATTACHMENT_IDS[index]}" \
-        --arg origin "${LEAN_ATTACHMENT_ORIGINS[index]}" --arg before "$before" \
-        '. + {($path):{id:$id,origin:$origin,before_sha256:$before}}' <<< "$attachments")"
+        --arg origin "${LEAN_ATTACHMENT_ORIGINS[index]}" --arg before "$before" --arg managed "$managed" --arg pending "$pending" \
+        '. + {($path):{id:$id,origin:$origin,before_sha256:$before,managed_sha256:(if $managed == "" then null else $managed end),pending_sha256:(if $pending == "" then null else $pending end)}}' <<< "$attachments")"
     else
       attachments="$(jq -c --arg path "${LEAN_ATTACHMENT_PATHS[index]}" --arg id "${LEAN_ATTACHMENT_IDS[index]}" \
-        --arg origin "${LEAN_ATTACHMENT_ORIGINS[index]}" \
-        '. + {($path):{id:$id,origin:$origin,before_sha256:null}}' <<< "$attachments")"
+        --arg origin "${LEAN_ATTACHMENT_ORIGINS[index]}" --arg managed "$managed" --arg pending "$pending" \
+        '. + {($path):{id:$id,origin:$origin,before_sha256:null,managed_sha256:(if $managed == "" then null else $managed end),pending_sha256:(if $pending == "" then null else $pending end)}}' <<< "$attachments")"
     fi
   done
   if ((${#LEAN_JSON_PATHS[@]} > 0)); then
-    version=2
     for index in "${!LEAN_JSON_PATHS[@]}"; do
       fields='{}'
       for field in "${!LEAN_JSON_FIELD_POINTERS[@]}"; do
@@ -769,26 +880,24 @@ lean_build_state_json() {
         '. + {($path):{id:$id,kind:"json-scalar-fields",fields:$fields}}' <<< "$resources")"
     done
   fi
-  if ((version == 1)); then
-    jq -cn --arg area "$LEAN_AREA" --arg profile "$LEAN_PROFILE" --argjson attachments "$attachments" \
-      '{version:1,profile:$profile,area:$area,attachments:$attachments}'
-  else
-    jq -cn --arg area "$LEAN_AREA" --arg profile "$LEAN_PROFILE" --argjson attachments "$attachments" --argjson resources "$resources" \
-      '{version:2,profile:$profile,area:$area,attachments:$attachments,resources:$resources}'
-  fi
+  jq -cn --arg area "$LEAN_AREA" --arg profile "$LEAN_PROFILE" --argjson attachments "$attachments" --argjson resources "$resources" \
+    '{version:3,profile:$profile,area:$area,attachments:$attachments,resources:$resources}'
 }
 
 lean_write_state_atomic() {
   local content dir base temporary temporary_hash temporary_identity source_hash source_identity
   ((${#LEAN_ATTACHMENT_PATHS[@]} > 0 || ${#LEAN_JSON_PATHS[@]} > 0)) || die 'refusing lean state write without guarded attachments'
   content="$(lean_build_state_json)"
-  if [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" && "$(jq -cS . "$LEAN_STATE")" == "$(jq -cS . <<< "$content")" ]]; then
-    return 0
-  fi
   capture_path_object_identity "$LEAN_STATE" || die "could not inspect lean state identity: $LEAN_STATE"
   source_identity="$PATH_OBJECT_IDENTITY"
   source_hash=""
   [[ "$source_identity" == absent ]] || source_hash="$(sha256_file "$LEAN_STATE")"
+  [[ "${LEAN_APPLY_STATE_EXPECTED:-false}" != true ||
+    ( "$source_identity" == "$LEAN_APPLY_STATE_IDENTITY" && "$source_hash" == "$LEAN_APPLY_STATE_HASH" ) ]] ||
+    die "lean state changed concurrently; refusing overwrite: $LEAN_STATE"
+  if [[ "$source_identity" != absent && "$(jq -cS . "$LEAN_STATE")" == "$(jq -cS . <<< "$content")" ]]; then
+    return 0
+  fi
   dir="$(dirname -- "$LEAN_STATE")"
   base="${LEAN_STATE##*/}"
   lean_ensure_directory "$dir"
@@ -874,22 +983,57 @@ lean_apply_stow() {
 }
 
 lean_write_attachment() {
-  local index="$1" path="$HOME/${LEAN_ATTACHMENT_PATHS[index]}" dir base temporary
-  local status origin="${LEAN_ATTACHMENT_ORIGINS[index]}" source_hash source_identity source_mode temporary_hash temporary_identity line read_status
+  local index="$1" path dir base temporary status origin source_hash source_identity source_mode
+  local temporary_hash temporary_identity line read_status inside=false
+  path="$HOME/${LEAN_ATTACHMENT_PATHS[index]}"
+  origin="${LEAN_ATTACHMENT_ORIGINS[index]}"
   lean_inspect_attachment "$index"
-  [[ "$LEAN_ATTACHMENT_STATUS" == absent ]] || return 0
-  [[ "$LEAN_ATTACHMENT_CURRENT_ORIGIN" == "$origin" && "$LEAN_ATTACHMENT_CURRENT_HASH" == "${LEAN_ATTACHMENT_BEFORE_HASHES[index]}" ]] ||
+  status="$LEAN_ATTACHMENT_STATUS"
+  capture_path_object_identity "$path" || die "could not inspect guarded attachment identity: $path"
+  [[ ( "$status" == "${LEAN_ATTACHMENT_PREFLIGHT_STATUSES[index]}" ||
+      ( "${LEAN_ATTACHMENT_PREFLIGHT_STATUSES[index]}" == hashless && "$status" == exact ) ||
+      ( "${LEAN_ATTACHMENT_PREFLIGHT_STATUSES[index]}" == legacy && "$status" == deployed ) ||
+      ( "${LEAN_ATTACHMENT_PREFLIGHT_STATUSES[index]}" == transitioned && "$status" == deployed ) ) &&
+    "$PATH_OBJECT_IDENTITY" == "${LEAN_ATTACHMENT_PREFLIGHT_IDENTITIES[index]}" &&
+    "$LEAN_ATTACHMENT_CURRENT_HASH" == "${LEAN_ATTACHMENT_PREFLIGHT_HASHES[index]}" &&
+    ( "$PATH_OBJECT_IDENTITY" == absent || "$(sha256_file "$path")" == "$LEAN_ATTACHMENT_CURRENT_HASH" ) ]] ||
+    die "guarded attachment changed after preflight: $path"
+  if [[ "$status" == exact || "$status" == hashless || "$status" == pending ]]; then
+    LEAN_ATTACHMENT_MANAGED_HASHES[index]="$(sha256_string "${LEAN_ATTACHMENT_BLOCKS[index]}")"
+    LEAN_ATTACHMENT_PENDING_HASHES[index]=""
+    return 0
+  fi
+  [[ "$status" == absent || "$status" == legacy || "$status" == deployed || "$status" == transitioned ]] ||
     die "guarded attachment changed before apply: $path"
+  if [[ "$status" == absent ]]; then
+    [[ "$LEAN_ATTACHMENT_CURRENT_ORIGIN" == "$origin" && "$LEAN_ATTACHMENT_CURRENT_HASH" == "${LEAN_ATTACHMENT_BEFORE_HASHES[index]}" ]] ||
+      die "guarded attachment changed before apply: $path"
+  fi
   source_hash="$LEAN_ATTACHMENT_CURRENT_HASH"
   capture_path_object_identity "$path" || die "could not inspect guarded attachment identity: $path"
   source_identity="$PATH_OBJECT_IDENTITY"
   source_mode="${LEAN_ATTACHMENT_MODES[index]}"
-  [[ "$origin" == created ]] || source_mode="$(stat -c %a -- "$path")"
+  [[ "$status" == absent && "$origin" == created ]] || source_mode="$(stat -c %a -- "$path")"
   dir="$(dirname -- "$path")"; base="${path##*/}"
   lean_ensure_directory "$dir"
   temporary="$(mktemp "$dir/.$base.tmp.XXXXXX")"
   track_temp_path "$temporary"
-  if [[ "${LEAN_ATTACHMENT_PLACEMENTS[index]}" == prepend ]]; then
+  if [[ "$status" == legacy || "$status" == deployed || "$status" == transitioned ]]; then
+    : > "$temporary"
+    while true; do
+      line=""; read_status=0; IFS= read -r line || read_status=$?
+      if [[ "$line" == "${LEAN_ATTACHMENT_BEGINS[index]}" ]]; then
+        printf '%s\n' "${LEAN_ATTACHMENT_BLOCKS[index]}" >> "$temporary"
+        inside=true
+      elif [[ "$inside" == true ]]; then
+        [[ "$line" != "${LEAN_ATTACHMENT_ENDS[index]}" ]] || inside=false
+      else
+        printf '%s' "$line" >> "$temporary"
+        ((read_status != 0)) || printf '\n' >> "$temporary"
+      fi
+      ((read_status == 0)) || break
+    done < "$path"
+  elif [[ "${LEAN_ATTACHMENT_PLACEMENTS[index]}" == prepend ]]; then
     printf '%s\n' "${LEAN_ATTACHMENT_BLOCKS[index]}" > "$temporary"
     [[ "$origin" == created ]] || dd if="$path" of="$temporary" oflag=append conv=notrunc status=none
   elif [[ "${LEAN_ATTACHMENT_PLACEMENTS[index]}" == append ]]; then
@@ -922,14 +1066,17 @@ lean_write_attachment() {
   capture_path_object_identity "$path" || die "could not recheck guarded attachment identity: $path"
   [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && ( "$source_identity" == absent || "$(sha256_file "$path")" == "$source_hash" ) ]] ||
     die "guarded attachment changed concurrently; refusing overwrite: $path"
-  if [[ "$origin" == created ]]; then
+  if [[ "$status" == absent && "$origin" == created ]]; then
     ln -T -- "$temporary" "$path" 2>/dev/null || { rm -f -- "$temporary"; die "guarded attachment destination appeared: $path"; }
     rm -- "$temporary"
   else
     mv -fT -- "$temporary" "$path"
   fi
   lean_inspect_attachment "$index"
-  [[ "$LEAN_ATTACHMENT_STATUS" == exact ]] || die "guarded attachment apply did not converge: $path"
+  [[ "$LEAN_ATTACHMENT_STATUS" == exact || "$LEAN_ATTACHMENT_STATUS" == pending ]] ||
+    die "guarded attachment apply did not converge: $path"
+  LEAN_ATTACHMENT_MANAGED_HASHES[index]="$(sha256_string "${LEAN_ATTACHMENT_BLOCKS[index]}")"
+  LEAN_ATTACHMENT_PENDING_HASHES[index]=""
 }
 
 lean_apply_area() {
@@ -937,11 +1084,21 @@ lean_apply_area() {
   lean_preflight_area apply
   if [[ "$LEAN_ENTRY_KIND" == validation-only ]]; then return 0; fi
   # Persist every non-derivable origin before the first managed-object write.
-  if ((${#LEAN_ATTACHMENT_PATHS[@]} > 0 || ${#LEAN_JSON_PATHS[@]} > 0)); then lean_write_state_atomic; fi
+  if ((${#LEAN_ATTACHMENT_PATHS[@]} > 0 || ${#LEAN_JSON_PATHS[@]} > 0)); then
+    lean_write_state_atomic
+    capture_path_object_identity "$LEAN_STATE" || die "could not inspect lean state identity: $LEAN_STATE"
+    LEAN_APPLY_STATE_IDENTITY="$PATH_OBJECT_IDENTITY"
+    LEAN_APPLY_STATE_HASH="$(sha256_file "$LEAN_STATE")"
+    LEAN_APPLY_STATE_EXPECTED=true
+  fi
   test_hold lean-after-state-write
   for index in "${!LEAN_JSON_PATHS[@]}"; do lean_replace_json_resource "$index" managed; done
   lean_apply_stow || return $?
   for index in "${!LEAN_ATTACHMENT_PATHS[@]}"; do lean_write_attachment "$index"; done
+  if ((${#LEAN_ATTACHMENT_PATHS[@]} > 0)); then
+    test_hold lean-before-final-state-write
+    lean_write_state_atomic
+  fi
 }
 
 lean_check_area() {
@@ -973,12 +1130,15 @@ lean_remove_attachment() {
   local dir base temporary line status inside=false mode source_hash source_identity temporary_hash temporary_identity
   [[ -e "$path" || -L "$path" ]] || return 0
   lean_inspect_attachment "$index"
-  [[ "$LEAN_ATTACHMENT_STATUS" == exact ]] || die "recorded guarded attachment changed before removal: $path"
+  [[ "$LEAN_ATTACHMENT_STATUS" == exact || "$LEAN_ATTACHMENT_STATUS" == deployed ||
+    "$LEAN_ATTACHMENT_STATUS" == pending || "$LEAN_ATTACHMENT_STATUS" == transitioned ||
+    "$LEAN_ATTACHMENT_STATUS" == hashless || "$LEAN_ATTACHMENT_STATUS" == legacy ]] ||
+    die "recorded guarded attachment changed before removal: $path"
   source_hash="$(sha256_file "$path")"
   capture_path_object_identity "$path" || die "could not inspect guarded attachment identity: $path"
   source_identity="$PATH_OBJECT_IDENTITY"
   if [[ "$origin" == created ]]; then
-    [[ "$(sha256_file "$path")" == "$(sha256_string "${LEAN_ATTACHMENT_BLOCKS[index]}"$'\n')" ]] ||
+    [[ "$(sha256_file "$path")" == "$(sha256_string "$LEAN_ATTACHMENT_FOUND_BLOCK"$'\n')" ]] ||
       die "created guarded attachment contains unrelated content: $path"
     test_hold lean-before-attachment-remove
     capture_path_object_identity "$path" || die "could not recheck guarded attachment identity: $path"

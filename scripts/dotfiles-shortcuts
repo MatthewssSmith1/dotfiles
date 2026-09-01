@@ -52,7 +52,12 @@ def manifest_bytes(data):
 
 def lock_path(root):
     runtime = os.environ.get("XDG_RUNTIME_DIR")
-    base = Path(runtime) if runtime else Path(tempfile.gettempdir()) / f"dotfiles-shortcuts-{os.getuid()}"
+    base = Path(runtime) / "dotfiles-shortcuts" if runtime else Path(tempfile.gettempdir()) / f"dotfiles-shortcuts-{os.getuid()}"
+    root = Path(root).resolve()
+    if not base.is_absolute():
+        raise ShortcutError(f"cannot prepare repository lock: lock directory is not absolute: {base}")
+    if base.resolve().is_relative_to(root):
+        raise ShortcutError(f"cannot prepare repository lock inside repository: {base}")
     try:
         base.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = base.lstat()
@@ -127,15 +132,34 @@ def check_generated(root):
         raise ShortcutError(f"generated files are stale; run 'dotfiles-shortcuts sync'\n{detail}")
 
 
-def run_checked(args, cwd, capture=False):
-    result = subprocess.run(args, cwd=cwd, text=True, capture_output=capture)
+def run_checked(args, cwd, capture=False, env=None):
+    result = subprocess.run(args, cwd=cwd, text=True, capture_output=capture, env=env)
     if result.returncode:
         detail = (result.stderr if capture else "").strip()
         raise ShortcutError(f"command failed ({result.returncode}): {' '.join(args)}" + (f"\n{detail}" if detail else ""))
     return result
 
 
+def upgrade_hashless_state(root):
+    if not (root / "dotfiles.sh").exists():
+        return
+    state = Path.home() / ".local/state/dotfiles/v2/desktop.json"
+    if not state.exists():
+        return
+    try:
+        content = json.loads(state.read_text())
+        version = content.get("version")
+    except (KeyError, TypeError, json.JSONDecodeError):
+        return
+    if version not in (1, 2):
+        return
+    environment = os.environ.copy()
+    environment["DOTFILES_SHORTCUTS_MIGRATE_STATE"] = "1"
+    run_checked([str(root / "dotfiles.sh"), "apply", "desktop"], root, capture=True, env=environment)
+
+
 def _sync(root):
+    upgrade_hashless_state(root)
     data = load_manifest(root / MANIFEST_REL)
     rendered = render(data)
     binding_path = output_paths(root)["binding"]
@@ -143,7 +167,7 @@ def _sync(root):
     write_generated(root, rendered)
     binding_changed = old_binding != rendered["binding"]
 
-    run_checked([str(root / "dotfiles.sh"), "apply", "desktop"], root)
+    run_checked([str(root / "dotfiles.sh"), "apply", "desktop"], root, capture=True)
     run_checked(["omarchy", "restart", "xcompose"], root)
     run_checked(["omarchy", "menu", "refresh"], root)
     if binding_changed:
@@ -162,6 +186,7 @@ def sync(root):
 def mutate(root, change):
     with repository_lock(root):
         check_generated(root)
+        upgrade_hashless_state(root)
         path = root / MANIFEST_REL
         original_manifest = (path.read_bytes(), path.stat().st_mode & 0o777)
         original_outputs = generated_state(root)
