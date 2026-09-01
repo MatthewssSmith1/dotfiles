@@ -16,8 +16,7 @@ FAKE_STOW_TRACE="$TEST_ROOT/stow.trace"
 export FAKE_STOW_TRACE
 mkdir -p "$DOTFILES_DIR/packages/common/one" "$DOTFILES_DIR/packages/common/two/.config/lean" \
   "$DOTFILES_DIR/profiles" "$FAKE_BIN"
-cp "$REPO_DIR/tests/fixtures/fake-stow" "$FAKE_BIN/stow"
-chmod 0755 "$FAKE_BIN/stow"
+install_fake_stow "$FAKE_BIN"
 export PATH="$FAKE_BIN:$PATH"
 printf 'one\n' > "$DOTFILES_DIR/packages/common/one/.one"
 printf 'two\n' > "$DOTFILES_DIR/packages/common/two/.config/lean/two"

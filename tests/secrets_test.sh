@@ -40,7 +40,7 @@ run_helper() {
     XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" OVERRIDE="${OVERRIDE:-}" "$HELPER" "$@"
 }
 
-expect_failure() {
+expect_helper_refusal() {
   local description="$1"
   shift
   rm -f "$CHILD_MARKER"
@@ -131,15 +131,15 @@ for content in \
   $'# comment only\n\n'; do
   make_fixture malformed
   write_bundle "$content"
-  expect_failure 'malformed bundle' exec-env app -- child
+  expect_helper_refusal 'malformed bundle' exec-env app -- child
 done
 make_fixture controls
 printf 'VALUE=good\rbad\n' > "$BUNDLE"; chmod 0600 "$BUNDLE"
-expect_failure 'carriage return' exec-env app -- child
+expect_helper_refusal 'carriage return' exec-env app -- child
 printf 'VALUE=good\tbad\n' > "$BUNDLE"; chmod 0600 "$BUNDLE"
-expect_failure 'control byte' exec-env app -- child
+expect_helper_refusal 'control byte' exec-env app -- child
 printf 'VALUE=good\0bad\n' > "$BUNDLE"; chmod 0600 "$BUNDLE"
-expect_failure 'NUL byte' exec-env app -- child
+expect_helper_refusal 'NUL byte' exec-env app -- child
 pass
 
 # Assignment count and byte-size limits fail closed.
@@ -147,19 +147,19 @@ make_fixture limits
 : > "$BUNDLE"
 for ((index=0; index<=256; index++)); do printf 'VALUE_%d=x\n' "$index" >> "$BUNDLE"; done
 chmod 0600 "$BUNDLE"
-expect_failure 'excessive assignment count' exec-env app -- child
+expect_helper_refusal 'excessive assignment count' exec-env app -- child
 python3 -c 'import sys; sys.stdout.write("VALUE=" + "x" * 65531)' > "$BUNDLE"; chmod 0600 "$BUNDLE"
 [[ "$(stat -c %s "$BUNDLE")" == 65537 ]] || fail 'oversize fixture is wrong'
-expect_failure 'excessive bundle size' exec-env app -- child
+expect_helper_refusal 'excessive bundle size' exec-env app -- child
 : > "$BUNDLE"; chmod 0600 "$BUNDLE"
-expect_failure 'empty bundle file' exec-env app -- child
+expect_helper_refusal 'empty bundle file' exec-env app -- child
 pass
 
 # Logical names cannot become paths.
 make_fixture names
 write_bundle 'VALUE=fixture-placeholder-value'
 for name in '' . .. .hidden '../app' 'app/name' '/absolute' 'two words' "$(printf 'a%.0s' {1..129})"; do
-  expect_failure 'invalid bundle name' exec-env "$name" -- child
+  expect_helper_refusal 'invalid bundle name' exec-env "$name" -- child
 done
 pass
 
@@ -167,30 +167,30 @@ pass
 make_fixture objects
 write_bundle 'VALUE=fixture-placeholder-value'
 rm "$BUNDLE"
-expect_failure 'missing bundle' exec-env app -- child
+expect_helper_refusal 'missing bundle' exec-env app -- child
 mkdir "$BUNDLE"
-expect_failure 'directory bundle' exec-env app -- child
+expect_helper_refusal 'directory bundle' exec-env app -- child
 rmdir "$BUNDLE"
 write_bundle 'VALUE=fixture-placeholder-value'; chmod 0644 "$BUNDLE"
-expect_failure 'broad bundle mode' exec-env app -- child
+expect_helper_refusal 'broad bundle mode' exec-env app -- child
 mv "$BUNDLE" "$FIXTURE/outside"; ln -s "$FIXTURE/outside" "$BUNDLE"
-expect_failure 'symlinked bundle' exec-env app -- child
+expect_helper_refusal 'symlinked bundle' exec-env app -- child
 pass
 
 # Every fixed parent must be real, owned by the user, and non-writable; secrets is exactly 0700.
 make_fixture parents
 write_bundle 'VALUE=fixture-placeholder-value'
 chmod 0775 "$FIXTURE_HOME/.config/dotfiles/local"
-expect_failure 'writable parent' exec-env app -- child
+expect_helper_refusal 'writable parent' exec-env app -- child
 chmod 0755 "$FIXTURE_HOME/.config/dotfiles/local"; chmod 0750 "$BUNDLE_DIRECTORY"
-expect_failure 'inexact secrets mode' exec-env app -- child
+expect_helper_refusal 'inexact secrets mode' exec-env app -- child
 chmod 0700 "$BUNDLE_DIRECTORY"
 mv "$BUNDLE_DIRECTORY" "$FIXTURE/real-secrets"; ln -s "$FIXTURE/real-secrets" "$BUNDLE_DIRECTORY"
-expect_failure 'symlinked secrets directory' exec-env app -- child
+expect_helper_refusal 'symlinked secrets directory' exec-env app -- child
 make_fixture linked-home
 write_bundle 'VALUE=fixture-placeholder-value'
 mv "$FIXTURE_HOME" "$FIXTURE/real-home"; ln -s "$FIXTURE/real-home" "$FIXTURE_HOME"
-expect_failure 'symlinked HOME' exec-env app -- child
+expect_helper_refusal 'symlinked HOME' exec-env app -- child
 pass
 
 # Usage, removed operations, and unavailable commands fail without reading or running anything.
@@ -198,9 +198,9 @@ make_fixture usage
 write_bundle 'VALUE=fixture-placeholder-value'
 for arguments in 'exec app VALUE -- child' 'status app' 'forget app' 'exec-env app child' 'exec-env app --' 'check-env app extra'; do
   read -r -a words <<< "$arguments"
-  expect_failure 'removed or invalid interface' "${words[@]}"
+  expect_helper_refusal 'removed or invalid interface' "${words[@]}"
 done
-expect_failure 'missing command' exec-env app -- unavailable-command
+expect_helper_refusal 'missing command' exec-env app -- unavailable-command
 pass
 
 # The helper has no provider, runtime-cache, lock, or network dependency.

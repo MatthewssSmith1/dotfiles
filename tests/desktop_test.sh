@@ -5,9 +5,7 @@ set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
 fake_bin="$TEST_ROOT/bin"
-mkdir "$fake_bin"
-cp "$REPO_DIR/tests/fixtures/fake-stow" "$fake_bin/stow"
-chmod 0755 "$fake_bin/stow"
+install_fake_stow "$fake_bin"
 cat > "$fake_bin/stat" <<'SCRIPT'
 #!/usr/bin/env bash
 if [[ -n "${DOTFILES_TEST_BAD_OWNER_PATH:-}" && "$1" == -c && "$2" == %u && "${*: -1}" == "$DOTFILES_TEST_BAD_OWNER_PATH" ]]; then
@@ -17,8 +15,6 @@ fi
 exec /usr/bin/stat "$@"
 SCRIPT
 chmod 0755 "$fake_bin/stat"
-FAKE_STOW_TRACE="$TEST_ROOT/stow.trace"
-export FAKE_STOW_TRACE
 CAPTURE_PATH_PREFIX="$fake_bin"
 
 for command_name in omarchy-shell hyprctl omarchy-theme-switcher omarchy-theme-set; do
@@ -717,7 +713,8 @@ runtime_native="$TEST_ROOT/usr-bin-omarchy-theme-switcher"
 runtime_native_menu="$TEST_ROOT/usr-bin-omarchy-menu-images"
 runtime_cache_base="$TEST_ROOT/theme-cache"
 runtime_trace="$TEST_ROOT/theme-selector.trace"
-readonly -a DENIED_THEMES=(ethereal flexoki-light hackerman last-horizon lumon lupine miasma rose-pine vantablack white)
+mapfile -t DENIED_THEMES < "$REPO_DIR/manifests/hidden-themes.txt"
+readonly -a DENIED_THEMES
 readonly -a ALLOWED_THEMES=(catppuccin catppuccin-latte everforest gruvbox kanagawa matte-black nord osaka-jade retro-82 ristretto solitude tokyo-night)
 mkdir -p "$runtime_root/bin" "$runtime_root/themes" "$runtime_cache_base" \
   "$runtime_home/.config/omarchy/themes/user-only"

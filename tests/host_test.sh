@@ -10,7 +10,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 # Host tests isolate detection/profile behavior. Seed the selected package-only
 # area so lean check does not turn an otherwise valid host probe into an
 # undeployed-area assertion.
-new_home() {
+new_seeded_home() {
   local name="$1" home source relative parent lexical
   home="$TEST_ROOT/home-$name"
   mkdir "$home"
@@ -55,13 +55,13 @@ wsl_host="$(make_host wsl wsl ubuntu 24.04)"
 # Supported Ubuntu releases select only the ubuntu profile; retired names are
 # rejected by the CLI rather than being interpreted as overrides.
 for host in "$ubuntu_host" "$ubuntu_new_host"; do
-  home="$(new_home "ubuntu-${host##*/}")"
+  home="$(new_seeded_home "ubuntu-${host##*/}")"
   expect_success "$home" "$host" "$DOTFILES" check agents
   assert_contains "$TEST_OUTPUT" "selected profile 'ubuntu'"
   expect_success "$home" "$host" "$DOTFILES" check --profile ubuntu agents
   expect_failure "not allowed" "$home" "$host" "$DOTFILES" check --profile omarchy agents
 done
-home="$(new_home retired-overrides)"
+home="$(new_seeded_home retired-overrides)"
 expect_failure "invalid profile 'generic'" "$home" "$ubuntu_host" "$DOTFILES" check --profile generic agents
 expect_failure "invalid profile 'wsl'" "$home" "$ubuntu_host" "$DOTFILES" check --profile wsl agents
 expect_failure 'usage:' "$home" "$ubuntu_host" "$DOTFILES" --provision
@@ -70,7 +70,7 @@ pass
 
 # WSL refusal precedes every other host signal, including a complete Omarchy
 # installation, and no override can make it deployable.
-home="$(new_home wsl)"
+home="$(new_seeded_home wsl)"
 expect_failure 'WSL hosts are not supported' "$home" "$wsl_host" "$DOTFILES" check agents
 prepare_omarchy "$wsl_host" "$home"
 printf 'ID="omarchy"\nVERSION_ID="4"\n' > "$wsl_host/etc/os-release"
@@ -80,7 +80,7 @@ pass
 # A native v4 host requires regular system signals, ID=omarchy, and identical
 # fixture pacman identities. The alpha family marker may accompany 4.0.1-1.
 omarchy_host="$(make_host omarchy linux omarchy 4)"
-home="$(new_home omarchy)"
+home="$(new_seeded_home omarchy)"
 prepare_omarchy "$omarchy_host" "$home"
 expect_success "$home" "$omarchy_host" "$DOTFILES" check agents
 assert_contains "$TEST_OUTPUT" "selected profile 'omarchy'"
@@ -96,7 +96,7 @@ for record in old-family:3.8.4 malformed:four empty:'' multiline:4.0.0; do
   name="${record%%:*}"
   marker="${record#*:}"
   root="$(make_host "marker-$name" linux omarchy 4)"
-  home="$(new_home "marker-$name")"
+  home="$(new_seeded_home "marker-$name")"
   prepare_omarchy "$root" "$home" "$marker"
   [[ "$name" != multiline ]] || printf '4.0.0\nextra\n' > "$root/usr/share/omarchy/version"
   expect_failure 'Omarchy v4 family marker' "$home" "$root" "$DOTFILES" check agents
@@ -105,7 +105,7 @@ pass
 
 # A v4 marker cannot be authorized by a package from another major family.
 root="$(make_host package-family linux omarchy 4)"
-home="$(new_home package-family)"
+home="$(new_seeded_home package-family)"
 prepare_omarchy "$root" "$home" 4.0.0.alpha 'omarchy 5.0.0-1'
 expect_failure 'exact v4 package authority' "$home" "$root" "$DOTFILES" check agents
 pass
@@ -113,23 +113,23 @@ pass
 # Missing, unsafe, and contradictory native signals are distinguished from a
 # valid Ubuntu fallback.
 root="$(make_host partial-version linux omarchy 4)"
-home="$(new_home partial-version)"
+home="$(new_seeded_home partial-version)"
 mkdir -p "$root/usr/share/omarchy"
 printf '4.0.0.alpha\n' > "$root/usr/share/omarchy/version"
 expect_failure 'partial Omarchy installation' "$home" "$root" "$DOTFILES" check agents
 
 root="$(make_host partial-command linux omarchy 4)"
-home="$(new_home partial-command)"
+home="$(new_seeded_home partial-command)"
 printf '#!/usr/bin/env bash\n' > "$root/usr/bin/omarchy"
 chmod 0755 "$root/usr/bin/omarchy"
 expect_failure 'partial Omarchy installation' "$home" "$root" "$DOTFILES" check agents
 
 root="$(make_host id-only linux omarchy 4)"
-home="$(new_home id-only)"
+home="$(new_seeded_home id-only)"
 expect_failure 'ID=omarchy requires native version and command signals' "$home" "$root" "$DOTFILES" check agents
 
 root="$(make_host contradictory linux ubuntu 24.04)"
-home="$(new_home contradictory)"
+home="$(new_seeded_home contradictory)"
 prepare_omarchy "$root" "$home"
 expect_failure 'contradictory host signals' "$home" "$root" "$DOTFILES" check agents
 pass
@@ -137,7 +137,7 @@ pass
 # Both native paths must be executable/regular non-symlinks.
 for signal in version command; do
   root="$(make_host "symlink-$signal" linux omarchy 4)"
-  home="$(new_home "symlink-$signal")"
+  home="$(new_seeded_home "symlink-$signal")"
   prepare_omarchy "$root" "$home"
   if [[ "$signal" == version ]]; then
     mv "$root/usr/share/omarchy/version" "$root/version.real"
@@ -149,7 +149,7 @@ for signal in version command; do
   expect_failure 'regular non-symlink file' "$home" "$root" "$DOTFILES" check agents
 done
 root="$(make_host non-executable linux omarchy 4)"
-home="$(new_home non-executable)"
+home="$(new_seeded_home non-executable)"
 prepare_omarchy "$root" "$home"
 chmod 0644 "$root/usr/bin/omarchy"
 expect_failure 'executable regular non-symlink file' "$home" "$root" "$DOTFILES" check agents
@@ -158,23 +158,23 @@ pass
 # Ownership metadata is isolated under each fixture root; missing, wrong, or
 # split package identities never fall back to the developer host's /usr.
 root="$(make_host owner-missing linux omarchy 4)"
-home="$(new_home owner-missing)"
+home="$(new_seeded_home owner-missing)"
 prepare_omarchy "$root" "$home"
 rm "$root/var/lib/dotfiles-test/pacman-owners.tsv"
 expect_failure 'package authority' "$home" "$root" "$DOTFILES" check agents
 
 root="$(make_host owner-wrong linux omarchy 4)"
-home="$(new_home owner-wrong)"
+home="$(new_seeded_home owner-wrong)"
 prepare_omarchy "$root" "$home" 4.0.0.alpha 'mise-bin 4.0.1-1'
 expect_failure 'package authority' "$home" "$root" "$DOTFILES" check agents
 
 root="$(make_host owner-malformed linux omarchy 4)"
-home="$(new_home owner-malformed)"
+home="$(new_seeded_home owner-malformed)"
 prepare_omarchy "$root" "$home" 4.0.0.alpha 'omarchy 4.0.1-1 extra'
 expect_failure 'package authority' "$home" "$root" "$DOTFILES" check agents
 
 root="$(make_host owner-split linux omarchy 4)"
-home="$(new_home owner-split)"
+home="$(new_seeded_home owner-split)"
 prepare_omarchy "$root" "$home"
 printf '/usr/bin/omarchy\tomarchy 4.0.2-1\n' >> "$root/var/lib/dotfiles-test/pacman-owners.tsv"
 expect_failure 'package authority' "$home" "$root" "$DOTFILES" check agents
@@ -182,7 +182,7 @@ pass
 
 # Every selected area must pass preflight before an earlier area may write.
 # Tools sorts before Agents, whose conflicting bridge supplies the late failure.
-home="$(new_home aggregate-preflight)"
+home="$(new_seeded_home aggregate-preflight)"
 rm "$home/.config/opencode/AGENTS.md"
 printf 'host-owned conflict\n' > "$home/.config/opencode/AGENTS.md"
 expect_failure 'unrelated destination conflict' "$home" "$ubuntu_host" \
@@ -193,19 +193,19 @@ expect_failure 'unrelated destination conflict' "$home" "$ubuntu_host" \
 pass
 
 # Unsupported distro/version and non-Linux diagnostics remain deterministic.
-home="$(new_home old-ubuntu)"
+home="$(new_seeded_home old-ubuntu)"
 expect_failure 'unsupported Ubuntu release: 22.04' "$home" "$ubuntu_old_host" "$DOTFILES" check agents
-home="$(new_home non-ubuntu)"
+home="$(new_seeded_home non-ubuntu)"
 expect_failure 'unsupported Linux distribution: ID=debian' "$home" "$debian_host" "$DOTFILES" check agents
 root="$(make_host missing-os linux ubuntu 24.04)"
 rm "$root/etc/os-release"
-home="$(new_home missing-os)"
+home="$(new_seeded_home missing-os)"
 expect_failure 'ID=missing VERSION_ID=missing' "$home" "$root" "$DOTFILES" check agents
 root="$(make_host malformed-os linux ubuntu 24.04)"
 printf 'ID="ubuntu\nVERSION_ID="24.04"\n' > "$root/etc/os-release"
-home="$(new_home malformed-os)"
+home="$(new_seeded_home malformed-os)"
 expect_failure 'malformed ID' "$home" "$root" "$DOTFILES" check agents
-home="$(new_home non-linux)"
+home="$(new_seeded_home non-linux)"
 DOTFILES_TEST_UNAME=Darwin expect_failure 'unsupported host operating system: Darwin' \
   "$home" "$ubuntu_host" "$DOTFILES" check agents
 pass

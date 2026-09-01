@@ -8,13 +8,8 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 TEST_GIT_USER_NAME='Git Fixture User'
 TEST_GIT_USER_EMAIL='git-fixture@example.com'
 fake_bin="$TEST_ROOT/bin"
-mkdir "$fake_bin"
-cp "$REPO_DIR/tests/fixtures/fake-stow" "$fake_bin/stow"
-chmod 0755 "$fake_bin/stow"
-FAKE_STOW_TRACE="$TEST_ROOT/stow.trace"
-export FAKE_STOW_TRACE
+install_fake_stow "$fake_bin"
 CAPTURE_PATH_PREFIX="$fake_bin"
-: > "$FAKE_STOW_TRACE"
 
 prepare_native() {
   local root="$1" home="$2"

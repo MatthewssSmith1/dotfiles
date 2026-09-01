@@ -5,11 +5,7 @@ set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
 fake_bin="$TEST_ROOT/bin"
-mkdir "$fake_bin"
-cp "$REPO_DIR/tests/fixtures/fake-stow" "$fake_bin/stow"
-chmod 0755 "$fake_bin/stow"
-export FAKE_STOW_TRACE="$TEST_ROOT/stow.trace"
-: > "$FAKE_STOW_TRACE"
+install_fake_stow "$fake_bin"
 CAPTURE_PATH_PREFIX="$fake_bin"
 ubuntu="$(make_host opencode-ubuntu linux ubuntu 24.04)"
 native="$(make_host opencode-native linux omarchy 4)"

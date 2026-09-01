@@ -6,10 +6,7 @@ set -Eeuo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
 test_bin="$TEST_ROOT/bin"
-mkdir "$test_bin"
-cp "$REPO_DIR/tests/fixtures/fake-stow" "$test_bin/stow"
-chmod 0755 "$test_bin/stow"
-export FAKE_STOW_TRACE="$TEST_ROOT/stow.trace"
+install_fake_stow "$test_bin"
 
 make_fake_tmux() {
   local path="$1" version="$2"
@@ -39,10 +36,10 @@ run_tmux_area() {
     PATH="$test_bin:/usr/bin:/bin" bash -c '
       set -Eeuo pipefail
       source "$DOTFILES_DIR/lib/common.sh"
+      source "$DOTFILES_DIR/lib/host.sh"
       source "$DOTFILES_DIR/lib/lean_engine.sh"
       source "$DOTFILES_DIR/lib/areas/tmux.sh"
-      AREA_ORDER=(git tools bash tmux nvim agents herdr desktop opencode)
-      AREA_STATUS=([git]=ready [tools]=ready [bash]=ready [tmux]=ready [nvim]=ready [agents]=ready [herdr]=ready [desktop]=ready [opencode]=optional)
+      validate_area_manifest
       case "$MODE" in
         check) preflight_tmux ;;
         apply) preflight_tmux; apply_tmux ;;

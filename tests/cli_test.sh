@@ -55,11 +55,7 @@ pass
 
 # Positional areas retain first-seen order and duplicates do not run twice.
 fake_bin="$TEST_ROOT/bin"
-mkdir "$fake_bin"
-cp "$REPO_DIR/tests/fixtures/fake-stow" "$fake_bin/stow"
-chmod 0755 "$fake_bin/stow"
-export FAKE_STOW_TRACE="$TEST_ROOT/stow.trace"
-: > "$FAKE_STOW_TRACE"
+install_fake_stow "$fake_bin"
 CAPTURE_PATH_PREFIX="$fake_bin"
 expect_success "$home" "$ubuntu" "$DOTFILES" apply tools agents tools
 mapfile -t actual_packages < <(grep '^stow|false|' "$FAKE_STOW_TRACE" | cut -d'|' -f3)

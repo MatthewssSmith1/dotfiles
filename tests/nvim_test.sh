@@ -7,11 +7,8 @@ unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
 test_bin="$TEST_ROOT/bin"
-mkdir "$test_bin"
-cp "$REPO_DIR/tests/fixtures/fake-stow" "$test_bin/stow"
-chmod 0755 "$test_bin/stow"
+install_fake_stow "$test_bin"
 export PATH="$test_bin:$PATH"
-export FAKE_STOW_TRACE="$TEST_ROOT/stow.trace"
 
 readonly RESTORE="$REPO_DIR/packages/ubuntu/nvim/.local/share/dotfiles/bin/nvim-restore"
 readonly LOCKFILE="$REPO_DIR/packages/upstream/nvim/.config/nvim/lazy-lock.json"
@@ -56,10 +53,10 @@ run_area() {
     DOTFILES_TEST_NVIM_BIN="$binary" bash -c '
       set -Eeuo pipefail
       source "$DOTFILES_DIR/lib/common.sh"
+      source "$DOTFILES_DIR/lib/host.sh"
       source "$DOTFILES_DIR/lib/lean_engine.sh"
       source "$DOTFILES_DIR/lib/areas/nvim.sh"
-      AREA_ORDER=(git tools bash tmux nvim agents herdr desktop opencode)
-      AREA_STATUS=([git]=ready [tools]=ready [bash]=ready [tmux]=ready [nvim]=ready [agents]=ready [herdr]=ready [desktop]=ready [opencode]=optional)
+      validate_area_manifest
       if [[ "$MODE" == remove ]]; then remove_nvim
       elif [[ "$MODE" == check ]]; then preflight_nvim
       else preflight_nvim; apply_nvim

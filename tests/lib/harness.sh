@@ -148,6 +148,19 @@ new_home() {
   printf '%s' "$home"
 }
 
+# Install the fake Stow fixture into a bin directory (default $TEST_ROOT/bin)
+# and arm the shared trace file. Callers add the directory to PATH or
+# CAPTURE_PATH_PREFIX themselves.
+install_fake_stow() {
+  local bin_dir="${1:-$TEST_ROOT/bin}"
+  mkdir -p "$bin_dir"
+  cp "$REPO_DIR/tests/fixtures/fake-stow" "$bin_dir/stow"
+  chmod 0755 "$bin_dir/stow"
+  FAKE_STOW_TRACE="${FAKE_STOW_TRACE:-$TEST_ROOT/stow.trace}"
+  export FAKE_STOW_TRACE
+  : > "$FAKE_STOW_TRACE"
+}
+
 # capture runs dotfiles under test-controlled HOME/host and records
 # TEST_OUTPUT/TEST_RC. Knobs, all optional:
 #   TEST_GIT_USER_NAME / TEST_GIT_USER_EMAIL  identity exported to the run

@@ -16,6 +16,7 @@ fail() {
   exit 1
 }
 
+# Canonical suite list; reporting uses this order.
 readonly TEST_FILES=(
   "$TEST_DIR/contract_test.sh"
   "$TEST_DIR/cli_test.sh"
@@ -34,42 +35,25 @@ readonly TEST_FILES=(
   "$TEST_DIR/opencode_test.sh"
   "$TEST_DIR/secrets_test.sh"
   "$TEST_DIR/windows_terminal_test.sh"
+  "$TEST_DIR/desktop_shortcuts_generator_test.py"
+  "$TEST_DIR/desktop_shortcuts_cli_test.py"
 )
 
-# Start historically long suites first; reporting remains in canonical order.
-readonly RUN_FILES=(
-  "$TEST_DIR/shell_test.sh"
-  "$TEST_DIR/nvim_test.sh"
-  "$TEST_DIR/git_test.sh"
-  "$TEST_DIR/github_auth_test.sh"
-  "$TEST_DIR/tools_test.sh"
-  "$TEST_DIR/lean_engine_test.sh"
-  "$TEST_DIR/agents_test.sh"
-  "$TEST_DIR/tmux_test.sh"
-  "$TEST_DIR/upstream_test.sh"
-  "$TEST_DIR/herdr_test.sh"
-  "$TEST_DIR/desktop_test.sh"
-  "$TEST_DIR/opencode_test.sh"
-  "$TEST_DIR/secrets_test.sh"
-  "$TEST_DIR/host_test.sh"
-  "$TEST_DIR/windows_terminal_test.sh"
-  "$TEST_DIR/contract_test.sh"
-  "$TEST_DIR/cli_test.sh"
-)
-
+# Start historically long suites first; every other suite follows in canonical
+# order. RUN_FILES derives from TEST_FILES, so the lists cannot diverge.
+readonly -a LONG_SUITES=(shell_test.sh desktop_test.sh nvim_test.sh git_test.sh agents_test.sh)
+RUN_FILES=()
+for suite_name in "${LONG_SUITES[@]}"; do
+  [[ -f "$TEST_DIR/$suite_name" ]] || fail "LONG_SUITES lists an unknown suite: $suite_name"
+  RUN_FILES+=("$TEST_DIR/$suite_name")
+done
 for test_file in "${TEST_FILES[@]}"; do
-  count=0
-  for run_file in "${RUN_FILES[@]}"; do
-    [[ "$run_file" != "$test_file" ]] || ((count += 1))
-  done
-  ((count == 1)) || fail "suite must appear exactly once in RUN_FILES: ${test_file##*/}"
+  case " ${LONG_SUITES[*]} " in
+    *" ${test_file##*/} "*) ;;
+    *) RUN_FILES+=("$test_file") ;;
+  esac
 done
-for run_file in "${RUN_FILES[@]}"; do
-  for test_file in "${TEST_FILES[@]}"; do
-    [[ "$test_file" != "$run_file" ]] || continue 2
-  done
-  fail "RUN_FILES contains an unlisted suite: ${run_file##*/}"
-done
+readonly -a RUN_FILES
 
 while (($#)); do
   case "$1" in
@@ -97,7 +81,11 @@ if [[ -z "$JOBS" ]]; then
 fi
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || fail '--jobs must be a positive integer'
 
-bash -n "$TEST_DIR/lib/harness.sh" "${TEST_FILES[@]}" || \
+bash_suites=()
+for test_file in "${TEST_FILES[@]}"; do
+  [[ "$test_file" == *.py ]] || bash_suites+=("$test_file")
+done
+bash -n "$TEST_DIR/lib/harness.sh" "${bash_suites[@]}" || \
   fail 'a test file has invalid Bash syntax'
 
 if [[ "$LIST_ONLY" == true ]]; then
@@ -116,7 +104,11 @@ run_suite() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
   set +e
-  "$test_file" > "$RUN_ROOT/$name.log" 2>&1
+  if [[ "$test_file" == *.py ]]; then
+    python3 "$test_file" > "$RUN_ROOT/$name.log" 2>&1
+  else
+    "$test_file" > "$RUN_ROOT/$name.log" 2>&1
+  fi
   status=$?
   set -e
   printf '%s\n' "$status" > "$RUN_ROOT/$name.status"
