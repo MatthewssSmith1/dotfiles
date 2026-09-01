@@ -14,6 +14,7 @@ readonly OMARCHY_AMDGPU_IPS="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfile
 readonly OMARCHY_THEME_SWITCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-theme-switcher"
 readonly OMARCHY_THEME_MENU_ADAPTER="$REPO_DIR/packages/omarchy/desktop/.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images"
 readonly SHORTCUTS_LAUNCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-shortcuts"
+readonly OMARCHY_MENU_PLUGIN="$REPO_DIR/packages/omarchy/desktop/.config/omarchy/plugins/matt.menu"
 
 # Every dotfiles source exists, parses, and keeps strict mode.
 readonly DOTFILES_SOURCES=(
@@ -112,7 +113,7 @@ expected_desktop_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p
 grep -qxF 'desktop omarchy/desktop' "$REPO_DIR/profiles/omarchy.conf" || fail 'native desktop closure is not final'
 grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu desktop is not validation-only'
 [[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f -printf '%P\n' | LC_ALL=C sort)" == \
-  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/bindings.lua\n.config/dotfiles/omarchy/hypr/input.lua\n.config/dotfiles/omarchy/menu-shortcuts.jsonc\n.local/bin/dotfiles-omarchy-compose-shortcut\n.local/bin/dotfiles-omarchy-theme-switcher\n.local/bin/dotfiles-shortcuts\n.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images' && -f "$desktop_fragment" ]] ||
+  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/bindings.lua\n.config/dotfiles/omarchy/hypr/input.lua\n.config/dotfiles/omarchy/menu-shortcuts.jsonc\n.config/omarchy/plugins/matt.menu/BarWidget.qml\n.config/omarchy/plugins/matt.menu/Menu.qml\n.config/omarchy/plugins/matt.menu/MenuModel.js\n.config/omarchy/plugins/matt.menu/manifest.json\n.local/bin/dotfiles-omarchy-compose-shortcut\n.local/bin/dotfiles-omarchy-theme-switcher\n.local/bin/dotfiles-shortcuts\n.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images' && -f "$desktop_fragment" ]] ||
   fail 'desktop package payload inventory is not exact'
 [[ "$(< "$desktop_aliases")" == "$expected_desktop_aliases" ]] || fail 'desktop Compose aliases are not exact'
 [[ -f "$OMARCHY_THEME_SWITCHER" && ! -L "$OMARCHY_THEME_SWITCHER" && -x "$OMARCHY_THEME_SWITCHER" &&
@@ -121,6 +122,20 @@ grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ub
   "$(stat -c %a "$OMARCHY_THEME_MENU_ADAPTER")" == 755 ]] || fail 'desktop theme image adapter is not an exact executable payload'
 [[ ! -e "$REPO_DIR/packages/omarchy/desktop/.config/omarchy/extensions/omarchy-menu.jsonc" ]] ||
   fail 'desktop package still replaces the regular live menu extension'
+jq -e '.id == "matt.menu" and .name == "Matt'"'"'s menu" and
+  .kinds == ["menu", "bar-widget"] and .entryPoints == {menu:"Menu.qml",barWidget:"BarWidget.qml"} and
+  .omarchy == {clonedFrom:"omarchy.menu"}' "$OMARCHY_MENU_PLUGIN/manifest.json" >/dev/null ||
+  fail 'desktop menu clone manifest is not exact'
+grep -Fq 'Style.space(520) : Style.space(420)' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
+  fail 'desktop normal menu width is not exactly 420'
+grep -Fq 'root.dmenuActive ? Style.space(root.dmenuWidth)' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
+  fail 'desktop menu clone does not preserve requested dmenu width'
+grep -Fq 'return Math.min(available, Math.round(panel.height * 0.7))' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
+  fail 'desktop menu clone lost the 70 percent height cap'
+! grep -Fq 'maxRowsHeight' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
+  fail 'desktop menu clone retains the starting-menu height ceiling'
+grep -Fq 'cardTop = effectiveCardTop' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
+  fail 'desktop menu clone no longer freezes its top edge'
 grep -qxF 'readonly -a HIDDEN_THEMES=(' "$OMARCHY_THEME_SWITCHER" || fail 'theme denylist is not readonly'
 expected_hidden=$'ethereal\nflexoki-light\nhackerman\nlast-horizon\nlumon\nlupine\nmiasma\nrose-pine\nvantablack\nwhite'
 actual_hidden="$(awk '/^readonly -a HIDDEN_THEMES=\($/{inside=1; next} inside && /^\)/{exit} inside {sub(/^[[:space:]]+/, ""); print}' "$OMARCHY_THEME_SWITCHER")"

@@ -7,6 +7,9 @@ readonly DESKTOP_XCOMPOSE_ALIASES='.config/dotfiles/omarchy/XCompose'
 readonly DESKTOP_BINDINGS='.config/hypr/bindings.lua'
 readonly DESKTOP_BINDINGS_FRAGMENT='.config/dotfiles/omarchy/hypr/bindings.lua'
 readonly DESKTOP_SHELL='.config/omarchy/shell.json'
+readonly DESKTOP_MENU_PLUGIN='.config/omarchy/plugins/matt.menu'
+readonly DESKTOP_MENU_WIDGET_POINTER='/bar/layout/left/0/id'
+DESKTOP_MENU_STATE_EXPANDED=false
 readonly DESKTOP_MENU_EXTENSION='.config/omarchy/extensions/omarchy-menu.jsonc'
 readonly DESKTOP_MENU_SHORTCUTS='.config/dotfiles/omarchy/menu-shortcuts.jsonc'
 readonly DESKTOP_THEME_SWITCHER='.local/bin/dotfiles-omarchy-theme-switcher'
@@ -69,6 +72,16 @@ desktop_menu_block() {
   printf '%s\n' "$DESKTOP_MENU_END"
 }
 
+desktop_shell_state_is_pre_plugin() {
+  [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] || return 1
+  jq -e --arg path "$DESKTOP_SHELL" '
+    (.version == 2 or .version == 3) and .area == "desktop" and .profile == "omarchy" and
+    (.resources | keys) == [$path] and
+    .resources[$path].id == "desktop-shell-idle-v1" and
+    (.resources[$path].fields | keys) == ["/idle/lock", "/idle/screensaver"]
+  ' "$LEAN_STATE" >/dev/null 2>&1
+}
+
 register_desktop_area() {
   local package menu_block
   load_profile_closure desktop
@@ -88,8 +101,14 @@ register_desktop_area() {
     lean_add_guarded_attachment desktop-bindings-v1 "$DESKTOP_BINDINGS" \
       "$DESKTOP_BINDINGS_BEGIN" "$DESKTOP_BINDINGS_END" "$DESKTOP_BINDINGS_TOKEN" \
       "$DESKTOP_BINDINGS_BLOCK" append 0644 true
-    lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_shell_json \
-      /idle/screensaver integer 600 /idle/lock integer 900
+    if [[ "$MODE" == apply && "$DESKTOP_MENU_STATE_EXPANDED" != true ]] && desktop_shell_state_is_pre_plugin; then
+      lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_shell_json \
+        /idle/screensaver integer 600 /idle/lock integer 900
+    else
+      lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_shell_json \
+        /idle/screensaver integer 600 /idle/lock integer 900 \
+        "$DESKTOP_MENU_WIDGET_POINTER" string '"matt.menu"'
+    fi
   fi
 }
 
@@ -148,8 +167,47 @@ validate_desktop_shell_json() {
     type == "object" and .version == 1 and
     (.idle | type == "object") and
     (.idle.screensaver | type == "number" and floor == .) and
-    (.idle.lock | type == "number" and floor == .)
+    (.idle.lock | type == "number" and floor == .) and
+    (.bar.layout.left | type == "array" and length > 0) and
+    (.bar.layout.left[0].id == "omarchy.menu" or .bar.layout.left[0].id == "matt.menu") and
+    ([.bar.layout | .left[], .center[], .right[] | select(.id == "omarchy.menu" or .id == "matt.menu")] | length) == 1
   ' "$1" >/dev/null
+}
+
+desktop_require_menu_plugin_adoptable() {
+  local live path="$HOME/$DESKTOP_SHELL"
+  validate_desktop_shell_json "$path" || die "JSON resource has an unsupported application shape: $path"
+  live="$(lean_json_pointer_value "$path" "$DESKTOP_MENU_WIDGET_POINTER")" ||
+    die 'Omarchy menu widget is missing from the supported left bar position'
+  if [[ ! -e "$LEAN_STATE" && ! -L "$LEAN_STATE" && "$live" != '"omarchy.menu"' ]]; then
+    die 'Omarchy menu widget already uses an unmanaged clone'
+  fi
+}
+
+# Apply alone expands the exact prior desktop resource record. Check/remove
+# keep refusing incomplete state, matching guarded attachment migrations.
+desktop_expand_menu_plugin_state() {
+  local shell_path="$HOME/$DESKTOP_SHELL" temporary mode live
+  [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] || return 0
+  lean_validate_state_file "$LEAN_STATE"
+  desktop_shell_state_is_pre_plugin || return 0
+  live="$(lean_json_pointer_value "$shell_path" "$DESKTOP_MENU_WIDGET_POINTER")"
+  DESKTOP_MENU_STATE_EXPANDED=true
+  if [[ "$live" == '"omarchy.menu"' ]]; then
+    register_desktop_area
+    LEAN_JSON_STATUSES=(original)
+    lean_replace_json_resource 0 managed
+  fi
+  mode="$(stat -c %a -- "$LEAN_STATE")"
+  temporary="$(mktemp "$(dirname -- "$LEAN_STATE")/.desktop-state.tmp.XXXXXX")"
+  track_temp_path "$temporary"
+  jq --arg path "$DESKTOP_SHELL" --arg pointer "$DESKTOP_MENU_WIDGET_POINTER" '
+    .resources[$path].fields[$pointer] = {
+      type: "string", original: "omarchy.menu", managed: "matt.menu"
+    }
+  ' "$LEAN_STATE" > "$temporary"
+  chmod "$mode" "$temporary"
+  mv -fT -- "$temporary" "$LEAN_STATE"
 }
 
 validate_desktop_stock_input() {
@@ -297,6 +355,8 @@ validate_desktop_closure() {
     validate_desktop_fragment
     validate_desktop_shortcuts
     validate_desktop_theme_filter
+    [[ -f "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_PLUGIN/manifest.json" ]] ||
+      die 'desktop menu plugin clone is missing'
     if [[ "$MODE" != remove ]]; then validate_desktop_stock_menu; fi
   else
     [[ "$PROFILE_ENTRY_KIND" == validation-only && ${#PACKAGES[@]} -eq 0 ]] ||
@@ -330,6 +390,7 @@ preflight_desktop() {
       desktop_require_xcompose
       desktop_require_native_shortcuts
       desktop_require_bindings
+      desktop_require_menu_plugin_adoptable
     fi
     validate_desktop_menu
   fi
@@ -347,7 +408,10 @@ apply_desktop() {
     desktop_require_xcompose
     desktop_require_native_shortcuts
     desktop_require_bindings
+    desktop_require_menu_plugin_adoptable
     validate_desktop_menu
+    desktop_expand_menu_plugin_state
+    register_desktop_area
   fi
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then

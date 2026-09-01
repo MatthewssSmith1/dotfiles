@@ -176,7 +176,7 @@ def render(data):
             )
     menu_lines.append(
         f'  {compact(menu["id"] + ".manage")}: '
-        f'{compact({"label": "Manage shortcuts...", "action": "dotfiles-shortcuts manage"})},'
+        f'{compact({"icon": "󰒓", "label": "Manage shortcuts...", "action": "dotfiles-shortcuts manage"})},'
     )
     menu_fragment = "\n".join(menu_lines) + "\n"
 

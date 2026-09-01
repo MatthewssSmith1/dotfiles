@@ -326,8 +326,8 @@ def choose(data, values, prompt):
 
 def manage(root):
     operations = [
-        "Add text alias", "Edit text alias", "Delete text alias", "Add group",
-        "Rename group", "Delete empty group", "Edit manifest", "Sync configuration",
+        "\tAdd text alias", "\tEdit text alias", "󰭌\tDelete text alias", "󰉗\tAdd group",
+        "\tRename group", "󰭌\tDelete empty group", "\tEdit manifest", "\tSync configuration",
     ]
     operation = menu_select("Manage shortcuts", operations)
     if operation is None:

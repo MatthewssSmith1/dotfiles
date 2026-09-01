@@ -52,7 +52,7 @@ validate_fixture_json() {
 write_fixture_json() {
   local screensaver="${1:-150}" lock="${2:-300}"
   mkdir -p "$HOME/.config/lean"
-  printf '{\n  "schema": 1,\n  "idle": { "screensaver": %s, "lock": %s },\n  "bar": { "widgets": ["clock", "tailscale"] },\n  "unrelated": { "nested": true }\n}\n' \
+  printf '{\n  "schema": 1,\n  "idle": { "screensaver": %s, "lock": %s },\n  "bar": { "widgets": ["clock", "tailscale"] },\n  "numeric_keys": { "0": "original-object" },\n  "unrelated": { "nested": true }\n}\n' \
     "$screensaver" "$lock" > "$HOME/.config/lean/app.json"
 }
 
@@ -120,6 +120,12 @@ register_json_only() {
     /idle/screensaver integer 600 /idle/lock integer 900
 }
 
+register_json_array() {
+  lean_begin_area json-array omarchy packages
+  lean_add_json_scalar_fields fixture-array-v1 .config/lean/app.json validate_fixture_json \
+    /bar/widgets/0 string '"menu"' /numeric_keys/0 string '"managed-object"'
+}
+
 capture_direct() {
   set +e
   TEST_OUTPUT="$("$@" 2>&1)"
@@ -144,6 +150,22 @@ apply_structured() { register_structured "${1:-omarchy}"; lean_apply_area; }
 check_structured() { register_structured "${1:-omarchy}"; lean_check_area; }
 remove_structured() { register_structured "${1:-omarchy}"; lean_remove_area; }
 apply_json_only() { register_json_only; lean_apply_area; }
+
+# Numeric JSON pointer segments address existing array elements without
+# replacing neighboring values.
+reset_lean_home json-array
+write_fixture_json
+register_json_array
+lean_apply_area
+jq -e '.bar.widgets == ["menu", "tailscale"] and .numeric_keys["0"] == "managed-object" and .unrelated.nested == true' "$HOME/.config/lean/app.json" >/dev/null ||
+  fail 'array JSON pointer update changed neighboring values'
+register_json_array
+lean_check_area
+register_json_array
+lean_remove_area
+jq -e '.bar.widgets == ["clock", "tailscale"] and .numeric_keys["0"] == "original-object" and .unrelated.nested == true' "$HOME/.config/lean/app.json" >/dev/null ||
+  fail 'array JSON pointer removal did not restore only the owned element'
+pass
 
 # Check performs Stow/package inspection only and package-only apply writes no
 # ownership state.

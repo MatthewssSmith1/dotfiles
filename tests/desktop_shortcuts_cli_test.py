@@ -235,8 +235,15 @@ class DesktopShortcutsCliTest(unittest.TestCase):
 
     def test_manage_cancellation_changes_nothing(self):
         before = self.bytes()
-        with mock.patch.object(CLI, "menu_select", return_value=None):
+        with mock.patch.object(CLI, "menu_select", return_value=None) as menu_select:
             self.assertEqual(self.run_cli("manage")[0], 0)
+        menu_select.assert_called_once_with(
+            "Manage shortcuts",
+            [
+                "\tAdd text alias", "\tEdit text alias", "󰭌\tDelete text alias", "󰉗\tAdd group",
+                "\tRename group", "󰭌\tDelete empty group", "\tEdit manifest", "\tSync configuration",
+            ],
+        )
         self.assertEqual(self.bytes(), before)
         self.sync_mock.assert_not_called()
 

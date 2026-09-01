@@ -44,7 +44,7 @@ class DesktopShortcutsGeneratorTest(unittest.TestCase):
         self.assertIn('"label":"space · Em dash"', rendered["menu"])
         self.assertEqual(
             menu_lines[-1],
-            '  "shortcuts.manage": {"label":"Manage shortcuts...","action":"dotfiles-shortcuts manage"},',
+            '  "shortcuts.manage": {"icon":"󰒓","label":"Manage shortcuts...","action":"dotfiles-shortcuts manage"},',
         )
         for shortcut_id in ("space-a", "space-e", "space-n", "space-space", "p-b", "p-d", "p-p", "p-t"):
             self.assertIn(f"  {shortcut_id})", rendered["helper"])

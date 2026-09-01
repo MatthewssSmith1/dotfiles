@@ -39,6 +39,7 @@ readonly SWITCHER_REL='.local/bin/dotfiles-omarchy-theme-switcher'
 readonly COMPOSE_SHORTCUT_REL='.local/bin/dotfiles-omarchy-compose-shortcut'
 readonly SHORTCUTS_REL='.local/bin/dotfiles-shortcuts'
 readonly MENU_ADAPTER_REL='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
+readonly MENU_PLUGIN_REL='.config/omarchy/plugins/matt.menu'
 readonly BEGIN='-- >>> dotfiles desktop input >>>'
 readonly END='-- <<< dotfiles desktop input <<<'
 readonly XCOMPOSE_BEGIN='# >>> dotfiles desktop xcompose >>>'
@@ -78,7 +79,7 @@ XCOMPOSE
 {
   "version": 1,
   "idle": { "screensaver": 150, "lock": 300 },
-  "bar": { "layout": { "right": [{ "id": "omarchy.tailscale" }] } },
+  "bar": { "layout": { "left": [{ "id": "omarchy.menu" }], "center": [], "right": [{ "id": "omarchy.tailscale" }] } },
   "plugins": [{ "id": "fixture", "options": { "nested": true } }],
   "unrelated": { "array": [3, 1, 2] }
 }
@@ -114,8 +115,13 @@ expected_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p> <b> : 
 [[ "$(< "$aliases")" == "$expected_aliases" ]] || fail 'desktop Compose aliases are not exact'
 [[ "$(< "$bindings_fragment")" == 'o.bind("SUPER + SHIFT + K", "Personal shortcuts", "omarchy-menu toggle shortcuts")' ]] ||
   fail 'desktop shortcut binding is not exact'
-[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 8 &&
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 12 &&
   ! -e "$REPO_DIR/packages/omarchy/desktop/$MENU_REL" ]] || fail 'desktop package payload inventory is not exact'
+plugin="$REPO_DIR/packages/omarchy/desktop/$MENU_PLUGIN_REL"
+jq -e '.id == "matt.menu" and .omarchy.clonedFrom == "omarchy.menu"' "$plugin/manifest.json" >/dev/null ||
+  fail 'desktop menu clone manifest is not exact'
+grep -Fq 'Style.space(420)' "$plugin/Menu.qml" || fail 'desktop menu clone width is not 420'
+! grep -Fq 'maxRowsHeight' "$plugin/Menu.qml" || fail 'desktop menu clone retains the starting height ceiling'
 "$REPO_DIR/scripts/generate-desktop-shortcuts" || fail 'desktop shortcut generated files are stale'
 cat > "$fake_bin/wtype" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -234,12 +240,26 @@ expect_success "$old_home" "$old_host" "$DOTFILES" apply desktop
 old_state="$old_home/.local/state/dotfiles/v2/desktop.json"
 cp "$old_host/usr/share/omarchy/config/omarchy/extensions/omarchy-menu.jsonc" "$old_home/$MENU_REL"
 jq '.version = 2 | .attachments |= map_values({id,origin,before_sha256}) |
-  del(.attachments[".config/omarchy/extensions/omarchy-menu.jsonc"])' "$old_state" > "$old_home/old-state.json"
+  del(.attachments[".config/omarchy/extensions/omarchy-menu.jsonc"]) |
+  del(.resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"])' "$old_state" > "$old_home/old-state.json"
 mv -fT "$old_home/old-state.json" "$old_state"
+modify_json="$old_home/.config/omarchy/old-shell.json"
+jq '.bar.layout.left[0].id = "omarchy.menu"' "$old_home/$SHELL_REL" > "$modify_json"
+mv -fT "$modify_json" "$old_home/$SHELL_REL"
 expect_failure 'attachment set differs' "$old_home" "$old_host" "$DOTFILES" check desktop
 expect_failure 'attachment set differs' "$old_home" "$old_host" "$DOTFILES" remove desktop
 expect_success "$old_home" "$old_host" "$DOTFILES" apply desktop
-jq -e '.version == 3 and (.attachments | length) == 4' "$old_state" >/dev/null || fail 'apply did not expand old desktop state'
+jq -e '.version == 3 and (.attachments | length) == 4 and
+  .resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"] == {
+    type:"string", original:"omarchy.menu", managed:"matt.menu"
+  }' "$old_state" >/dev/null || fail 'apply did not expand old desktop state'
+expect_success "$old_home" "$old_host" "$DOTFILES" check desktop
+# Retry recovers if migration stopped after activating the cloned widget but
+# before publishing expanded state.
+jq 'del(.resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"])' \
+  "$old_state" > "$old_home/interrupted-state.json"
+mv -fT "$old_home/interrupted-state.json" "$old_state"
+expect_success "$old_home" "$old_host" "$DOTFILES" apply desktop
 expect_success "$old_home" "$old_host" "$DOTFILES" check desktop
 pass
 
@@ -416,12 +436,16 @@ jq -e '
   .version == 3 and .area == "desktop" and .profile == "omarchy" and
   (.attachments | keys) == [".XCompose", ".config/hypr/bindings.lua", ".config/hypr/input.lua", ".config/omarchy/extensions/omarchy-menu.jsonc"] and
   .resources[".config/omarchy/shell.json"].fields["/idle/screensaver"].original == 150 and
-  .resources[".config/omarchy/shell.json"].fields["/idle/lock"].original == 300
+  .resources[".config/omarchy/shell.json"].fields["/idle/lock"].original == 300 and
+  .resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"] == {
+    type:"string", original:"omarchy.menu", managed:"matt.menu"
+  }
 ' "$state" >/dev/null || fail 'desktop state does not contain complete origins'
 assert_file "$home/$INPUT_REL"
 assert_file "$home/$SHELL_REL"
 [[ -L "$home/$FRAGMENT_REL" && -L "$home/$ALIASES_REL" && -L "$home/$BINDINGS_FRAGMENT_REL" &&
   -L "$home/$MENU_FRAGMENT_REL" && -L "$home/$COMPOSE_SHORTCUT_REL" && -L "$home/$SHORTCUTS_REL" &&
+  -L "$home/$MENU_PLUGIN_REL/Menu.qml" &&
   -f "$home/$MENU_REL" && ! -L "$home/$MENU_REL" && -L "$home/$SWITCHER_REL" && -L "$home/$MENU_ADAPTER_REL" &&
   "$(stat -c %a "$home/$INPUT_REL")" == 640 &&
   "$(stat -c %a "$home/$XCOMPOSE_REL")" == 640 && "$(stat -c %a "$home/$SHELL_REL")" == 640 ]] ||
@@ -449,7 +473,7 @@ attached_shortcuts="$(awk -v begin="$MENU_BEGIN" -v end="$MENU_END" '
 xcompose_block_line="$(grep -nFx -- "$XCOMPOSE_BEGIN" "$home/$XCOMPOSE_REL" | cut -d: -f1)"
 sed -n "1,$((xcompose_block_line - 1))p" "$home/$XCOMPOSE_REL" > "$TEST_ROOT/xcompose-prefix"
 assert_same "$TEST_ROOT/xcompose-prefix" "$TEST_ROOT/xcompose.original"
-jq -e '.idle.screensaver == 600 and .idle.lock == 900 and .bar.layout.right[0].id == "omarchy.tailscale" and .plugins[0].options.nested == true and .unrelated.array == [3,1,2]' \
+jq -e '.idle.screensaver == 600 and .idle.lock == 900 and .bar.layout.left[0].id == "matt.menu" and .bar.layout.right[0].id == "omarchy.tailscale" and .plugins[0].options.nested == true and .unrelated.array == [3,1,2]' \
   "$home/$SHELL_REL" >/dev/null || fail 'desktop JSON update lost managed or unrelated semantics'
 [[ ! -e "$home/desktop-command.trace" && "$(sha256sum "$stock")" == "$stock_hash" ]] ||
   fail 'desktop apply invoked a shell/reload command or changed stock input'
@@ -543,6 +567,24 @@ expect_failure 'managed JSON fields conflict' "$home" "$native" "$DOTFILES" appl
 expect_failure 'managed JSON fields conflict' "$home" "$native" "$DOTFILES" remove desktop
 pass
 
+# A pre-existing local clone or duplicate source/clone entries are never
+# silently adopted or normalized.
+for kind in unmanaged-clone duplicate-menu; do
+  read -r bad_host bad_home < <(prepare_native_desktop "menu-plugin-$kind")
+  if [[ "$kind" == unmanaged-clone ]]; then
+    jq '.bar.layout.left[0].id = "matt.menu"' "$bad_home/$SHELL_REL" > "$bad_home/shell-replacement.json"
+    expected='already uses an unmanaged clone'
+  else
+    jq '.bar.layout.left += [{"id":"matt.menu"}]' "$bad_home/$SHELL_REL" > "$bad_home/shell-replacement.json"
+    expected='JSON resource'
+  fi
+  mv -fT "$bad_home/shell-replacement.json" "$bad_home/$SHELL_REL"
+  expect_failure "$expected" "$bad_home" "$bad_host" "$DOTFILES" apply desktop
+  [[ ! -e "$bad_home/.local/state/dotfiles/v2/desktop.json" && ! -e "$bad_home/$MENU_PLUGIN_REL" ]] ||
+    fail "$kind conflict wrote desktop ownership"
+done
+pass
+
 # Removal restores only recorded fields, preserves unrelated semantic changes,
 # removes the exact loader/link, and deletes state last.
 jq '.idle.lock = 900 | .unrelated.during_ownership = "keep"' "$home/$SHELL_REL" > "$home/.config/omarchy/repaired.json"
@@ -557,6 +599,7 @@ expect_success "$home" "$native" "$DOTFILES" remove desktop
 [[ ! -e "$state" && ! -e "$home/$FRAGMENT_REL" && ! -e "$home/$ALIASES_REL" &&
   ! -e "$home/$BINDINGS_FRAGMENT_REL" && ! -e "$home/$MENU_FRAGMENT_REL" &&
   ! -e "$home/$COMPOSE_SHORTCUT_REL" && ! -e "$home/$SHORTCUTS_REL" && ! -e "$home/$MENU_ADAPTER_REL" &&
+  ! -e "$home/$MENU_PLUGIN_REL/manifest.json" &&
   -f "$home/$MENU_REL" && ! -L "$home/$MENU_REL" && ! -e "$home/$SWITCHER_REL" ]] ||
   fail 'desktop removal retained state or package link'
 assert_file "$home/$INPUT_REL"
@@ -566,7 +609,7 @@ assert_file "$home/$BINDINGS_REL"
 assert_same "$home/$XCOMPOSE_REL" "$TEST_ROOT/xcompose.refreshed"
 assert_same "$home/$BINDINGS_REL" "$TEST_ROOT/bindings.original"
 assert_same "$home/$MENU_REL" "$TEST_ROOT/menu.refreshed"
-jq -e '.idle.screensaver == 150 and .idle.lock == 300 and .unrelated.during_ownership == "keep" and .bar.layout.right[0].id == "omarchy.tailscale"' \
+jq -e '.idle.screensaver == 150 and .idle.lock == 300 and .unrelated.during_ownership == "keep" and .bar.layout.left[0].id == "omarchy.menu" and .bar.layout.right[0].id == "omarchy.tailscale"' \
   "$home/$SHELL_REL" >/dev/null || fail 'desktop removal changed unrelated shell semantics'
 [[ ! -e "$home/desktop-command.trace" ]] || fail 'desktop lifecycle invoked restart/reload commands'
 expect_success "$home" "$native" "$DOTFILES" remove desktop

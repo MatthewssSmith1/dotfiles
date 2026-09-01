@@ -9,4 +9,4 @@
   "shortcuts.prompts.d": {"label":"d · Discuss unresolved points","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-d"},
   "shortcuts.prompts.p": {"label":"p · Write implementation plan","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-p"},
   "shortcuts.prompts.t": {"label":"t · Ask for recommendation","action":"\"$HOME/.local/bin/dotfiles-omarchy-compose-shortcut\" p-t"},
-  "shortcuts.manage": {"label":"Manage shortcuts...","action":"dotfiles-shortcuts manage"},
+  "shortcuts.manage": {"icon":"󰒓","label":"Manage shortcuts...","action":"dotfiles-shortcuts manage"},

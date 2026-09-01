@@ -708,8 +708,12 @@ lean_json_pointer_value() {
   jq -er --arg pointer "$pointer" '
     ($pointer | split("/")[1:]) as $path |
     reduce $path[] as $key ({found:true,value:.};
-      if .found and (.value | type) == "object" and (.value | has($key))
-      then {found:true,value:.value[$key]} else {found:false} end) |
+      if .found and (.value | type) == "object" and (.value | has($key)) then
+        {found:true,value:.value[$key]}
+      elif .found and (.value | type) == "array" and ($key | test("^(0|[1-9][0-9]*)$")) and
+          (($key | tonumber) < (.value | length)) then
+        {found:true,value:.value[$key | tonumber]}
+      else {found:false} end) |
     select(.found) | (.value | tojson)
   ' "$file" 2>/dev/null
 }
@@ -945,8 +949,20 @@ lean_replace_json_resource() {
   temporary_identity="$PATH_OBJECT_IDENTITY"
   [[ -f "$temporary" && ! -L "$temporary" && "$(stat -c %u -- "$temporary")" == "$EUID" ]] ||
     die "unsafe JSON resource temporary file: $temporary"
-  jq --argjson updates "$updates" 'reduce ($updates | to_entries[]) as $update (.;
-    setpath(($update.key | split("/")[1:]); $update.value))' "$path" > "$temporary" || die "could not construct JSON resource replacement: $path"
+  jq --argjson updates "$updates" '
+    def pointer_path($root; $pointer):
+      reduce ($pointer | split("/")[1:])[] as $key
+        ({path: [], value: $root};
+          if (.value | type) == "array" and ($key | test("^(0|[1-9][0-9]*)$")) then
+            ($key | tonumber) as $index |
+            {path: (.path + [$index]), value: .value[$index]}
+          else
+            {path: (.path + [$key]), value: .value[$key]}
+          end) |
+      .path;
+    reduce ($updates | to_entries[]) as $update (.;
+      . as $root | setpath(pointer_path($root; $update.key); $update.value))
+  ' "$path" > "$temporary" || die "could not construct JSON resource replacement: $path"
   chmod "$mode" "$temporary"
   lean_validate_json_resource_file "$index" "$temporary"
   temporary_hash="$(sha256_file "$temporary")"
