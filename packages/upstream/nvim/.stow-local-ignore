@@ -1,1 +1,5 @@
+# Load-bearing: the presence of this file replaces Stow's default ignore list,
+# whose unanchored \.gitignore pattern would suppress the pinned
+# ~/.config/nvim/.gitignore destination that sources.json declares and
+# lean_apply_stow verifies. Keep this file, and keep it ignoring only itself.
 ^/\.stow-local-ignore$

@@ -5,7 +5,8 @@
   "title": "Lean ownership state",
   "oneOf": [
     { "$ref": "#/$defs/version1" },
-    { "$ref": "#/$defs/version2" }
+    { "$ref": "#/$defs/version2" },
+    { "$ref": "#/$defs/version3" }
   ],
   "$defs": {
     "baseProperties": {
@@ -40,6 +41,52 @@
           "additionalProperties": { "$ref": "#/$defs/jsonScalarResource" }
         }
       }
+    },
+    "version3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "profile", "area", "attachments", "resources"],
+      "properties": {
+        "version": { "const": 3 },
+        "profile": { "$ref": "#/$defs/baseProperties/profile" },
+        "area": { "$ref": "#/$defs/baseProperties/area" },
+        "attachments": { "$ref": "#/$defs/v3Attachments" },
+        "resources": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/relativePath" },
+          "additionalProperties": { "$ref": "#/$defs/jsonScalarResource" }
+        }
+      },
+      "anyOf": [
+        { "properties": { "attachments": { "minProperties": 1 } } },
+        { "properties": { "resources": { "minProperties": 1 } } }
+      ]
+    },
+    "v3Attachments": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/relativePath" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "origin", "before_sha256", "managed_sha256", "pending_sha256"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+          "origin": {
+            "enum": ["created", "existing-empty", "existing-final-newline", "existing-no-final-newline"]
+          },
+          "before_sha256": { "$ref": "#/$defs/nullableSha256" },
+          "managed_sha256": { "$ref": "#/$defs/nullableSha256" },
+          "pending_sha256": { "$ref": "#/$defs/nullableSha256" }
+        },
+        "anyOf": [
+          { "properties": { "managed_sha256": { "type": "string" } } },
+          { "properties": { "pending_sha256": { "type": "string" } } }
+        ]
+      }
+    },
+    "nullableSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
     },
     "attachments": {
       "type": "object",
