@@ -1,5 +1,6 @@
 ---
-name: applying-dotfiles description: Apply dotfiles configuration changes — use when changing terminal, shell, tmux, Git, or Neovim configuration, deploying dotfiles to an Ubuntu or Omarchy host, or theming the Windows host.
+name: applying-dotfiles
+description: Apply dotfiles configuration changes — use when changing terminal, shell, tmux, Git, or Neovim configuration, deploying dotfiles to an Ubuntu or Omarchy host, or theming the Windows host.
 ---
 
 Route by where the change lands. Facts about each environment live in `docs/environments/`; these files carry only the apply procedures.

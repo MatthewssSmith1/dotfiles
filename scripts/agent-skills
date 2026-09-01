@@ -36,6 +36,51 @@ frontmatter_name() {
   printf '%s' "$name"
 }
 
+# Lighter discoverability check for repo-level skills: each SKILL.md carries
+# well-formed frontmatter whose name matches its directory and a nonempty
+# single-line description. Payload layout is not constrained (these skills
+# keep companion documents beside SKILL.md).
+verify_repo_skill_frontmatter() {
+  local file="$1" line='' description='' count=0 first=true closed=false
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$first" == true ]]; then
+      [[ "$line" == '---' ]] || return 1
+      first=false
+      continue
+    fi
+    if [[ "$line" == '---' ]]; then
+      closed=true
+      break
+    fi
+    if [[ "$line" == description:* ]]; then
+      description="${line#description:}"
+      description="${description# }"
+      ((count += 1))
+    fi
+  done < "$file"
+  [[ "$closed" == true && "$count" == 1 && -n "$description" ]] || return 1
+}
+
+verify_repo_skills() {
+  local skills_root="$REPO_DIR/.agents/skills"
+  local entry skill name repo_skill_count=0
+
+  [[ -d "$skills_root" && ! -L "$skills_root" ]] || die 'repo .agents/skills is missing or not a directory'
+  for entry in "$skills_root"/*; do
+    [[ -d "$entry" && ! -L "$entry" ]] || die "repo skill entry is not a directory: ${entry#"$REPO_DIR"/}"
+    skill="${entry##*/}"
+    [[ "$skill" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || die "invalid repo skill directory name: $skill"
+    [[ -f "$entry/SKILL.md" && ! -L "$entry/SKILL.md" ]] || die "missing or non-regular skill file: .agents/skills/$skill/SKILL.md"
+    name="$(frontmatter_name "$entry/SKILL.md")" || die "invalid SKILL.md frontmatter: .agents/skills/$skill/SKILL.md"
+    [[ "$name" == "$skill" ]] || die "frontmatter name does not match repo skill directory: $skill"
+    verify_repo_skill_frontmatter "$entry/SKILL.md" ||
+      die "SKILL.md frontmatter lacks a single nonempty description line: .agents/skills/$skill/SKILL.md"
+    ((repo_skill_count += 1))
+  done
+  ((repo_skill_count > 0)) || die 'repository must contain at least one repo skill directory'
+  printf '[%s] verified %s repository skills\n' "$SCRIPT_NAME" "$repo_skill_count"
+}
+
 verify() {
   local agents_root="$PACKAGE_ROOT/.agents" skills_root="$PACKAGE_ROOT/.agents/skills"
   local entry relative skill name file_count=0 skill_count=0
@@ -85,6 +130,7 @@ case "${1:-}" in
   verify)
     (($# == 1)) || die "usage: $SCRIPT_NAME verify"
     verify
+    verify_repo_skills
     ;;
   *) die "usage: $SCRIPT_NAME verify" ;;
 esac
