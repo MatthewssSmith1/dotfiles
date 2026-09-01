@@ -27,13 +27,13 @@ dotfiles.sh help [command]
 dotfiles.sh --help
 ```
 
-An operation is mandatory and must come first. Areas are positional; optional areas require explicit selection for apply/check. Legacy operation flags, selector flags, comma lists, and options after an area are rejected. No areas selects ready defaults for apply/check and owned defaults for removal. `list` and help do not require a supported host. The executable `~/.local/bin/dotfiles` payload in `common/tools` locates exactly one checkout root and forwards this interface without a fixed checkout path.
+An operation is mandatory and must come first. `--profile` is assertion-only: the profile is always detected from the host, and the flag merely fails the run when its value does not match the detected host class. Areas are positional; optional areas require explicit selection for apply/check. Legacy operation flags, selector flags, comma lists, and options after an area are rejected. No areas selects ready defaults for apply/check and owned defaults for removal. `list` and help do not require a supported host. The executable `~/.local/bin/dotfiles` payload in `common/tools` locates exactly one checkout root and forwards this interface without a fixed checkout path.
 
 The `dotfiles.sh` deployment lifecycle is non-root and user-scoped. It never invokes `sudo`, a distro package manager, an installer, or a network-capable command, and it never changes the login shell. Missing dependencies print exact manual guidance.
 
 The Omarchy tools closure also deploys `dotfiles-omarchy-prune` onto `PATH` but never executes it. This separate, manually invoked administration command asks Omarchy to remove selected packages and web-app launchers; Omarchy's package command may request sudo authentication.
 
-Every selected area completes preflight before its first write. A shared/exclusive lock on `HOME` coordinates apply/remove and check respectively. Derivable package links can converge directly after an interrupted Stow run; dotfiles has no deployment transaction, journal, backup, or rollback layer.
+Every selected area completes preflight before its first write. Apply and remove take an exclusive lock on `HOME`; check takes a shared lock, so concurrent checks coexist but never overlap a mutating run. Derivable package links can converge directly after an interrupted Stow run; dotfiles has no deployment transaction, journal, backup, or rollback layer.
 
 ## Lean Ownership
 
