@@ -6,10 +6,11 @@ Use the smallest suite that covers the change. `tests/run.sh` is the exhaustive 
 
 | Changed scope                                       | Run                                                                         |
 | --------------------------------------------------- | --------------------------------------------------------------------------- |
-| Documentation only                                  | No test unless it mirrors an executable contract                            |
+| Documentation only (nothing under `packages/upstream/`) | No test unless it mirrors an executable contract                        |
 | Static config, manifests, schemas, or shell source  | `tests/contract_test.sh`                                                    |
 | Host detection or profile mapping                   | `tests/contract_test.sh`, `tests/host_test.sh`                              |
 | `lib/areas/git.sh` or Git packages                  | `tests/contract_test.sh`, `tests/git_test.sh`                               |
+| GitHub `gh` wrapper or auth helper                  | `tests/contract_test.sh`, `tests/github_auth_test.sh`                       |
 | `lib/areas/tools.sh` or mise packages               | `tests/contract_test.sh`, `tests/tools_test.sh`                             |
 | Bash area and packages                              | `tests/contract_test.sh`, `tests/shell_test.sh`                             |
 | `dotfiles-secret` helper                            | `tests/contract_test.sh`, `tests/secrets_test.sh`                           |
@@ -32,4 +33,4 @@ Run focused suites while iterating. Run `tests/run.sh` before committing a chang
 
 ## Reference Cost
 
-Expensive suites are `shell_test.sh` (~10m), `git_test.sh` (~4m), `agents_test.sh` (~3m), and `lean_engine_test.sh` (~1m); full `tests/run.sh` is ~30m on constrained hosts. The runner prints current timings. Override concurrency with `tests/run.sh --jobs COUNT` or `TEST_JOBS=COUNT` and inspect the suite list with `tests/run.sh --list`.
+Expensive suites are `shell_test.sh` (~10m), `desktop_test.sh` (~4.5m), `agents_test.sh` (~3m), and `lean_engine_test.sh` (~1m); `git_test.sh` is ~40s and `contract_test.sh` a few seconds; full `tests/run.sh` is ~30m on constrained hosts. The runner prints current timings. Override concurrency with `tests/run.sh --jobs COUNT` or `TEST_JOBS=COUNT` and inspect the suite list with `tests/run.sh --list`.

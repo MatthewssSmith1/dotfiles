@@ -1,0 +1,7 @@
+# Byte-pinned upstream snapshots: content must match recorded blob hashes.
+# scripts/upstream verify (run by tests/contract_test.sh) fails on any edit.
+packages/upstream/
+# SKILL.md YAML frontmatter is discovery-critical; a reflow has collapsed the
+# name/description lines before. scripts/agent-skills verify enforces shape.
+.agents/skills/
+packages/common/agents/.agents/skills/
