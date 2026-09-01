@@ -17,26 +17,6 @@ register_herdr_area() {
   for package in "${PACKAGES[@]}"; do lean_add_package "$package"; done
 }
 
-herdr_package_identity() {
-  local metadata owner='' recorded_path recorded_owner package
-  if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
-    metadata="$HOST_ROOT/var/lib/dotfiles-test/pacman-owners.tsv"
-    [[ -f "$metadata" ]] || return 1
-    while IFS=$'\t' read -r recorded_path recorded_owner; do
-      [[ "$recorded_path" == /usr/bin/herdr ]] || continue
-      [[ -z "$owner" ]] || return 1
-      owner="$recorded_owner"
-    done < "$metadata"
-    [[ -n "$owner" ]] || return 1
-    printf '%s' "$owner"
-    return
-  fi
-  [[ -x /usr/bin/pacman ]] || return 1
-  package="$(/usr/bin/pacman -Qqo -- /usr/bin/herdr 2>/dev/null)" || return 1
-  [[ "$package" == herdr ]] || return 1
-  /usr/bin/pacman -Q herdr 2>/dev/null
-}
-
 herdr_resolved_binary() {
   type -P herdr 2>/dev/null || true
 }
@@ -50,7 +30,7 @@ validate_herdr_runtime() {
     [[ "${DOTFILES_TESTING:-}" != 1 ]] || expected="$binary"
     [[ "$resolved" == "$expected" ]] ||
       die "native Herdr must resolve to package-owned /usr/bin/herdr, not '${resolved:-missing}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
-    identity="$(herdr_package_identity 2>/dev/null || true)"
+    identity="$(omarchy_package_identity /usr/bin/herdr herdr 2>/dev/null || true)"
     [[ "$identity" == "$HERDR_NATIVE_PACKAGE" ]] ||
       die "native /usr/bin/herdr must be owned by package '$HERDR_NATIVE_PACKAGE', found '${identity:-no package owner}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
   else
@@ -78,7 +58,7 @@ validate_herdr_runtime() {
 validate_herdr_config_file() {
   local path="$1" description="$2" mode
   [[ -f "$path" && ! -L "$path" ]] || die "$description is missing or is not a regular file: $path"
-  [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "$description has an unsafe owner: $path"
+  path_owned_by_euid "$path" || die "$description has an unsafe owner: $path"
   mode="$(stat -c %a -- "$path")"
   [[ "$mode" == 600 || "$mode" == 640 || "$mode" == 644 ]] || die "$description has an unsafe mode: $path"
   cmp -s -- "$path" "$DOTFILES_DIR/$HERDR_REFERENCE" || {
@@ -136,11 +116,7 @@ validate_herdr_closure() {
       <(printf '%s' "$HERDR_MOSHI_PATH_CONTENT") || die 'Ubuntu Moshi Herdr PATH drop-in bytes are not exact'
     grep -qxF '"aqua:ogulcancelik/herdr" = "0.8.2"' "$selector" ||
       die 'Ubuntu Herdr mise selector is not the accepted 0.8.2 release'
-    lean_scan_packages
-    ((${#LEAN_TARGET_PATHS[@]} == ${#expected_targets[@]})) || die 'Ubuntu Herdr package target inventory is not exact'
-    for expected in "${expected_targets[@]}"; do
-      array_contains "$expected" "${LEAN_TARGET_PATHS[@]}" || die "Ubuntu Herdr package is missing expected target: $expected"
-    done
+    lean_scan_expected_targets 'Ubuntu Herdr package' "${expected_targets[@]}"
     for index in "${!LEAN_TARGET_PATHS[@]}"; do
       relative="${LEAN_TARGET_PATHS[index]}"
       source="${LEAN_TARGET_SOURCES[index]}"
@@ -172,11 +148,7 @@ preflight_herdr() {
 }
 
 apply_herdr() {
-  register_herdr_area
-  validate_herdr_closure
-  validate_herdr_runtime
-  [[ "$SELECTED_PROFILE" != omarchy ]] || validate_herdr_config_file "$HOME/$HERDR_CONFIG" 'native Herdr config'
-  validate_herdr_config_syntax
+  preflight_herdr
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     log 'validated package-owned native Herdr; no files or deployment state were written'

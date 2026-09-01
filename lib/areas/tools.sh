@@ -70,7 +70,7 @@ preflight_tools() {
 }
 
 apply_tools() {
-  register_tools_area
+  preflight_tools
   lean_apply_area
   log "applied tools area for profile '$SELECTED_PROFILE'; install selected tools manually with mise"
 }

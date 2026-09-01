@@ -84,11 +84,7 @@ validate_git_closure() {
       .local/share/dotfiles/bin/dotfiles-github-auth
     )
   fi
-  lean_scan_packages
-  ((${#LEAN_TARGET_PATHS[@]} == ${#expected_targets[@]})) || die 'Git package target inventory is not exact'
-  for expected in "${expected_targets[@]}"; do
-    array_contains "$expected" "${LEAN_TARGET_PATHS[@]}" || die "Git package closure is missing expected target: $expected"
-  done
+  lean_scan_expected_targets 'Git package' "${expected_targets[@]}"
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     relative="${LEAN_TARGET_PATHS[index]}"
     source="${LEAN_TARGET_SOURCES[index]}"
@@ -111,7 +107,7 @@ validate_git_local_layer() {
   [[ ! -e "$path" && ! -L "$path" ]] && return 0
   [[ -f "$path" && ! -L "$path" && -r "$path" ]] ||
     die "host-local Git layer is not a readable regular non-symlink file: $path"
-  [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "$path has an unsafe owner"
+  path_owned_by_euid "$path" || die "$path has an unsafe owner"
   mode="$(stat -c %a -- "$path")"
   (((8#$mode & 022) == 0)) || die "$path is group- or other-writable"
   validate_git_file "$path"
@@ -159,7 +155,7 @@ preflight_git_identity() {
   validate_home_parent_chain "$path"
   if [[ -e "$path" || -L "$path" ]]; then
     [[ -f "$path" && ! -L "$path" ]] || die "$path must be a regular non-symlink file"
-    [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "$path has an unsafe owner"
+    path_owned_by_euid "$path" || die "$path has an unsafe owner"
     validate_git_file "$path"
     while IFS= read -r key; do
       case "${key,,}" in
@@ -183,6 +179,7 @@ apply_git_identity() {
   local path="$HOME/.gitconfig.local" temporary
   [[ "$GIT_IDENTITY_ACTION" != none ]] || return 0
   temporary="$(mktemp "$HOME/.gitconfig.local.tmp.XXXXXX")"
+  track_temp_path "$temporary"
   if [[ "$GIT_IDENTITY_ACTION" == create ]]; then
     : > "$temporary"
     git config --file "$temporary" user.name "$GIT_USER_NAME"
@@ -244,7 +241,7 @@ git_url_section_matches() {
 
 validate_active_github_git() {
   local expected_origin="file:$HOME/.config/dotfiles/git/github-vps.conf" key origin backend
-  local record config_key raw_config_key value section selected_url is_managed managed_started=false
+  local record config_key raw_config_key value section selected_url is_managed managed_started=false index
   local -a values=() origins=() helpers=() records=()
   local -a selected_urls=(
     https://github.com/MatthewssSmith1/dotfiles
@@ -339,9 +336,8 @@ validate_effective_git() {
 }
 
 apply_git() {
+  preflight_git
   apply_git_identity
-  register_git_area
-  validate_git_closure
   lean_apply_area
   validate_effective_git
   log "applied Git area for profile '$SELECTED_PROFILE'"

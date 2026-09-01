@@ -106,10 +106,7 @@ preflight_opencode() {
 }
 
 apply_opencode() {
-  register_opencode_area
-  validate_opencode_payload
-  validate_opencode_global_configs
-  lean_preflight_area apply
+  preflight_opencode
   remove_opencode_legacy_links
   validate_opencode_global_configs
   lean_apply_area
@@ -121,6 +118,8 @@ remove_opencode() {
   validate_opencode_payload
   lean_preflight_area remove
   remove_opencode_legacy_links
+  ((${#LEAN_ATTACHMENT_PATHS[@]} == 0 && ${#LEAN_JSON_PATHS[@]} == 0)) ||
+    die 'OpenCode remove bypasses guarded teardown but guarded resources are registered'
   lean_remove_stow
   log 'removed exact managed OpenCode profile and launcher links'
 }

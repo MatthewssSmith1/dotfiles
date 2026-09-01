@@ -57,7 +57,8 @@ validate_area_manifest() {
   AREA_ORDER=()
   AREA_STATUS=()
   while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -n "$line" && "$line" != *$'\t'* && "$line" != *' '* ]] || die 'invalid area manifest'
+    [[ -n "$line" && "$line" != \#* ]] || continue
+    [[ "$line" != *$'\t'* && "$line" != *' '* ]] || die 'invalid area manifest'
     IFS='|' read -r -a fields <<< "$line"
     case "${fields[0]}" in
       schema)
@@ -236,7 +237,7 @@ lean_validate_state_file() {
   local file="$1" value
   validate_home_parent_chain "$file"
   [[ -f "$file" && ! -L "$file" ]] || die "lean deployment state is not a regular file: $file"
-  [[ "$(stat -c %u -- "$file")" == "$EUID" ]] || die "lean deployment state has an unsafe owner: $file"
+  path_owned_by_euid "$file" || die "lean deployment state has an unsafe owner: $file"
   jq -e '
     def old_attachment_map($allow_empty):
       type == "object" and ($allow_empty or length > 0) and all(to_entries[];
@@ -325,6 +326,7 @@ lean_begin_area() {
   LEAN_AREA="$area"
   LEAN_PROFILE="$profile"
   LEAN_ENTRY_KIND="$entry_kind"
+  LEAN_STOW_PREFLIGHT_MEMO=""
   LEAN_STATE="$(lean_state_dir)/$area.json"
   LEAN_PACKAGES=()
   LEAN_TARGET_PATHS=()
@@ -371,6 +373,16 @@ lean_add_package() {
   [[ "$package" =~ ^([a-z0-9-]+)/([a-z0-9-]+)$ ]] || die "invalid qualified package ID: $package"
   array_contains "$package" "${LEAN_PACKAGES[@]:-}" && die "duplicate lean package: $package"
   LEAN_PACKAGES+=("$package")
+}
+
+# Resolve a registered guarded-attachment ID to its index so callers never
+# depend on registration order.
+lean_attachment_index() {
+  local id="$1" index
+  for index in "${!LEAN_ATTACHMENT_IDS[@]}"; do
+    [[ "${LEAN_ATTACHMENT_IDS[index]}" != "$id" ]] || { printf '%s' "$index"; return 0; }
+  done
+  die "unknown guarded attachment ID: $id"
 }
 
 lean_add_guarded_attachment() {
@@ -460,6 +472,19 @@ lean_add_json_scalar_fields() {
   done
 }
 
+# Scan the selected packages, then assert the derived link inventory matches
+# the caller's expected relative-target list exactly. "$describe" names the
+# area payload in error messages (e.g. "Bash package").
+lean_scan_expected_targets() {
+  local describe="$1" expected
+  shift
+  lean_scan_packages
+  ((${#LEAN_TARGET_PATHS[@]} == $#)) || die "$describe target inventory is not exact"
+  for expected in "$@"; do
+    array_contains "$expected" "${LEAN_TARGET_PATHS[@]}" || die "$describe closure is missing expected target: $expected"
+  done
+}
+
 lean_scan_packages() {
   local package layer name root packages_root path relative source parent lexical
   LEAN_TARGET_PATHS=()
@@ -520,9 +545,11 @@ lean_preflight_links() {
 }
 
 lean_run_stow_preflight() {
-  local mode="$1" package layer name output status
+  local mode="$1" package layer name output status cache_key
   local action=(--stow)
   [[ "$mode" != remove ]] || action=(--delete)
+  cache_key="$mode ${LEAN_AREA:-} ${LEAN_PACKAGES[*]}"
+  [[ "${LEAN_STOW_PREFLIGHT_MEMO:-}" != "$cache_key" ]] || return 0
   for package in "${LEAN_PACKAGES[@]}"; do
     layer="${package%%/*}"
     name="${package#*/}"
@@ -531,6 +558,7 @@ lean_run_stow_preflight() {
     [[ -z "$output" ]] || printf '%s\n' "$output" >&2
     ((status == 0)) || die "Stow conflict preflight failed for $package"
   done
+  LEAN_STOW_PREFLIGHT_MEMO="$cache_key"
 }
 
 lean_inspect_attachment() {
@@ -543,7 +571,7 @@ lean_inspect_attachment() {
   LEAN_ATTACHMENT_FOUND_BLOCK=""
   if [[ ! -e "$path" && ! -L "$path" ]]; then return 0; fi
   [[ -f "$path" && ! -L "$path" ]] || die "guarded attachment is not a regular file: $path"
-  [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "guarded attachment has an unsafe owner: $path"
+  path_owned_by_euid "$path" || die "guarded attachment has an unsafe owner: $path"
   file_contains_nul "$path" && die "guarded attachment contains NUL bytes: $path"
   LEAN_ATTACHMENT_CURRENT_HASH="$(sha256_file "$path")"
   if [[ ! -s "$path" ]]; then
@@ -722,7 +750,7 @@ lean_validate_json_resource_file() {
   local index="$1" path="$2" field value
   validate_home_parent_chain "$path"
   [[ -f "$path" && ! -L "$path" ]] || die "JSON resource is not an EUID-owned regular file: $path"
-  [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "JSON resource is not an EUID-owned regular file: $path"
+  path_owned_by_euid "$path" || die "JSON resource is not an EUID-owned regular file: $path"
   jq -e . "$path" >/dev/null 2>&1 || die "JSON resource is malformed: $path"
   "${LEAN_JSON_VALIDATORS[index]}" "$path" || die "JSON resource has an unsupported application shape: $path"
   for field in "${!LEAN_JSON_FIELD_POINTERS[@]}"; do
@@ -888,6 +916,27 @@ lean_build_state_json() {
     '{version:3,profile:$profile,area:$area,attachments:$attachments,resources:$resources}'
 }
 
+# Shared verify-then-rename publication tail. Rechecks the prepared temporary
+# file and the destination immediately before renaming the temporary into
+# place; "$describe" names the object in error messages and must match the
+# strings suites assert. A source identity of "absent" accepts a still-absent
+# destination. Pass "verify-only" to run every recheck but leave publication
+# to the caller (used where the publish strategy is not a rename).
+lean_publish_temp() {
+  local describe="$1" hold="$2" temporary="$3" temporary_identity="$4" temporary_hash="$5"
+  local path="$6" source_identity="$7" source_hash="$8" strategy="${9:-rename}"
+  test_hold "$hold"
+  capture_path_object_identity "$temporary" || die "could not recheck $describe temporary file: $temporary"
+  if [[ "$PATH_OBJECT_IDENTITY" != "$temporary_identity" || "$(sha256_file "$temporary")" != "$temporary_hash" ]]; then
+    retain_tracked_temp_path "$temporary"
+    die "$describe temporary file changed before publication: $temporary"
+  fi
+  capture_path_object_identity "$path" || die "could not recheck $describe identity: $path"
+  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && ( "$source_identity" == absent || "$(sha256_file "$path")" == "$source_hash" ) ]] ||
+    die "$describe changed concurrently; refusing overwrite: $path"
+  [[ "$strategy" == verify-only ]] || mv -fT -- "$temporary" "$path"
+}
+
 lean_write_state_atomic() {
   local content dir base temporary temporary_hash temporary_identity source_hash source_identity
   ((${#LEAN_ATTACHMENT_PATHS[@]} > 0 || ${#LEAN_JSON_PATHS[@]} > 0)) || die 'refusing lean state write without guarded attachments'
@@ -911,16 +960,8 @@ lean_write_state_atomic() {
   track_temp_path "$temporary"
   temporary_identity="$PATH_OBJECT_IDENTITY"
   temporary_hash="$(sha256_file "$temporary")"
-  test_hold lean-before-state-rename
-  capture_path_object_identity "$temporary" || die "could not recheck lean state temporary file: $temporary"
-  if [[ "$PATH_OBJECT_IDENTITY" != "$temporary_identity" || "$(sha256_file "$temporary")" != "$temporary_hash" ]]; then
-    retain_tracked_temp_path "$temporary"
-    die "lean state temporary file changed before publication: $temporary"
-  fi
-  capture_path_object_identity "$LEAN_STATE" || die "could not recheck lean state identity: $LEAN_STATE"
-  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && ( "$source_identity" == absent || "$(sha256_file "$LEAN_STATE")" == "$source_hash" ) ]] ||
-    die "lean state changed concurrently; refusing overwrite: $LEAN_STATE"
-  mv -fT -- "$temporary" "$LEAN_STATE"
+  lean_publish_temp 'lean state' lean-before-state-rename "$temporary" "$temporary_identity" "$temporary_hash" \
+    "$LEAN_STATE" "$source_identity" "$source_hash"
 }
 
 lean_replace_json_resource() {
@@ -966,16 +1007,8 @@ lean_replace_json_resource() {
   chmod "$mode" "$temporary"
   lean_validate_json_resource_file "$index" "$temporary"
   temporary_hash="$(sha256_file "$temporary")"
-  test_hold lean-before-json-rename
-  capture_path_object_identity "$temporary" || die "could not recheck JSON resource temporary file: $temporary"
-  if [[ "$PATH_OBJECT_IDENTITY" != "$temporary_identity" || "$(sha256_file "$temporary")" != "$temporary_hash" ]]; then
-    retain_tracked_temp_path "$temporary"
-    die "JSON resource temporary file changed before publication: $temporary"
-  fi
-  capture_path_object_identity "$path" || die "could not recheck JSON resource identity: $path"
-  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && "$(sha256_file "$path")" == "$source_hash" ]] ||
-    die "JSON resource changed concurrently; refusing overwrite: $path"
-  mv -fT -- "$temporary" "$path"
+  lean_publish_temp 'JSON resource' lean-before-json-rename "$temporary" "$temporary_identity" "$temporary_hash" \
+    "$path" "$source_identity" "$source_hash"
   capture_path_object_identity "$temporary"
   [[ "$PATH_OBJECT_IDENTITY" == absent ]] || die "JSON resource temporary path remained after replacement: $temporary"
   lean_validate_json_resource_file "$index" "$path"
@@ -1073,15 +1106,8 @@ lean_write_attachment() {
   chmod "$source_mode" "$temporary"
   capture_path_object_identity "$temporary" || die "could not inspect guarded attachment temporary file: $temporary"
   temporary_identity="$PATH_OBJECT_IDENTITY"; temporary_hash="$(sha256_file "$temporary")"
-  test_hold lean-before-attachment-rename
-  capture_path_object_identity "$temporary" || die "could not recheck guarded attachment temporary file: $temporary"
-  [[ "$PATH_OBJECT_IDENTITY" == "$temporary_identity" && "$(sha256_file "$temporary")" == "$temporary_hash" ]] || {
-    retain_tracked_temp_path "$temporary"
-    die "guarded attachment temporary file changed before publication: $temporary"
-  }
-  capture_path_object_identity "$path" || die "could not recheck guarded attachment identity: $path"
-  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && ( "$source_identity" == absent || "$(sha256_file "$path")" == "$source_hash" ) ]] ||
-    die "guarded attachment changed concurrently; refusing overwrite: $path"
+  lean_publish_temp 'guarded attachment' lean-before-attachment-rename "$temporary" "$temporary_identity" "$temporary_hash" \
+    "$path" "$source_identity" "$source_hash" verify-only
   if [[ "$status" == absent && "$origin" == created ]]; then
     ln -T -- "$temporary" "$path" 2>/dev/null || { rm -f -- "$temporary"; die "guarded attachment destination appeared: $path"; }
     rm -- "$temporary"
@@ -1184,16 +1210,8 @@ lean_remove_attachment() {
   chmod "$mode" "$temporary"
   capture_path_object_identity "$temporary" || die "could not inspect guarded attachment temporary file: $temporary"
   temporary_identity="$PATH_OBJECT_IDENTITY"; temporary_hash="$(sha256_file "$temporary")"
-  test_hold lean-before-attachment-remove
-  capture_path_object_identity "$temporary" || die "could not recheck guarded attachment temporary file: $temporary"
-  [[ "$PATH_OBJECT_IDENTITY" == "$temporary_identity" && "$(sha256_file "$temporary")" == "$temporary_hash" ]] || {
-    retain_tracked_temp_path "$temporary"
-    die "guarded attachment temporary file changed before publication: $temporary"
-  }
-  capture_path_object_identity "$path" || die "could not recheck guarded attachment identity: $path"
-  [[ "$PATH_OBJECT_IDENTITY" == "$source_identity" && "$(sha256_file "$path")" == "$source_hash" ]] ||
-    die "guarded attachment changed concurrently; refusing overwrite: $path"
-  mv -fT -- "$temporary" "$path"
+  lean_publish_temp 'guarded attachment' lean-before-attachment-remove "$temporary" "$temporary_identity" "$temporary_hash" \
+    "$path" "$source_identity" "$source_hash"
 }
 
 lean_remove_area() {

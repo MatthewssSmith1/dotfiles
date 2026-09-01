@@ -47,11 +47,7 @@ validate_bash_closure() {
       .local/share/dotfiles/bin/fd
     )
   fi
-  lean_scan_packages
-  ((${#LEAN_TARGET_PATHS[@]} == ${#expected_targets[@]})) || die 'Bash package target inventory is not exact'
-  for expected in "${expected_targets[@]}"; do
-    array_contains "$expected" "${LEAN_TARGET_PATHS[@]}" || die "Bash package closure is missing expected target: $expected"
-  done
+  lean_scan_expected_targets 'Bash package' "${expected_targets[@]}"
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     relative="${LEAN_TARGET_PATHS[index]}"
     source="${LEAN_TARGET_SOURCES[index]}"
@@ -105,9 +101,7 @@ preflight_bash() {
 }
 
 apply_bash() {
-  register_bash_area
-  validate_bash_closure
-  validate_bash_local_layer
+  preflight_bash
   lean_apply_area
   log "applied Bash area for profile '$SELECTED_PROFILE'"
 }

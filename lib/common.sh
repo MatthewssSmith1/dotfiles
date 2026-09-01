@@ -48,6 +48,11 @@ tracked_temp_path_index() {
   return 1
 }
 
+# Canonical EUID-ownership test for paths dotfiles is about to trust.
+path_owned_by_euid() {
+  [[ "$(stat -c %u -- "$1")" == "$EUID" ]]
+}
+
 track_temp_path() {
   local path="$1" index recursive=false
   capture_path_object_identity "$path" || die "could not track temporary path: $path"

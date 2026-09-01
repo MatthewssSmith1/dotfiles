@@ -36,7 +36,7 @@ for source_file in "${DOTFILES_SOURCES[@]}"; do
   [[ -f "$source_file" ]] || fail "missing dotfiles source file: $source_file"
 done
 bash -n "${DOTFILES_SOURCES[@]}" \
-  "$REPO_DIR/scripts/upstream" \
+  "$REPO_DIR/scripts/upstream" "$REPO_DIR/lib/upstream/verify.sh" \
   "$REPO_DIR/scripts/agent-skills" "$SHORTCUTS_LAUNCHER" \
   "$OMARCHY_PRUNE" "$OMARCHY_AMDGPU_IPS" "$OMARCHY_THEME_SWITCHER" "$OMARCHY_THEME_MENU_ADAPTER" ||
   fail 'a dotfiles Bash file has invalid syntax'
@@ -67,7 +67,7 @@ for profile in omarchy ubuntu; do
   grep -qxF 'opencode common/opencode' "$REPO_DIR/profiles/$profile.conf" ||
     fail "$profile OpenCode closure is not final"
 done
-grep -Fq '|| "$1" == opencode' "$DOTFILES" || fail 'OpenCode is absent from lean dispatch'
+grep -qxF 'area|opencode|optional' "$REPO_DIR/manifests/areas.tsv" || fail 'OpenCode is absent from lean dispatch'
 opencode_package="$REPO_DIR/packages/common/opencode"
 opencode_inventory="$(find "$opencode_package" -type f -printf '%P\n' | LC_ALL=C sort)"
 [[ "$opencode_inventory" == $'.config/dotfiles/opencode/personal.jsonc\n.config/dotfiles/opencode/tui.jsonc\n.config/dotfiles/opencode/work.jsonc\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
@@ -137,7 +137,8 @@ grep -Fq 'return Math.min(available, Math.round(panel.height * 0.7))' "$OMARCHY_
 grep -Fq 'cardTop = effectiveCardTop' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
   fail 'desktop menu clone no longer freezes its top edge'
 grep -qxF 'readonly -a HIDDEN_THEMES=(' "$OMARCHY_THEME_SWITCHER" || fail 'theme denylist is not readonly'
-expected_hidden=$'ethereal\nflexoki-light\nhackerman\nlast-horizon\nlumon\nlupine\nmiasma\nrose-pine\nvantablack\nwhite'
+expected_hidden="$(< "$REPO_DIR/manifests/hidden-themes.txt")"
+grep -qxE '[a-z0-9-]+' "$REPO_DIR/manifests/hidden-themes.txt" || fail 'hidden-theme manifest is empty or malformed'
 actual_hidden="$(awk '/^readonly -a HIDDEN_THEMES=\($/{inside=1; next} inside && /^\)/{exit} inside {sub(/^[[:space:]]+/, ""); print}' "$OMARCHY_THEME_SWITCHER")"
 [[ "$actual_hidden" == "$expected_hidden" ]] || fail 'theme denylist names are not exact'
 [[ -x "$REPO_DIR/scripts/generate-desktop-shortcuts" ]] || fail 'desktop shortcut generator is not executable'
@@ -166,7 +167,7 @@ grep -qxF 'native_switcher="${DOTFILES_TEST_NATIVE_SELECTOR:-/usr/bin/omarchy-th
 grep -Fq 'style.theme' \
   "$REPO_DIR/lib/areas/desktop.sh" || fail 'desktop guarded menu theme routing is not exact'
 grep -Fq 'after-exact 0644 true '\''{'\''' "$REPO_DIR/lib/areas/desktop.sh" || fail 'desktop menu attachment is not anchored after exact {'
-grep -Fq '|| "$1" == desktop' "$DOTFILES" || fail 'desktop is absent from lean dispatch'
+grep -Fq 'AREA_STATUS[$1]+x' "$DOTFILES" || fail 'lean dispatch is not derived from the area manifest'
 grep -Fq 'for file in "$(lean_state_dir)"/*.json' "$DOTFILES" || fail 'default removal does not inspect ownership state'
 ! grep -Eq 'add_area[[:space:]]+desktop' "$DOTFILES" || fail 'default removal selects desktop without ownership'
 ! grep -Eq '(^|[;&|[:space:]])(omarchy-shell|hyprctl|omarchy[[:space:]]+restart|omarchy[[:space:]]+reload)([;&|[:space:]]|$)' \
@@ -177,7 +178,7 @@ pass
 
 # Herdr uses native validation-only ownership and one Ubuntu package-only
 # closure. Ubuntu adds one exact policy preamble to the accepted config.
-grep -Fq '|| "$1" == herdr' "$DOTFILES" ||
+grep -qxF 'area|herdr|ready' "$REPO_DIR/manifests/areas.tsv" ||
   fail 'Herdr is absent from lean dispatch'
 grep -qxF 'herdr validation-only' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Herdr is not validation-only'
 grep -qxF 'herdr ubuntu/herdr' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Herdr closure is not final'
@@ -252,7 +253,7 @@ pass
 grep -qxF 'bash common/bash' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Bash closure is not personal-only'
 grep -qxF 'bash upstream/bash,upstream/starship,ubuntu/bash,common/bash' "$REPO_DIR/profiles/ubuntu.conf" ||
   fail 'Ubuntu Bash closure is not final'
-grep -Fq '|| "$1" == bash' "$DOTFILES" ||
+grep -qxF 'area|bash|ready' "$REPO_DIR/manifests/areas.tsv" ||
   fail 'Bash is absent from lean dispatch'
 grep -qxF '"aqua:starship/starship" = "1.26.0"' \
   "$REPO_DIR/packages/ubuntu/bash/.config/mise/conf.d/40-dotfiles-bash-ubuntu.toml" ||
@@ -290,6 +291,102 @@ shopt -u nullglob
 ((${#versioned_schema_names[@]} == 0)) || fail 'first-party schema filename contains a version suffix'
 pass
 
+# The deployment-state schema accepts the format-3 documents the lean engine
+# actually writes (attachments with managed/pending hashes plus resources).
+v3_state_doc="$TEST_ROOT/v3-state.json"
+cat > "$v3_state_doc" <<'JSON'
+{
+  "version": 3,
+  "profile": "omarchy",
+  "area": "desktop",
+  "attachments": {
+    ".config/omarchy/hypr/bindings.lua": {
+      "id": "desktop.bindings",
+      "origin": "existing-final-newline",
+      "before_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "managed_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "pending_sha256": null
+    }
+  },
+  "resources": {
+    ".config/omarchy/shell.json": {
+      "id": "desktop.menu-widget",
+      "kind": "json-scalar-fields",
+      "fields": {
+        "/bar/left": { "type": "string", "original": "omarchy.menu", "managed": "matt.menu" }
+      }
+    }
+  }
+}
+JSON
+validate_json_schema "$REPO_DIR/schemas/deployment-state.schema.json" "$v3_state_doc"
+if schema_validator_available; then
+  jq '.attachments[].managed_sha256 = null' "$v3_state_doc" > "$TEST_ROOT/v3-state-hashless.json"
+  if python3 - "$REPO_DIR/schemas/deployment-state.schema.json" "$TEST_ROOT/v3-state-hashless.json" <<'PYTHON'
+import json, sys
+import jsonschema
+with open(sys.argv[1]) as handle:
+    schema = json.load(handle)
+with open(sys.argv[2]) as handle:
+    instance = json.load(handle)
+sys.exit(0 if jsonschema.Draft202012Validator(schema).is_valid(instance) else 1)
+PYTHON
+  then
+    fail 'deployment-state schema accepted a v3 attachment with neither managed nor pending hash'
+  fi
+fi
+pass
+
+# Every area in manifests/areas.tsv implements the full lean entrypoint
+# contract. Dispatch derives from the manifest, so this is the enforcement
+# that a listed area actually has preflight/apply/remove functions.
+DOTFILES_DIR="$REPO_DIR" SCRIPT_NAME=contract-test bash -c '
+  set -Eeuo pipefail
+  source "$DOTFILES_DIR/lib/common.sh"
+  source "$DOTFILES_DIR/lib/host.sh"
+  source "$DOTFILES_DIR/lib/lean_engine.sh"
+  for area_lib in "$DOTFILES_DIR"/lib/areas/*.sh; do source "$area_lib"; done
+  validate_area_manifest
+  for area in "${AREA_ORDER[@]}"; do
+    for verb in preflight apply remove; do
+      declare -F "${verb}_${area}" >/dev/null ||
+        { printf "missing lean entrypoint: %s_%s\n" "$verb" "$area" >&2; exit 1; }
+    done
+  done
+' || fail 'an area in manifests/areas.tsv lacks a complete preflight/apply/remove implementation'
+pass
+
+# Durable docs track their executable sources: the README area roster and its
+# count word derive from manifests/areas.tsv, and the Git baseline count word
+# matches the table in lib/areas/git.sh.
+declare -a COUNT_WORDS=([6]=Six [7]=Seven [8]=Eight [9]=Nine [10]=Ten [11]=Eleven [12]=Twelve)
+ready_count=0
+while IFS='|' read -r _ area status; do
+  case "$status" in
+    ready)
+      ((ready_count += 1))
+      grep -Fq -- "\`$area\`" "$REPO_DIR/README.md" || fail "README does not mention ready area: $area"
+      ;;
+    optional)
+      grep -Fq -- "\`$area\` is optional" "$REPO_DIR/README.md" || fail "README does not mark optional area: $area"
+      ;;
+  esac
+done < <(grep '^area|' "$REPO_DIR/manifests/areas.tsv")
+grep -q "^${COUNT_WORDS[$ready_count]} areas are ready by default" "$REPO_DIR/README.md" ||
+  fail 'README ready-area count word does not match the area manifest'
+grep -q "defines ${COUNT_WORDS[$ready_count],,} default-ready areas" "$REPO_DIR/docs/architecture.md" ||
+  fail 'architecture.md ready-area count word does not match the area manifest'
+git_baseline_entries="$(sed -n "/^readonly GIT_BASELINE_TABLE='/,/'\$/p" "$REPO_DIR/lib/areas/git.sh" | grep -c "$(printf '\t')")"
+declare -a BASELINE_WORDS=([14]=fourteen [15]=fifteen [16]=sixteen [17]=seventeen [18]=eighteen)
+grep -q "all ${BASELINE_WORDS[$git_baseline_entries]} required baseline values" "$REPO_DIR/docs/tools/git.md" ||
+  fail 'git.md baseline count word does not match the executable baseline table'
+pass
+
+# Byte-pinned upstream snapshots still match their recorded blob hashes, so a
+# stray formatter or edit under packages/upstream/ turns the contract red.
+"$REPO_DIR/scripts/upstream" verify >/dev/null || fail 'pinned upstream snapshots drifted from the source manifest'
+pass
+
 # tmux is native validation-only and an Ubuntu package-only baseline plus a
 # small portable help adapter. Retired plugin/parser machinery is absent.
 for file in "$TMUX_BASELINE" "$TMUX_DISPATCHER" "$TMUX_ADAPTER"; do
@@ -297,7 +394,7 @@ for file in "$TMUX_BASELINE" "$TMUX_DISPATCHER" "$TMUX_ADAPTER"; do
 done
 grep -qxF 'tmux validation-only' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tmux is not validation-only'
 grep -qxF 'tmux upstream/tmux,ubuntu/tmux' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu tmux closure is not final'
-grep -Fq '|| "$1" == tmux' "$DOTFILES" ||
+grep -qxF 'area|tmux|ready' "$REPO_DIR/manifests/areas.tsv" ||
   fail 'tmux is absent from lean dispatch'
 grep -Fq 'set -g prefix C-Space' "$TMUX_BASELINE" || fail 'relocated tmux baseline lost its primary prefix'
 grep -Fq 'set -g prefix2 C-b' "$TMUX_BASELINE" || fail 'relocated tmux baseline lost its fallback prefix'
@@ -323,7 +420,7 @@ pass
 # deployment-state-v1 machinery are absent from the executable topology.
 grep -qxF 'agents common/agents' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Agents closure is not final'
 grep -qxF 'agents common/agents' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu Agents closure is not final'
-grep -Fq '|| "$1" == agents' "$DOTFILES" || fail 'Agents is absent from lean dispatch'
+grep -qxF 'area|agents|ready' "$REPO_DIR/manifests/areas.tsv" || fail 'Agents is absent from lean dispatch'
 for path in lib/engine.sh lib/areas/generic.sh tests/engine_test.sh tests/engine_profile_test.sh manifests/legacy-links.json; do
   [[ ! -e "$REPO_DIR/$path" && ! -L "$REPO_DIR/$path" ]] || fail "retired deployment machinery remains: $path"
 done
@@ -335,7 +432,11 @@ pass
 grep -qxF 'nvim upstream/nvim,ubuntu/nvim,common/nvim' "$REPO_DIR/profiles/ubuntu.conf" ||
   fail 'Ubuntu Neovim closure is not final'
 grep -qxF 'nvim common/nvim' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Neovim closure is not personal-only'
-grep -Fq '|| "$1" == nvim' "$DOTFILES" || fail 'Neovim is absent from lean dispatch'
+grep -qxF 'area|nvim|ready' "$REPO_DIR/manifests/areas.tsv" || fail 'Neovim is absent from lean dispatch'
+nvim_upstream_ignore="$REPO_DIR/packages/upstream/nvim/.stow-local-ignore"
+grep -qxF '^/\.stow-local-ignore$' "$nvim_upstream_ignore" &&
+  [[ "$(grep -cv '^#' "$nvim_upstream_ignore")" == 1 ]] ||
+  fail 'upstream Neovim stow ignore list must exist and ignore only itself (it re-enables .gitignore deployment)'
 for path in lib/provisioning.sh manifests/provisioning.json schemas/provisioning-manifest.schema.json \
   schemas/provisioning-receipt.schema.json tests/provisioning_test.sh \
   packages/ubuntu/nvim/.local/share/dotfiles/bin/nvim-record-restore; do

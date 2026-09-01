@@ -152,9 +152,7 @@ apply_agents_bridges() {
 }
 
 apply_agents() {
-  register_agents_area
-  validate_agents_closure
-  preflight_agents_skill_boundaries apply
+  preflight_agents
   lean_apply_area
   apply_agents_bridges
   "$DOTFILES_DIR/scripts/agent-skills" verify >/dev/null || die 'managed agent skills changed during apply'
@@ -172,6 +170,8 @@ remove_agents() {
     path="$HOME/${AGENTS_BRIDGE_PATHS[index]}"
     agents_bridge_is_exact "$index" && rm -- "$path"
   done
+  ((${#LEAN_ATTACHMENT_PATHS[@]} == 0 && ${#LEAN_JSON_PATHS[@]} == 0)) ||
+    die 'Agents remove bypasses guarded teardown but guarded resources are registered'
   lean_remove_stow
   remove_empty_agents_skill_directories
   log 'removed exact managed Agents links and bridges'

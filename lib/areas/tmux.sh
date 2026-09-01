@@ -25,26 +25,6 @@ tmux_version_at_least_3_5() {
     (10#${BASH_REMATCH[1]} == 3 && 10#${BASH_REMATCH[2]} >= 5)))
 }
 
-tmux_native_package_identity() {
-  local metadata owner='' recorded_path recorded_owner package
-  if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
-    metadata="$HOST_ROOT/var/lib/dotfiles-test/pacman-owners.tsv"
-    [[ -f "$metadata" ]] || return 1
-    while IFS=$'\t' read -r recorded_path recorded_owner; do
-      [[ "$recorded_path" == /usr/bin/tmux ]] || continue
-      [[ -z "$owner" ]] || return 1
-      owner="$recorded_owner"
-    done < "$metadata"
-    [[ -n "$owner" ]] || return 1
-    printf '%s' "$owner"
-    return
-  fi
-  [[ -x /usr/bin/pacman ]] || return 1
-  package="$(/usr/bin/pacman -Qqo -- /usr/bin/tmux 2>/dev/null)" || return 1
-  [[ "$package" == tmux ]] || return 1
-  /usr/bin/pacman -Q tmux 2>/dev/null
-}
-
 tmux_ubuntu_distro_owned() {
   local binary="$1" owner
   if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
@@ -63,7 +43,7 @@ validate_tmux_runtime() {
     expected="${HOST_ROOT:-}/usr/bin/tmux"
     [[ "$selected" == "$expected" ]] ||
       die "native tmux must resolve to package-owned /usr/bin/tmux, not '${selected:-missing}'; run omarchy refresh tmux or reinstall tmux, then rerun validation"
-    identity="$(tmux_native_package_identity 2>/dev/null || true)"
+    identity="$(omarchy_package_identity /usr/bin/tmux tmux 2>/dev/null || true)"
     [[ "$identity" == "$TMUX_NATIVE_PACKAGE" ]] ||
       die "native /usr/bin/tmux must be owned by package '$TMUX_NATIVE_PACKAGE', found '${identity:-no package owner}'; run omarchy refresh tmux or reinstall tmux, then rerun validation"
   else
@@ -94,7 +74,7 @@ validate_tmux_config_file() {
   local path="$1" description="$2" mode guidance=''
   [[ "$SELECTED_PROFILE" != omarchy ]] || guidance='; run omarchy refresh tmux or reinstall tmux, then rerun validation'
   [[ -f "$path" && ! -L "$path" ]] || die "$description is missing or is not a regular file: $path$guidance"
-  [[ "$(stat -c %u -- "$path")" == "$EUID" ]] || die "$description has an unsafe owner: $path$guidance"
+  path_owned_by_euid "$path" || die "$description has an unsafe owner: $path$guidance"
   mode="$(stat -c %a -- "$path")"
   [[ "$mode" == 600 || "$mode" == 640 || "$mode" == 644 ]] || die "$description has an unsafe mode: $path$guidance"
   cmp -s -- "$path" "$DOTFILES_DIR/$TMUX_BASELINE" || {
@@ -141,11 +121,7 @@ validate_tmux_closure() {
       die 'Ubuntu tmux closure must contain only upstream/tmux and ubuntu/tmux'
     selector="$DOTFILES_DIR/$TMUX_UBUNTU_ROOT/.config/mise/conf.d/50-dotfiles-tmux-ubuntu.toml"
     grep -qxF '"aqua:tmux/tmux-builds" = "3.7c"' "$selector" || die 'Ubuntu tmux mise selector is not the accepted 3.7c release'
-    lean_scan_packages
-    ((${#LEAN_TARGET_PATHS[@]} == ${#expected_targets[@]})) || die 'Ubuntu tmux package target inventory is not exact'
-    for expected in "${expected_targets[@]}"; do
-      array_contains "$expected" "${LEAN_TARGET_PATHS[@]}" || die "Ubuntu tmux package is missing expected target: $expected"
-    done
+    lean_scan_expected_targets 'Ubuntu tmux package' "${expected_targets[@]}"
     for index in "${!LEAN_TARGET_PATHS[@]}"; do
       relative="${LEAN_TARGET_PATHS[index]}"; source="${LEAN_TARGET_SOURCES[index]}"
       [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Ubuntu tmux payload mode for $relative"
@@ -215,14 +191,7 @@ preflight_tmux() {
 }
 
 apply_tmux() {
-  register_tmux_area
-  validate_tmux_closure
-  validate_tmux_runtime
-  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    validate_home_parent_chain "$HOME/$TMUX_CONFIG"
-    validate_tmux_config_file "$HOME/$TMUX_CONFIG" 'native tmux config'
-  fi
-  validate_tmux_parse
+  preflight_tmux
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     log 'validated package-owned native tmux; no files or deployment state were written'

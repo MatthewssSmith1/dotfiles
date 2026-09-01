@@ -113,7 +113,7 @@ register_desktop_area() {
 }
 
 validate_desktop_shortcuts() {
-  local package="$DOTFILES_DIR/packages/omarchy/desktop" helper fragment launcher menu
+  local package="$DOTFILES_DIR/packages/omarchy/desktop" helper fragment launcher menu expected_binding
   helper="$package/$DESKTOP_COMPOSE_SHORTCUT"
   fragment="$package/$DESKTOP_BINDINGS_FRAGMENT"
   launcher="$package/$DESKTOP_SHORTCUTS"
@@ -121,8 +121,10 @@ validate_desktop_shortcuts() {
   [[ -f "$helper" && ! -L "$helper" && -x "$helper" && "$(stat -c %a -- "$helper")" == 755 ]] ||
     die 'desktop Compose shortcut helper is not an accepted executable payload'
   bash -n "$helper" || die 'desktop Compose shortcut helper has invalid Bash syntax'
-  [[ -f "$fragment" && ! -L "$fragment" && "$(< "$fragment")" == \
-    'o.bind("SUPER + SHIFT + K", "Personal shortcuts", "omarchy-menu toggle shortcuts")' ]] ||
+  expected_binding="$(jq -r \
+    '"o.bind(\(.binding.keys | tojson), \(.binding.description | tojson), \"omarchy-menu toggle shortcuts\")"' \
+    "$DOTFILES_DIR/manifests/desktop-shortcuts.json")" || die 'desktop shortcut manifest binding is unreadable'
+  [[ -f "$fragment" && ! -L "$fragment" && "$(< "$fragment")" == "$expected_binding" ]] ||
     die 'desktop shortcut binding fragment is not exact'
   [[ -f "$menu" && ! -L "$menu" ]] || die 'desktop shortcut menu fragment is missing or unsafe'
   [[ -f "$launcher" && ! -L "$launcher" && -x "$launcher" && "$(stat -c %a -- "$launcher")" == 755 ]] ||
@@ -187,7 +189,7 @@ desktop_require_menu_plugin_adoptable() {
 # Apply alone expands the exact prior desktop resource record. Check/remove
 # keep refusing incomplete state, matching guarded attachment migrations.
 desktop_expand_menu_plugin_state() {
-  local shell_path="$HOME/$DESKTOP_SHELL" temporary mode live
+  local shell_path="$HOME/$DESKTOP_SHELL" temporary mode live source_hash source_identity temporary_hash temporary_identity
   [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] || return 0
   lean_validate_state_file "$LEAN_STATE"
   desktop_shell_state_is_pre_plugin || return 0
@@ -198,16 +200,23 @@ desktop_expand_menu_plugin_state() {
     LEAN_JSON_STATUSES=(original)
     lean_replace_json_resource 0 managed
   fi
+  source_hash="$(sha256_file "$LEAN_STATE")"
+  capture_path_object_identity "$LEAN_STATE" || die "could not inspect lean state identity: $LEAN_STATE"
+  source_identity="$PATH_OBJECT_IDENTITY"
   mode="$(stat -c %a -- "$LEAN_STATE")"
   temporary="$(mktemp "$(dirname -- "$LEAN_STATE")/.desktop-state.tmp.XXXXXX")"
   track_temp_path "$temporary"
+  temporary_identity="$PATH_OBJECT_IDENTITY"
   jq --arg path "$DESKTOP_SHELL" --arg pointer "$DESKTOP_MENU_WIDGET_POINTER" '
     .resources[$path].fields[$pointer] = {
       type: "string", original: "omarchy.menu", managed: "matt.menu"
     }
   ' "$LEAN_STATE" > "$temporary"
   chmod "$mode" "$temporary"
-  mv -fT -- "$temporary" "$LEAN_STATE"
+  temporary_hash="$(sha256_file "$temporary")"
+  lean_publish_temp 'lean state' lean-before-state-rename "$temporary" "$temporary_identity" "$temporary_hash" \
+    "$LEAN_STATE" "$source_identity" "$source_hash"
+  lean_validate_state_file "$LEAN_STATE"
 }
 
 validate_desktop_stock_input() {
@@ -235,7 +244,7 @@ validate_desktop_theme_filter() {
     die 'desktop theme image adapter is not an accepted executable payload'
   bash -n "$adapter" || die 'desktop theme image adapter has invalid Bash syntax'
   mapfile -t hidden < <(awk '/^readonly -a HIDDEN_THEMES=\($/{inside=1; next} inside && /^\)/{exit} inside {sub(/^[[:space:]]+/, ""); print}' "$selector")
-  [[ "${hidden[*]}" == 'ethereal flexoki-light hackerman last-horizon lumon lupine miasma rose-pine vantablack white' ]] ||
+  [[ "$(printf '%s\n' "${hidden[@]}")" == "$(< "$DOTFILES_DIR/manifests/hidden-themes.txt")" ]] ||
     die 'desktop theme selector denylist is not exact'
 }
 
@@ -264,7 +273,7 @@ validate_desktop_menu() {
     all(to_entries[]; .value | type == "object")
   ' >/dev/null 2>&1 ||
     die "Omarchy menu extension is malformed or incompatible: $path"
-  lean_inspect_attachment 2
+  lean_inspect_attachment "$(lean_attachment_index desktop-menu-theme-v1)"
   status="$LEAN_ATTACHMENT_STATUS"
   [[ "$status" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $path"
   if [[ "$status" == legacy ]]; then
@@ -286,14 +295,18 @@ validate_desktop_menu() {
 }
 
 desktop_require_bindings() {
-  local path="$HOME/$DESKTOP_BINDINGS" status
+  local path="$HOME/$DESKTOP_BINDINGS" status binding_keys keys_pattern
   [[ -f "$path" && ! -L "$path" ]] || die "Omarchy bindings baseline is missing or not a regular file: $path"
-  lean_inspect_attachment 3
+  lean_inspect_attachment "$(lean_attachment_index desktop-bindings-v1)"
   status="$LEAN_ATTACHMENT_STATUS"
   [[ "$status" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $path"
+  binding_keys="$(jq -r '.binding.keys' "$DOTFILES_DIR/manifests/desktop-shortcuts.json")" ||
+    die 'desktop shortcut manifest binding is unreadable'
+  keys_pattern="${binding_keys//+/\\+}"
+  keys_pattern="${keys_pattern// /[[:space:]]*}"
   if [[ "$status" == absent ]] && grep -Eq \
-    "^[[:space:]]*(o|hl)\\.bind[[:space:]]*\\([[:space:]]*[\"']SUPER[[:space:]]*\\+[[:space:]]*SHIFT[[:space:]]*\\+[[:space:]]*K[\"']" "$path"; then
-    die "Omarchy bindings already contain an unmanaged SUPER + SHIFT + K: $path"
+    "^[[:space:]]*(o|hl)\\.bind[[:space:]]*\\([[:space:]]*[\"']${keys_pattern}[\"']" "$path"; then
+    die "Omarchy bindings already contain an unmanaged $binding_keys: $path"
   fi
 }
 
@@ -309,7 +322,7 @@ validate_desktop_stock_menu() {
 desktop_require_adoptable_input() {
   local stock="${HOST_ROOT:-}/usr/share/omarchy/config/hypr/input.lua"
   validate_desktop_stock_input
-  lean_inspect_attachment 0
+  lean_inspect_attachment "$(lean_attachment_index desktop-input-v1)"
   if [[ "$LEAN_ATTACHMENT_STATUS" == absent ]]; then
     cmp -s -- "$HOME/$DESKTOP_INPUT" "$stock" ||
       die 'desktop input differs from the accepted Omarchy baseline; run: omarchy refresh config hypr/input.lua'
@@ -401,15 +414,8 @@ preflight_desktop() {
 }
 
 apply_desktop() {
-  register_desktop_area
-  validate_desktop_closure
+  preflight_desktop
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    desktop_require_adoptable_input
-    desktop_require_xcompose
-    desktop_require_native_shortcuts
-    desktop_require_bindings
-    desktop_require_menu_plugin_adoptable
-    validate_desktop_menu
     desktop_expand_menu_plugin_state
     register_desktop_area
   fi

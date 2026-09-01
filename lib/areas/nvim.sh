@@ -25,28 +25,6 @@ register_nvim_area() {
   fi
 }
 
-nvim_native_package_identity() {
-  local package="$1" path="$2" metadata owner='' recorded_path recorded_owner queried
-  if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
-    metadata="$HOST_ROOT/var/lib/dotfiles-test/pacman-owners.tsv"
-    [[ -f "$metadata" ]] || return 1
-    while IFS=$'\t' read -r recorded_path recorded_owner; do
-      [[ "$recorded_path" == "$path" ]] || continue
-      [[ -z "$owner" ]] || return 1
-      owner="$recorded_owner"
-    done < "$metadata"
-    [[ -n "$owner" ]] || return 1
-    printf '%s' "$owner"
-    return
-  fi
-  [[ -x /usr/bin/pacman ]] || return 1
-  if [[ -n "$path" ]]; then
-    queried="$(/usr/bin/pacman -Qqo -- "$path" 2>/dev/null)" || return 1
-    [[ "$queried" == "$package" ]] || return 1
-  fi
-  /usr/bin/pacman -Q "$package" 2>/dev/null
-}
-
 validate_nvim_runtime() {
   local binary output identity version expected
   binary="${DOTFILES_TEST_NVIM_BIN:-$(type -P nvim 2>/dev/null || true)}"
@@ -54,10 +32,10 @@ validate_nvim_runtime() {
     expected="${HOST_ROOT:-}/usr/bin/nvim"
     [[ "$binary" == "$expected" ]] ||
       die "native Neovim must resolve to package-owned /usr/bin/nvim, not '${binary:-missing}'; refresh or reinstall Neovim, then rerun validation"
-    identity="$(nvim_native_package_identity neovim /usr/bin/nvim 2>/dev/null || true)"
+    identity="$(omarchy_package_identity /usr/bin/nvim neovim 2>/dev/null || true)"
     [[ "$identity" == 'neovim 0.12.4-1' || "$identity" == 'neovim 0.12.5-1' ]] ||
       die "native /usr/bin/nvim has an unaccepted package identity: ${identity:-no package owner}"
-    identity="$(nvim_native_package_identity omarchy-nvim /usr/share/omarchy-nvim 2>/dev/null || true)"
+    identity="$(omarchy_package_identity /usr/share/omarchy-nvim omarchy-nvim 2>/dev/null || true)"
     [[ "$identity" == 'omarchy-nvim 2026.8.13-1' ]] ||
       die "native Neovim baseline has an unaccepted package identity: ${identity:-missing omarchy-nvim package}"
   elif [[ -z "$binary" ]]; then
@@ -115,11 +93,7 @@ validate_nvim_closure() {
       "$DOTFILES_DIR/scripts/upstream" verify >/dev/null || die 'accepted Neovim snapshot verification failed'
     fi
   fi
-  lean_scan_packages
-  ((${#LEAN_TARGET_PATHS[@]} == ${#expected_targets[@]})) || die 'Neovim package target inventory is not exact'
-  for expected in "${expected_targets[@]}"; do
-    array_contains "$expected" "${LEAN_TARGET_PATHS[@]}" || die "Neovim package is missing expected target: $expected"
-  done
+  lean_scan_expected_targets 'Neovim package' "${expected_targets[@]}"
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     relative="${LEAN_TARGET_PATHS[index]}"; source="${LEAN_TARGET_SOURCES[index]}"
     if [[ "$relative" == .local/share/dotfiles/bin/* ]]; then
@@ -154,10 +128,7 @@ preflight_nvim() {
 }
 
 apply_nvim() {
-  register_nvim_area
-  validate_nvim_closure
-  validate_nvim_runtime
-  [[ "$SELECTED_PROFILE" != omarchy ]] || validate_native_nvim_baseline
+  preflight_nvim
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     log 'retained the package-owned native Neovim baseline and applied only the personal layer/loader'

@@ -123,8 +123,10 @@ select_default_areas() {
   ((${#AREAS[@]} > 0)) || die 'no ready areas are defined in manifests/areas.tsv'
 }
 
+# Area membership derives from manifests/areas.tsv (loaded by
+# validate_area_manifest before any lifecycle work).
 lean_area() {
-  [[ "$1" == git || "$1" == tools || "$1" == bash || "$1" == tmux || "$1" == nvim || "$1" == agents || "$1" == herdr || "$1" == desktop || "$1" == opencode ]]
+  [[ -n "${AREA_STATUS[$1]+x}" ]]
 }
 
 prepare_selected_lean_state() {
@@ -188,10 +190,9 @@ validate_selected_areas() {
 
 area_entrypoint() {
   local verb="$1" area="$2"
-  case "$area" in
-    git|tools|bash|tmux|nvim|agents|herdr|desktop|opencode) "${verb}_${area}" ;;
-    *) die "area '$area' has no lean implementation" ;;
-  esac
+  lean_area "$area" && declare -F "${verb}_${area}" >/dev/null ||
+    die "area '$area' has no lean implementation"
+  "${verb}_${area}"
 }
 
 run_area() {
