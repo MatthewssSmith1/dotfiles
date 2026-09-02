@@ -66,7 +66,7 @@ validate_agents_closure() {
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     relative="${LEAN_TARGET_PATHS[index]}"; source="${LEAN_TARGET_SOURCES[index]}"
     [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/* ||
-      "$relative" == .claude/skills/* ]] ||
+      "$relative" == .claude/skills/* || "$relative" == .codex/*.config.toml ]] ||
       die "Agents package has an out-of-area target: $relative"
     [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Agents payload mode: $relative"
   done

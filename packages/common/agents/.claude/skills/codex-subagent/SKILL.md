@@ -1,53 +1,40 @@
 ---
 name: codex-subagent
-description: Delegate a bounded task to the Codex CLI. Use when the user says "codex" or asks for an independent second opinion or review.
+description: Delegate tasks to subagents with the Codex CLI. Use when the user says "codex", or asks to implement a plan, review, or get a second opinion.
 ---
 
 # Instructions
 
-You orchestrate; Codex executes bounded subtasks.
+You orchestrate from the primary checkout; Codex executes bounded dispatches.
 
 ## Preflight
 
-Codex must be present and authenticated; check with `codex login status`. Otherwise tell the user and stop.
+`codex login status`; otherwise tell the user and stop.
+
+## Size the dispatch
+
+A **dispatch** is one agent's bounded unit: the files it owns and a completion criterion it can check itself (gate green). Cut plan phases to dispatch grain, not domain headings: merge phases that share files; split a phase spanning disjoint areas so it can fan out. More than one write dispatch in flight: read [parallel-worktrees.md](parallel-worktrees.md).
 
 ## Invoke
 
-Always `codex exec`, never bare `codex` (requires a TTY).
+Always `codex -p subagent exec` (profile: `~/.codex/subagent.config.toml`), never bare `codex`. Launch with the Bash sandbox off (`dangerouslyDisableSandbox: true`); Codex's own sandbox is the guard. Stacked sandboxes fail git and socket tests with EPERM, and Codex then reports a gate it never ran.
 
 ```bash
-codex exec -m <model> -c model_reasoning_effort="<effort>" \
-  --sandbox <mode> --skip-git-repo-check \
-  "$PROMPT" 2>/dev/null
+codex -p subagent exec --skip-git-repo-check -o <job>/<name>.out - <<'EOF'
+...
+EOF
 ```
 
-- `2>/dev/null` drops the progress/reasoning stream; stdout carries the final message. On failure or empty output, rerun without it to see the error.
-- Long prompts via stdin: `codex exec ... - <<'EOF' ... EOF`.
-- Follow-ups: `codex exec resume --last "<prompt>"` (repeat the same flags).
-- Prompts must be self-contained: Codex cannot see this conversation. Include file paths, relevant snippets, constraints, and the exact output expected back.
+- Prompt via heredoc. A prompt passed as an argument needs `</dev/null` or Codex blocks on stdin.
+- `run_in_background: true`; the harness notifies on exit; read the `.out`.
+- For simple work, override with `-c model_reasoning_effort="low"`.
+- Prompt is self-contained: paths, snippets, constraints, gate command, exact output expected. Name the files the dispatch owns; edits elsewhere are allowed when the work needs them and are listed in the report. Say "single agent; do not spawn agents."
+- Follow-up: `codex -p subagent exec resume --last -`. Flags are per invocation; repeat any override.
 
-## Model and effort
+## Verify
 
-Only `gpt-5.6-terra` or `gpt-5.6-sol`; only `low` or `medium` effort.
-
-| Task | Model | Effort |
-|---|---|---|
-| Mechanical: lookup, rename, format, one-file question | terra | low |
-| Routine bugfix or small feature with a clear spec | terra | medium |
-| Hard question needing a fast pass: triage, second opinion, cheap scan | sol | low |
-| Complex feature, cross-module refactor, subtle bug, security/adversarial review, design tradeoffs | sol | medium |
-
-Unsure: start terra/medium, escalate to sol/medium on a weak result.
+The prompt ends: "Run `<gate>`; iterate until green; paste the last 20 lines of its output verbatim." Only pasted output counts; a summary is not a gate. Run the gate yourself once, review the diff, commit. Codex never commits.
 
 ## Sandbox
 
-### Read (`--sandbox read-only`)
-
-- Default; analysis, review, plans. Tasks may run concurrently.
-- Reads the entire filesystem — pass absolute paths for files outside the repo; never copy them in.
-
-### Write (`--sandbox workspace-write`)
-
-- Only when edits are requested. Review the diff before accepting it.
-- At most one write task at a time per checkout.
-- Writes are confined to the cwd tree. Edits outside it: `--add-dir <dir>` (repeatable; grants write — scope to the one dir needed). Task rooted in a different directory entirely: `-C <dir>` instead. Prefer `--add-dir`; it keeps the repo as primary root.
+Profile default is read-only; read dispatches may run concurrently. Write dispatch: `--sandbox workspace-write`, confined to cwd. Writes outside cwd: `--add-dir <dir>`. Different root: `-C <dir>`.

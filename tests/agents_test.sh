@@ -41,6 +41,10 @@ readonly CLAUDE_SKILLS=(
 )
 readonly CLAUDE_SKILL_FILES=(
   codex-subagent/SKILL.md
+  codex-subagent/parallel-worktrees.md
+)
+readonly CODEX_PROFILE_FILES=(
+  subagent.config.toml
 )
 
 run_agents_area() {
@@ -87,6 +91,10 @@ expected_claude_skills="$(printf '%s\n' "${CLAUDE_SKILLS[@]}" | LC_ALL=C sort)"
 actual_claude_skill_files="$(find "$claude_skill_root" -type f -printf '%P\n' | LC_ALL=C sort)"
 expected_claude_skill_files="$(printf '%s\n' "${CLAUDE_SKILL_FILES[@]}" | LC_ALL=C sort)"
 [[ "$actual_claude_skill_files" == "$expected_claude_skill_files" ]] || fail 'Claude skill file inventory is not exact'
+codex_root="$REPO_DIR/packages/common/agents/.codex"
+actual_codex_profiles="$(find "$codex_root" -type f -printf '%P\n' | LC_ALL=C sort)"
+expected_codex_profiles="$(printf '%s\n' "${CODEX_PROFILE_FILES[@]}" | LC_ALL=C sort)"
+[[ "$actual_codex_profiles" == "$expected_codex_profiles" ]] || fail 'Codex profile inventory is not exact'
 fixture="$(copy_repo_fixture agents-invalid-package)"
 printf 'invalid direct entry\n' > "$fixture/packages/common/agents/.agents/skills/UNDECLARED"
 if TEST_OUTPUT="$("$fixture/scripts/agent-skills" verify 2>&1)"; then
@@ -101,6 +109,12 @@ if TEST_OUTPUT="$("$fixture/scripts/agent-skills" verify 2>&1)"; then
   fail 'verification accepted a Claude skill that conflicts with a universal skill'
 fi
 assert_contains "$TEST_OUTPUT" 'Claude skill conflicts with universal skill: grilling'
+fixture="$(copy_repo_fixture agents-stray-codex-file)"
+printf 'stray\n' > "$fixture/packages/common/agents/.codex/stray.txt"
+if TEST_OUTPUT="$("$fixture/scripts/agent-skills" verify 2>&1)"; then
+  fail 'verification accepted a non-profile file beneath .codex'
+fi
+assert_contains "$TEST_OUTPUT" 'package file is outside managed Agents payload: .codex/stray.txt'
 pass
 
 # Apply deploys the exact package closure and bridges without state, preserves
@@ -150,6 +164,11 @@ for skill_file in "${CLAUDE_SKILL_FILES[@]}"; do
     "$(realpath "$home/.claude/skills/$skill_file")" == \
       "$REPO_DIR/packages/common/agents/.claude/skills/$skill_file" ]] ||
     fail "missing Claude skill package link: $skill_file"
+done
+for profile in "${CODEX_PROFILE_FILES[@]}"; do
+  [[ -L "$home/.codex/$profile" &&
+    "$(realpath "$home/.codex/$profile")" == "$REPO_DIR/packages/common/agents/.codex/$profile" ]] ||
+    fail "missing Codex profile package link: $profile"
 done
 [[ "$(readlink -- "$home/.config/opencode/AGENTS.md")" == '../../.agents/AGENTS.md' ]] || fail 'OpenCode bridge is not exact'
 [[ "$(readlink -- "$home/.claude/CLAUDE.md")" == '../.agents/AGENTS.md' ]] || fail 'Claude bridge is not exact'
@@ -220,6 +239,10 @@ done
 for skill in "${CLAUDE_SKILLS[@]}"; do
   [[ ! -e "$home/.claude/skills/$skill" && ! -L "$home/.claude/skills/$skill" ]] ||
     fail "managed Claude skill survived removal: $skill"
+done
+for profile in "${CODEX_PROFILE_FILES[@]}"; do
+  [[ ! -e "$home/.codex/$profile" && ! -L "$home/.codex/$profile" ]] ||
+    fail "managed Codex profile survived removal: $profile"
 done
 [[ ! -e "$home/.agents/AGENTS.md" && ! -L "$home/.agents/AGENTS.md" ]] || fail 'canonical link survived removal'
 [[ ! -e "$home/.config/opencode/AGENTS.md" && ! -L "$home/.config/opencode/AGENTS.md" ]] || fail 'OpenCode bridge survived removal'

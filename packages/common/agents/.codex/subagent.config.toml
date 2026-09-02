@@ -1,0 +1,10 @@
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
+hide_agent_reasoning = true
+
+[features]
+multi_agent = false
+
+[sandbox_workspace_write]
+network_access = true

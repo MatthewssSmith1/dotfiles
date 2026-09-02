@@ -84,7 +84,7 @@ verify_repo_skills() {
 verify() {
   local agents_root="$PACKAGE_ROOT/.agents" skills_root="$PACKAGE_ROOT/.agents/skills"
   local claude_root="$PACKAGE_ROOT/.claude" claude_skills_root="$PACKAGE_ROOT/.claude/skills"
-  local entry relative skill name file_count=0 skill_count=0 claude_skill_count=0
+  local entry relative skill name file_count=0 skill_count=0 claude_skill_count=0 codex_profile_count=0
   declare -A universal_skills=()
 
   [[ -d "$PACKAGE_ROOT" && ! -L "$PACKAGE_ROOT" ]] || die 'package root is missing or not a directory'
@@ -128,13 +128,15 @@ verify() {
       die "package payload symlink is forbidden: $relative"
     elif [[ -d "$entry" ]]; then
       [[ "$relative" == .agents || "$relative" == .agents/skills || "$relative" == .agents/skills/* ||
-        "$relative" == .claude || "$relative" == .claude/skills || "$relative" == .claude/skills/* ]] ||
+        "$relative" == .claude || "$relative" == .claude/skills || "$relative" == .claude/skills/* ||
+        "$relative" == .codex ]] ||
         die "package payload is outside managed skill roots: $relative"
     elif [[ -f "$entry" ]]; then
       [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/*/* ||
-        "$relative" == .claude/skills/*/* ]] ||
+        "$relative" == .claude/skills/*/* || "$relative" == .codex/*.config.toml ]] ||
         die "package file is outside managed Agents payload: $relative"
       [[ "$(stat -c '%a' -- "$entry")" == 644 ]] || die "unexpected package file mode: $relative"
+      [[ "$relative" != .codex/* ]] || ((codex_profile_count += 1))
       ((file_count += 1))
     else
       die "unsupported package object: $relative"
@@ -142,8 +144,8 @@ verify() {
   done
   shopt -u dotglob nullglob globstar
 
-  printf '[%s] verified %s universal skills, %s Claude skills, and %s package files\n' \
-    "$SCRIPT_NAME" "$skill_count" "$claude_skill_count" "$file_count"
+  printf '[%s] verified %s universal skills, %s Claude skills, %s Codex profiles, and %s package files\n' \
+    "$SCRIPT_NAME" "$skill_count" "$claude_skill_count" "$codex_profile_count" "$file_count"
 }
 
 case "${1:-}" in
