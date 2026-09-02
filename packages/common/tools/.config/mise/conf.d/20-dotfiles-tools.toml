@@ -1,6 +1,6 @@
 [tools]
 "aqua:pnpm/pnpm" = "11.13.1"
-"aqua:max-sixty/worktrunk" = "0.68.0"
+"aqua:max-sixty/worktrunk" = "0.75.0"
 
 [settings]
 not_found_auto_install = false
