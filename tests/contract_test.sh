@@ -13,6 +13,8 @@ readonly OMARCHY_PRUNE="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-oma
 readonly OMARCHY_AMDGPU_IPS="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-amdgpu-ips"
 readonly OMARCHY_THEME_SWITCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-theme-switcher"
 readonly OMARCHY_THEME_MENU_ADAPTER="$REPO_DIR/packages/omarchy/desktop/.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images"
+readonly OMARCHY_WINDOWS_VM="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-windows-vm"
+readonly OMARCHY_WINDOWS_VM_DESKTOP="$REPO_DIR/packages/omarchy/desktop/.local/share/applications/windows-vm.desktop"
 readonly SHORTCUTS_LAUNCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-shortcuts"
 readonly OMARCHY_MENU_PLUGIN="$REPO_DIR/packages/omarchy/desktop/.config/omarchy/plugins/matt.menu"
 
@@ -38,7 +40,8 @@ done
 bash -n "${DOTFILES_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" "$REPO_DIR/lib/upstream/verify.sh" \
   "$REPO_DIR/scripts/agent-skills" "$SHORTCUTS_LAUNCHER" \
-  "$OMARCHY_PRUNE" "$OMARCHY_AMDGPU_IPS" "$OMARCHY_THEME_SWITCHER" "$OMARCHY_THEME_MENU_ADAPTER" ||
+  "$OMARCHY_PRUNE" "$OMARCHY_AMDGPU_IPS" "$OMARCHY_THEME_SWITCHER" "$OMARCHY_THEME_MENU_ADAPTER" \
+  "$OMARCHY_WINDOWS_VM" ||
   fail 'a dotfiles Bash file has invalid syntax'
 grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missing'
 [[ -x "$DOTFILES" && ! -e "$REPO_DIR/bootstrap.sh" ]] || fail 'root command rename is incomplete'
@@ -47,6 +50,10 @@ grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missi
   fail 'Omarchy prune command is not a regular executable payload'
 [[ -f "$OMARCHY_AMDGPU_IPS" && ! -L "$OMARCHY_AMDGPU_IPS" && -x "$OMARCHY_AMDGPU_IPS" ]] ||
   fail 'Omarchy AMDGPU IPS command is not a regular executable payload'
+[[ -f "$OMARCHY_WINDOWS_VM" && ! -L "$OMARCHY_WINDOWS_VM" && -x "$OMARCHY_WINDOWS_VM" ]] ||
+  fail 'Omarchy Windows VM wrapper is not a regular executable payload'
+[[ -f "$OMARCHY_WINDOWS_VM_DESKTOP" && ! -L "$OMARCHY_WINDOWS_VM_DESKTOP" ]] ||
+  fail 'Omarchy Windows VM desktop entry is not a regular payload'
 pass
 
 # Production topology has exactly the native Omarchy and supported Ubuntu
@@ -113,8 +120,14 @@ expected_desktop_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p
 grep -qxF 'desktop omarchy/desktop' "$REPO_DIR/profiles/omarchy.conf" || fail 'native desktop closure is not final'
 grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu desktop is not validation-only'
 [[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f -printf '%P\n' | LC_ALL=C sort)" == \
-  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/bindings.lua\n.config/dotfiles/omarchy/hypr/input.lua\n.config/dotfiles/omarchy/menu-shortcuts.jsonc\n.config/omarchy/plugins/matt.menu/BarWidget.qml\n.config/omarchy/plugins/matt.menu/Menu.qml\n.config/omarchy/plugins/matt.menu/MenuModel.js\n.config/omarchy/plugins/matt.menu/manifest.json\n.local/bin/dotfiles-omarchy-compose-shortcut\n.local/bin/dotfiles-omarchy-theme-switcher\n.local/bin/dotfiles-shortcuts\n.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images' && -f "$desktop_fragment" ]] ||
+  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/bindings.lua\n.config/dotfiles/omarchy/hypr/input.lua\n.config/dotfiles/omarchy/menu-shortcuts.jsonc\n.config/omarchy/plugins/matt.menu/BarWidget.qml\n.config/omarchy/plugins/matt.menu/Menu.qml\n.config/omarchy/plugins/matt.menu/MenuModel.js\n.config/omarchy/plugins/matt.menu/manifest.json\n.local/bin/dotfiles-omarchy-compose-shortcut\n.local/bin/dotfiles-omarchy-theme-switcher\n.local/bin/dotfiles-omarchy-windows-vm\n.local/bin/dotfiles-shortcuts\n.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images\n.local/share/applications/windows-vm.desktop' && -f "$desktop_fragment" ]] ||
   fail 'desktop package payload inventory is not exact'
+[[ "$(stat -c %a "$OMARCHY_WINDOWS_VM")" == 755 && "$(stat -c %a "$OMARCHY_WINDOWS_VM_DESKTOP")" == 644 ]] ||
+  fail 'Windows VM launcher payload modes are not exact'
+grep -qxF 'Exec=uwsm app -- dotfiles-omarchy-windows-vm' "$OMARCHY_WINDOWS_VM_DESKTOP" ||
+  fail 'Windows VM desktop entry does not use the guarded wrapper'
+! grep -qE 'DOTFILES_TEST|TEST_NATIVE|NATIVE_OWNER' "$OMARCHY_WINDOWS_VM" ||
+  fail 'Windows VM wrapper exposes a production test override'
 [[ "$(< "$desktop_aliases")" == "$expected_desktop_aliases" ]] || fail 'desktop Compose aliases are not exact'
 [[ -f "$OMARCHY_THEME_SWITCHER" && ! -L "$OMARCHY_THEME_SWITCHER" && -x "$OMARCHY_THEME_SWITCHER" &&
   "$(stat -c %a "$OMARCHY_THEME_SWITCHER")" == 755 ]] || fail 'desktop theme selector is not an exact executable payload'

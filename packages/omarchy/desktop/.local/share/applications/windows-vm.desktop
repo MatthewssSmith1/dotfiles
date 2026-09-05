@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Windows
+Comment=Safely launch Windows VM and keep it running after RDP disconnects
+Exec=uwsm app -- dotfiles-omarchy-windows-vm
+Icon=windows
+Terminal=false
+Type=Application
+Categories=System;Emulator;

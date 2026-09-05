@@ -16,6 +16,8 @@ readonly DESKTOP_THEME_SWITCHER='.local/bin/dotfiles-omarchy-theme-switcher'
 readonly DESKTOP_THEME_MENU_ADAPTER='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
 readonly DESKTOP_COMPOSE_SHORTCUT='.local/bin/dotfiles-omarchy-compose-shortcut'
 readonly DESKTOP_SHORTCUTS='.local/bin/dotfiles-shortcuts'
+readonly DESKTOP_WINDOWS_VM='.local/bin/dotfiles-omarchy-windows-vm'
+readonly DESKTOP_WINDOWS_ENTRY='.local/share/applications/windows-vm.desktop'
 readonly DESKTOP_INPUT_BEGIN='-- >>> dotfiles desktop input >>>'
 readonly DESKTOP_INPUT_END='-- <<< dotfiles desktop input <<<'
 readonly DESKTOP_INPUT_TOKEN='dotfiles desktop input'
@@ -67,6 +69,7 @@ readonly DESKTOP_MENU_LEGACY_BLOCK='  // >>> dotfiles desktop menu theme >>>
 
 desktop_menu_block() {
   printf '%s\n' "$DESKTOP_MENU_BEGIN"
+  printf '%s\n' '  "remove.windows": {"when":"false"},'
   printf '%s\n' '  "style.theme": {"icon":"󰸌","label":"Theme","aliases":["theme","themes"],"action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""},'
   cat "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_SHORTCUTS"
   printf '%s\n' "$DESKTOP_MENU_END"
@@ -288,7 +291,7 @@ validate_desktop_menu() {
     ' >/dev/null || die "managed Style > Theme action differs: $path"
   else
     desktop_menu_json "$path" | jq -e '
-      (has("style.theme") | not) and
+      (has("style.theme") | not) and (has("remove.windows") | not) and
       (all(keys[]; . != "shortcuts" and (startswith("shortcuts.") | not)))
     ' >/dev/null || die "Omarchy menu extension already has an unmanaged desktop route: $path"
   fi
@@ -368,6 +371,20 @@ validate_desktop_closure() {
     validate_desktop_fragment
     validate_desktop_shortcuts
     validate_desktop_theme_filter
+    local wrapper="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_WINDOWS_VM"
+    local entry="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_WINDOWS_ENTRY"
+    [[ -f "$wrapper" && ! -L "$wrapper" && "$(stat -c %a -- "$wrapper")" == 755 ]] ||
+      die 'desktop Windows VM wrapper is not an accepted executable payload'
+    bash -n "$wrapper" || die 'desktop Windows VM wrapper has invalid Bash syntax'
+    [[ -f "$entry" && ! -L "$entry" && "$(stat -c %a -- "$entry")" == 644 &&
+      "$(< "$entry")" == '[Desktop Entry]
+Name=Windows
+Comment=Safely launch Windows VM and keep it running after RDP disconnects
+Exec=uwsm app -- dotfiles-omarchy-windows-vm
+Icon=windows
+Terminal=false
+Type=Application
+Categories=System;Emulator;' ]] || die 'desktop Windows VM entry is not exact'
     [[ -f "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_PLUGIN/manifest.json" ]] ||
       die 'desktop menu plugin clone is missing'
     if [[ "$MODE" != remove ]]; then validate_desktop_stock_menu; fi

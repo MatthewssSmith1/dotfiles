@@ -17,7 +17,8 @@ SCRIPT
 chmod 0755 "$fake_bin/stat"
 CAPTURE_PATH_PREFIX="$fake_bin"
 
-for command_name in omarchy-shell hyprctl omarchy-theme-switcher omarchy-theme-set; do
+for command_name in omarchy-shell hyprctl omarchy-theme-switcher omarchy-theme-set \
+  uwsm omarchy-windows-vm dotfiles-omarchy-windows-vm sudo pkexec docker docker-compose; do
   printf '#!/usr/bin/env bash\nprintf "%%s:%%s\\n" "${0##*/}" "$*" >> "$HOME/desktop-command.trace"\nexit 99\n' > "$fake_bin/$command_name"
   chmod 0755 "$fake_bin/$command_name"
 done
@@ -36,6 +37,8 @@ readonly COMPOSE_SHORTCUT_REL='.local/bin/dotfiles-omarchy-compose-shortcut'
 readonly SHORTCUTS_REL='.local/bin/dotfiles-shortcuts'
 readonly MENU_ADAPTER_REL='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
 readonly MENU_PLUGIN_REL='.config/omarchy/plugins/matt.menu'
+readonly WINDOWS_VM_REL='.local/bin/dotfiles-omarchy-windows-vm'
+readonly WINDOWS_VM_DESKTOP_REL='.local/share/applications/windows-vm.desktop'
 readonly BEGIN='-- >>> dotfiles desktop input >>>'
 readonly END='-- <<< dotfiles desktop input <<<'
 readonly XCOMPOSE_BEGIN='# >>> dotfiles desktop xcompose >>>'
@@ -111,8 +114,11 @@ expected_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p> <b> : 
 [[ "$(< "$aliases")" == "$expected_aliases" ]] || fail 'desktop Compose aliases are not exact'
 [[ "$(< "$bindings_fragment")" == 'o.bind("SUPER + SHIFT + K", "Personal shortcuts", "omarchy-menu toggle shortcuts")' ]] ||
   fail 'desktop shortcut binding is not exact'
-[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 12 &&
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 14 &&
   ! -e "$REPO_DIR/packages/omarchy/desktop/$MENU_REL" ]] || fail 'desktop package payload inventory is not exact'
+[[ -x "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_REL" &&
+  -f "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_DESKTOP_REL" ]] ||
+  fail 'desktop Windows VM launcher payloads are missing'
 plugin="$REPO_DIR/packages/omarchy/desktop/$MENU_PLUGIN_REL"
 jq -e '.id == "matt.menu" and .omarchy.clonedFrom == "omarchy.menu"' "$plugin/manifest.json" >/dev/null ||
   fail 'desktop menu clone manifest is not exact'
@@ -145,6 +151,10 @@ if command -v xkbcli >/dev/null 2>&1; then
 else
   printf 'SKIP: xkbcli unavailable; exact Compose aliases were checked\n'
 fi
+pass
+
+# The Windows VM launcher has a separate, fully isolated runtime contract suite.
+bash "$TEST_DIR/windows_vm_test.sh" || fail 'Windows VM wrapper contracts failed'
 pass
 
 # Every native reference is required for apply/check, but outputs remain private.
@@ -203,6 +213,14 @@ for preserved in 'Partial override' 'Personal submenu' '"provider": "fonts"' '"t
 done
 expect_success "$menu_home" "$menu_host" "$DOTFILES" remove desktop
 assert_same "$menu_home/$MENU_REL" "$TEST_ROOT/menu-unrelated.original"
+pass
+
+# An unmanaged Windows removal override is preserved, not silently adopted.
+read -r windows_menu_host windows_menu_home < <(prepare_native_desktop windows-menu-conflict)
+printf '%s\n' '{' '  "remove.windows": {"when":"true"}' '}' > "$windows_menu_home/$MENU_REL"
+cp "$windows_menu_home/$MENU_REL" "$TEST_ROOT/windows-menu.original"
+expect_failure 'unmanaged desktop route' "$windows_menu_home" "$windows_menu_host" "$DOTFILES" apply desktop
+assert_same "$windows_menu_home/$MENU_REL" "$TEST_ROOT/windows-menu.original"
 pass
 
 # Missing managed menu content does not strand the remaining package links or
@@ -406,6 +424,19 @@ for verb in apply check; do
 done
 pass
 
+# A pre-existing Windows launcher payload conflicts without partial desktop
+# deployment or invoking privileged/VM runtime commands.
+read -r windows_conflict_host windows_conflict_home < <(prepare_native_desktop windows-launcher-conflict)
+mkdir -p "$windows_conflict_home/.local/share/applications"
+printf '%s\n' unmanaged > "$windows_conflict_home/$WINDOWS_VM_DESKTOP_REL"
+expect_failure '' "$windows_conflict_home" "$windows_conflict_host" "$DOTFILES" apply desktop
+[[ "$(< "$windows_conflict_home/$WINDOWS_VM_DESKTOP_REL")" == unmanaged &&
+  ! -e "$windows_conflict_home/$WINDOWS_VM_REL" &&
+  ! -e "$windows_conflict_home/.local/state/dotfiles/v2/desktop.json" &&
+  ! -e "$windows_conflict_home/desktop-command.trace" ]] ||
+  fail 'Windows launcher conflict caused partial deployment or runtime commands'
+pass
+
 # Stock input must belong to the same-version omarchy-settings package.
 for kind in wrong-owner mismatched-version; do
   read -r bad_host bad_home < <(prepare_native_desktop "settings-$kind")
@@ -448,13 +479,15 @@ assert_file "$home/$SHELL_REL"
   fail 'desktop apply changed regular-file or mode contracts'
 [[ "$(readlink -f "$home/$SHORTCUTS_REL")" == "$REPO_DIR/packages/omarchy/desktop/$SHORTCUTS_REL" ]] ||
   fail 'desktop shortcut launcher does not resolve to the repository payload'
+[[ "$(grep -cFx '  "remove.windows": {"when":"false"},' "$home/$MENU_REL")" == 1 ]] ||
+  fail 'desktop menu must hide Remove > Windows exactly once'
 grep -Fq '"style.theme": {"icon":"󰸌"' "$home/$MENU_REL" || fail 'desktop menu action was not attached'
 grep -Fq '"shortcuts.prompts.t": {"label":"t · Ask for recommendation"' "$home/$MENU_REL" ||
   fail 'desktop shortcut menu was not attached'
 attached_shortcuts="$(awk -v begin="$MENU_BEGIN" -v end="$MENU_END" '
   $0 == begin { inside=1; next }
   $0 == end { inside=0 }
-  inside && $0 !~ /"style.theme"/
+  inside && $0 !~ /"style.theme"|"remove.windows"/
 ' "$home/$MENU_REL")"
 [[ "$attached_shortcuts" == "$(< "$REPO_DIR/packages/omarchy/desktop/$MENU_FRAGMENT_REL")" ]] ||
   fail 'desktop shortcut menu attachment is not the exact generated fragment'
@@ -595,6 +628,7 @@ expect_success "$home" "$native" "$DOTFILES" remove desktop
 [[ ! -e "$state" && ! -e "$home/$FRAGMENT_REL" && ! -e "$home/$ALIASES_REL" &&
   ! -e "$home/$BINDINGS_FRAGMENT_REL" && ! -e "$home/$MENU_FRAGMENT_REL" &&
   ! -e "$home/$COMPOSE_SHORTCUT_REL" && ! -e "$home/$SHORTCUTS_REL" && ! -e "$home/$MENU_ADAPTER_REL" &&
+  ! -e "$home/$WINDOWS_VM_REL" && ! -e "$home/$WINDOWS_VM_DESKTOP_REL" &&
   ! -e "$home/$MENU_PLUGIN_REL/manifest.json" &&
   -f "$home/$MENU_REL" && ! -L "$home/$MENU_REL" && ! -e "$home/$SWITCHER_REL" ]] ||
   fail 'desktop removal retained state or package link'
@@ -627,7 +661,8 @@ for retained in links markers; do
   else
     rm "$lost_home/$FRAGMENT_REL" "$lost_home/$ALIASES_REL" "$lost_home/$BINDINGS_FRAGMENT_REL" \
       "$lost_home/$MENU_FRAGMENT_REL" "$lost_home/$COMPOSE_SHORTCUT_REL" "$lost_home/$SWITCHER_REL" \
-      "$lost_home/$SHORTCUTS_REL" "$lost_home/$MENU_ADAPTER_REL"
+      "$lost_home/$SHORTCUTS_REL" "$lost_home/$MENU_ADAPTER_REL" "$lost_home/$WINDOWS_VM_REL" \
+      "$lost_home/$WINDOWS_VM_DESKTOP_REL"
   fi
   input_before="$(sha256sum "$lost_home/$INPUT_REL")"
   xcompose_before="$(sha256sum "$lost_home/$XCOMPOSE_REL")"
@@ -972,6 +1007,7 @@ done
 after="$(find "$ubuntu_home" -mindepth 1 -printf '%P\n')"
 [[ "$before" == "$after" && ! -e "$ubuntu_home/.local/state/dotfiles/v2/desktop.json" ]] ||
   fail 'Ubuntu desktop lifecycle wrote files or state'
+[[ ! -e "$ubuntu_home/desktop-command.trace" ]] || fail 'Ubuntu desktop lifecycle invoked privileged or VM runtime commands'
 expect_success "$ubuntu_home" "$ubuntu" "$DOTFILES" remove
 [[ ! -e "$ubuntu_home/.local/state/dotfiles/v2/desktop.json" ]] || fail 'Ubuntu default remove invented desktop state'
 assert_not_contains "$TEST_OUTPUT" 'desktop'

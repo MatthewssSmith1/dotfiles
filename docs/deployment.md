@@ -45,9 +45,19 @@ The offline `dotfiles.sh` lifecycle deploys and checks repository state but does
 
 ## Network Boundaries
 
+Desktop also owns the Windows VM wrapper and `windows-vm.desktop` package links
+on Omarchy only. No VM command or privilege elevation runs during apply/check/
+remove, and no VM data or credentials are owned. An existing regular desktop
+entry must be inspected, backed up, and explicitly moved aside before adoption;
+remove does not restore it. Before upstream install/reinstall, detach the managed
+desktop symlink because upstream `tee` follows it. Re-adopt the newly generated
+regular entry deliberately afterwards. See the [launcher safeguards and setup
+exception](environments/omarchy.md#windows-vm-launcher).
+
 | Operation                              | Network                                          |
 | -------------------------------------- | ------------------------------------------------ |
 | Dotfiles apply/check/remove            | Forbidden                                        |
+| Explicit Windows VM wrapper launch     | Upstream VM runtime; fresh setup may download images |
 | `dotfiles-omarchy-prune`               | No fetch; privileged local package mutation      |
 | Shell, tmux, ordinary Neovim startup   | Forbidden                                        |
 | Herdr runtime manifest refresh         | Explicitly allowed for agent detection           |
@@ -59,4 +69,4 @@ The offline `dotfiles.sh` lifecycle deploys and checks repository state but does
 
 Ubuntu selectors are ordinary mise configuration. Install them manually with the exact command printed by the relevant area; dotfiles writes selectors but never runs `mise install`.
 
-Application runtime networking is allowed only when documented in this matrix. The managed exceptions are Herdr's agent-detection manifest refresh, with version checks disabled, and OpenCode personal-profile installation of its pinned npm plugin when absent from the host cache. This does not alter the offline dotfiles apply/check/remove guarantee.
+Application runtime networking is allowed only when documented in this matrix. The managed exceptions are Herdr's agent-detection manifest refresh, with version checks disabled, OpenCode personal-profile installation of its pinned npm plugin when absent from the host cache, and explicitly invoked upstream Windows VM runtime networking. This does not alter the offline dotfiles apply/check/remove guarantee.

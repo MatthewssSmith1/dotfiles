@@ -17,6 +17,11 @@ Omarchy is the reference Linux environment; Ubuntu reproduces its pinned, review
 
 Eight areas are ready by default: `git`, `tools`, `bash`, `tmux`, `nvim`, `agents`, `herdr`, `desktop`. `opencode` is optional and explicitly deploys parallel work/personal configuration. `desktop` is native ownership (natural touchpad scrolling, shell idle thresholds, generated Compose aliases, and a shortcut manager/menu) and validation-only on Ubuntu.
 
+Omarchy desktop also owns a [guarded Windows VM launcher](docs/environments/omarchy.md#windows-vm-launcher)
+and its desktop entry, not VM data or credentials. Deployment never operates the
+VM. Back up and move aside an unmanaged entry before adoption; detach the managed
+symlink before upstream install/reinstall to prevent `tee` overwriting the repo.
+
 ## Quick start
 
 ```bash

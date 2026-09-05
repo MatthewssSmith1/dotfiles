@@ -58,6 +58,61 @@ First adoption requires separate explicit confirmation before the single-file na
 
 For tmux, the native `~/.config/tmux/tmux.conf` remains the regular Omarchy-owned baseline. The validation-only area checks exact package identity, runtime output, stock bytes, safe owner/mode, key prefixes, terminal, and parsing without writing files or state.
 
+## Windows VM Launcher
+
+The guarded desktop menu block hides `Remove > Windows` with the supported top-level override `"remove.windows": {"when":"false"}`. This only hides the menu row; it does not disable upstream CLI removal or operate on the VM.
+
+The desktop area links `~/.local/bin/dotfiles-omarchy-windows-vm` and
+`~/.local/share/applications/windows-vm.desktop`. The Windows menu entry runs
+`uwsm app -- dotfiles-omarchy-windows-vm`. Deployment is offline and user-scoped:
+apply/check/remove never inspect, launch, stop, install, or elevate the VM.
+Ubuntu remains validation-only. VM storage, configuration, and credentials are
+not dotfiles payloads.
+
+Normal invocation requires a regular, non-symlink `~/.windows/windows.boot`
+before any mutation or upstream call. Dockurr can delete and recreate an existing
+`data.img` when that marker is missing: stop and inspect, never manufacture the
+marker or retry with Docker start/restart/compose up. This guard is an accidental
+reinstallation safeguard, not a backup, installer-completion proof, or protection
+against concurrent external changes. Do not change storage or run another VM
+operation concurrently with launch.
+
+The wrapper validates the account home and owned, accessible storage/shared
+directories, including legitimate directory symlinks; it refuses aliases and
+resolved nested paths. Alternate `OMARCHY_WINDOWS_DIR` values are refused so the
+guard and privileged launcher inspect the same home paths. It clears only the
+shared directory's setgid bit, nonrecursively, then invokes the protected
+`/usr/bin/omarchy-windows-vm launch --keep-alive`. Samba can set shared mode 2777;
+upstream's `chmod 0700` retains setgid and subsequently rejects mode 2700.
+Upstream still owns privacy hardening, authorization, Docker, and RDP. Closing
+RDP leaves the VM alive. Errors go to stderr and desktop notifications.
+
+`dotfiles-omarchy-windows-vm --fresh-setup-once` is an explicit, invocation-only
+exception for absent or provably empty storage. Hidden entries and enumeration
+errors refuse it. It never empties storage, creates a marker, installs Windows,
+creates directories, or saves a bypass setting. It still calls only `launch
+--keep-alive`: upstream configuration and mount-source directories must already
+have been provisioned. It is not a first-install wizard or a way to resume a
+partially populated installation. A new installation requires separately
+authorized upstream setup; upstream install starts installation itself.
+
+Before first adoption, inspect the existing desktop entry. An unmanaged regular
+file is a conflict even if it is the stock launcher. Back it up outside Git and
+move it aside explicitly before `dotfiles.sh check desktop`,
+`dotfiles.sh apply desktop`, and a final `dotfiles.sh check desktop`. Never
+overwrite unrelated content. Removal unlinks the managed entry and wrapper; it
+does **not** restore the previous desktop file or stop/delete the VM.
+
+**Before upstream install/reinstall**, detach the exact managed desktop symlink
+(verify it resolves to this checkout, then unlink that symlink only). Upstream
+uses `tee`, which follows the symlink and would overwrite the repository payload.
+After separately authorized setup, inspect/back up/move aside the new regular
+entry and reapply/check desktop to re-adopt it. Keep all disk images, credentials,
+compose files, and backups outside Git. If setup is paused, a separately reviewed
+`docker unpause omarchy-windows` resumes the existing process; do not substitute
+start/restart/compose up. Verify genuine marker generation and guest readiness
+before normal launch; unavailable authorization or a missing marker is a blocker.
+
 ## Executable Ownership
 
 Development tools resolve to native Omarchy packages. Dotfiles fails if a protected command such as Neovim does not resolve to its accepted package-owned `/usr/bin` runtime.

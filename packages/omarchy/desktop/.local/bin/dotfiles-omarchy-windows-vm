@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Guard the installed VM launcher, never the installer.
+set -uo pipefail
+
+fail() {
+  printf 'Windows VM: %s\n' "$1" >&2
+  notify-send -u critical 'Windows VM' "$1" >/dev/null 2>&1 || true
+  exit "${2:-1}"
+}
+
+fresh=false
+case "$#:$*" in
+  0:) ;;
+  1:--fresh-setup-once) fresh=true ;;
+  *) fail 'Usage: dotfiles-omarchy-windows-vm [--fresh-setup-once]' ;;
+esac
+[[ ${OMARCHY_WINDOWS_DIR:-/var/lib/omarchy/windows} == /var/lib/omarchy/windows ]] ||
+  fail 'Alternate OMARCHY_WINDOWS_DIR is not supported.'
+[[ ${HOME:-} == /* && -d $HOME && -O $HOME ]] || fail 'HOME must be an owned absolute directory.'
+account=$(getent passwd "$EUID") || fail 'Cannot verify the account home.'
+IFS=: read -r _ _ _ _ _ account_home _ <<< "$account"
+[[ $HOME == "$account_home" ]] || fail 'HOME differs from the account home used by upstream.'
+
+storage="$HOME/.windows"
+shared="$HOME/Windows"
+for path in "$storage" "$shared"; do
+  if [[ -e $path || -L $path ]]; then
+    [[ -d $path && -O $path && -r $path && -x $path ]] ||
+      fail "Expected an accessible, user-owned directory: $path"
+  fi
+done
+storage_real=$(realpath -m -- "$storage") || fail 'Cannot resolve storage.'
+shared_real=$(realpath -m -- "$shared") || fail 'Cannot resolve shared directory.'
+[[ $storage_real != "$shared_real" && $storage_real != "$shared_real/"* && $shared_real != "$storage_real/"* ]] ||
+  fail 'Storage and shared directories must be separate, non-nested directories.'
+if [[ -d $storage && -d $shared && $storage -ef $shared ]]; then
+  fail 'Storage and shared directories must not alias each other.'
+fi
+
+if "$fresh"; then
+  if [[ -d $storage ]]; then
+    # Constant output detects even hidden/newline-only names; preserve find errors.
+    contents=$(find -H "$storage" -mindepth 1 -maxdepth 1 -printf x -quit) ||
+      fail 'Cannot prove storage is empty; fresh setup refused.'
+    [[ -z $contents ]] || fail 'Fresh setup requires absent or empty storage; existing data is never bypassed.'
+  fi
+else
+  [[ -f $storage/windows.boot && ! -L $storage/windows.boot ]] ||
+    fail 'Missing or unsafe ~/.windows/windows.boot. Launch refused: upstream may replace the disk. Inspect setup manually; never fabricate the marker.'
+fi
+
+native=/usr/bin/omarchy-windows-vm
+[[ -f $native && ! -L $native && -x $native ]] || fail 'Native Windows VM launcher is missing or unsafe.'
+probe=$native
+while :; do
+  owner=$(stat -Lc %u -- "$probe") || fail 'Cannot verify native launcher ownership.'
+  mode=$(stat -Lc %a -- "$probe") || fail 'Cannot verify native launcher permissions.'
+  [[ $owner == 0 && $mode =~ ^[0-7]+$ ]] && ! ((8#$mode & 022)) ||
+    fail 'Native Windows VM launcher or parent is not root-owned and protected.'
+  [[ ! -L $probe ]] || fail 'Native Windows VM launcher has a symlink parent.'
+  [[ $probe == / ]] && break
+  probe=$(dirname -- "$probe")
+done
+
+# Samba sets setgid on /shared; upstream chmod 0700 preserves it, then rejects it.
+# Pin the directory so chmod cannot follow a replaced symlink to another object.
+if [[ -d $shared ]]; then
+  exec {shared_fd}<"$shared/." || fail 'Cannot open shared directory.'
+  [[ -O /proc/$$/fd/$shared_fd ]] || fail 'Shared directory ownership changed.'
+  chmod g-s -- "/proc/$$/fd/$shared_fd" || fail 'Cannot clear shared directory setgid.'
+  [[ $shared -ef /proc/$$/fd/$shared_fd ]] || fail 'Shared directory changed during validation.'
+  exec {shared_fd}<&-
+fi
+
+"$native" launch --keep-alive
+status=$?
+((status == 0)) || fail 'Native Windows VM launch failed; inspect its output before retrying.' "$status"
