@@ -113,8 +113,9 @@ Air60 live sysfs/proc/journal evidence identifies four USB keyboard-class interf
 | `k:19f5:3255:921cd195` | Consumer Control input2 |
 
 All four are in the intended pass-through profile. The currently ignored Mouse
-interface stays ignored; no mouse selector is added. Air60's `transports` example
-(inside its own hash/readback-bound device record):
+interface stays ignored; no mouse selector is added. Air60's USB-only `transports`
+example (not the current live Bluetooth state; inside its own hash/readback-bound
+device record):
 
 ```json
 {
@@ -130,9 +131,9 @@ interface stays ignored; no mouse selector is added. Air60's `transports` exampl
   },
   "bluetooth": {
     "status": "not-used",
-    "reason": "Historical selector reserved pending identity inspection; keep Bluetooth disconnected",
+    "reason": "USB-only example: keep both Bluetooth selectors disconnected",
     "disconnected": true,
-    "keyd_ids": ["k:19f5:3246:838051e9"]
+    "keyd_ids": ["k:19f5:3246:838051e9", "k:19f5:3246:7b6b2fa7"]
   },
   "receiver": {
     "status": "not-used",
@@ -142,8 +143,17 @@ interface stays ignored; no mouse selector is added. Air60's `transports` exampl
 }
 ```
 
-The historical Bluetooth selector is preserved, not newly verified. Bluetooth and
-the unknown receiver must stay disconnected during USB migration.
+The historical Bluetooth selector is preserved, not newly verified. On 2026-09-06,
+live keyd/proc evidence identified Bluetooth slot 1 as `k:19f5:3246:7b6b2fa7`
+(`NuPhy Air60 V2-1 Keyboard`). This is the only intended Bluetooth slot; its
+selector is now included in Air60 pass-through. See the dated
+[live record](../air60/LIVE-TEST.md) for deployment and human-test status.
+The example above accounts for both IDs as unused for a USB-only migration;
+it must not be used as evidence for the connected Bluetooth keyboard. The current
+whole-tree evidence format cannot separately reserve an unverified ID on a used
+transport; this targeted one-file update does not change that format or use its
+`apply`. Do not attest the historical selector as verified. Other Bluetooth slots
+and the unknown receiver remain outside the tested scope.
 Unknown transports are not covered by generic fallback. Verify keyd IDs live before adding new selectors
 to the intended profile. Original known selectors remain preserved. Air60 Plain
 and Enhanced both bypass keyd during test pass-through.

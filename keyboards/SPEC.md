@@ -34,8 +34,10 @@ firmware/host recovery, rather than blindly restoring overlapping host remaps.
 Unused transports must remain explicitly disconnected. File-level `verify`
 does not certify physical test completion.
 
-Toucan USB selector is `k:1d50:615e:982e9afd`; Air60 known
-selectors are `k:19f5:3255:0d7157bb` and `k:19f5:3246:838051e9`.
+Toucan USB selector is `k:1d50:615e:982e9afd`. Air60's four USB selectors are
+listed in `keyd/air60.conf`; its observed Bluetooth slot 1 selector is
+`k:19f5:3246:7b6b2fa7`. Historical `k:19f5:3246:838051e9` remains reserved,
+not newly verified. Only Bluetooth slot 1 is intended for use.
 Toucan Bluetooth selector `k:1d50:615e:b1063934` was confirmed during live testing;
 Air60 receiver coverage remains unverified. Transport identities must be
 observed, not inferred. Unknown transports must not silently

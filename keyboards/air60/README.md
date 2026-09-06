@@ -4,8 +4,8 @@
 253-cell update and independent readback. Air60-only host pass-through is active.
 Physical typing, switch behavior and power-cycle persistence remain pending.
 See [LIVE-TEST.md](LIVE-TEST.md) for backups, identities and results.
-No firmware was flashed. Statements below about operations not run refer to the
-initial offline implementation, before this live session.
+No firmware was flashed. USB and Bluetooth slot 1 pass-through routing are
+verified; other Bluetooth slots and the receiver remain untested.
 
 `layout.json` is a native VIA export: eight flat, row-major layers of 102
 matrix cells. `prepare_layout.py` records the exact offline migration from the
@@ -84,7 +84,7 @@ Functions also has F1-F12 across the twelve physical number-row positions
 Bluetooth profiles are user-facing 1/2/3, via CUSTOM(3/4/5), not QMK layer IDs.
 No number-row Bluetooth duplicates; that row retains twelve function keys.
 These device-specific Functions positions are intentional: Air60 puts F11/F12
-on P/rightmost backslash (plus number-row duplicates), Toucan proposes R/T to
+on P/rightmost backslash (plus number-row duplicates), Toucan uses R/T to
 free Q/W/E for Bluetooth, and generic keyd uses Symbols plus the physical
 number row for all F1-F12. They do not require identical activation mechanisms.
 
@@ -210,7 +210,6 @@ Existing hidden same-user or other-user handles, privileged processes, hidden
 processes, UID changes and new non-cooperating opens racing the audit remain
 possible. This is practical same-user conflict
 detection, **not hard exclusivity**; that would require a broker/kernel mechanism.
-No device requests were attempted during implementation.
 
 Apply validates all 816 desired cells first, then obtains a full current
 keymap/capability snapshot and computes the complete diff. Before setters it:
@@ -281,7 +280,7 @@ python3 keyboards/air60/backend.py verify --device /dev/hidrawN
 python3 tests/keyboard_air60_test.py
 ```
 
-Future, separately authorized apply after layout/firmware review, **not run**:
+Explicit apply after layout/firmware review:
 
 ```sh
 python3 keyboards/air60/backend.py apply --device /dev/hidrawN \
@@ -304,13 +303,13 @@ PYTHONPATH=keyboards/air60 python3 -c 'import backend as b; old=b.load("keyboard
   switch logic. VIA cannot change that policy. Test installed-firmware rollover.
 - Vendor Air60 config has no exposed runtime hold-tap tuning. QMK's usual
   200 ms default is a source baseline, not a measured installed behavior.
-- Live setter acceptance, EEPROM persistence across reconnect, typing, rolls,
-  modifier release, layer-tap release, RF/BLE pairing and side controls remain
-  untested because no Air60 was connected. Readback is not a behavioral test.
+- Live setters and fresh-connection full readback passed. Physical typing,
+  rolls, modifier/layer-tap release, side controls and power-cycle persistence
+  remain pending. Readback is not a behavioral test.
 - Symbol characters assume US host layout. Mac-specific controls may do
   nothing or different actions on Linux; they are retained device utilities.
-- Firmware must own Air60 remaps after migration. Existing keyd Air60 remaps
-  must be transitioned separately to pass-through at the reviewed stage, for
-  both Plain and Enhanced. This backend never installs/reloads keyd.
-- USB is the only management transport implemented. Bluetooth/receiver
-  identities and behavior need separate observation. No flashing is required.
+- Firmware owns Air60 remaps with USB and Bluetooth slot 1 host pass-through
+  active for both modes. This backend never installs/reloads keyd.
+- USB is the only management transport implemented. Bluetooth slot 1 routing
+  is verified, with physical tests pending; other slots and receiver remain
+  untested. No flashing is required.

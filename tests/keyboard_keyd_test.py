@@ -273,8 +273,9 @@ class KeydTest(unittest.TestCase):
         self.wanted = backend.desired(["air60"])
         usb_ids = ["k:19f5:3255:e3746a94", "k:19f5:3255:0d7157bb",
                    "k:19f5:3255:a10585ca", "k:19f5:3255:921cd195"]
+        bluetooth_ids = ["k:19f5:3246:838051e9", "k:19f5:3246:7b6b2fa7"]
         self.assertEqual(self.wanted["air60.conf"].decode().split("[ids]\n")[1],
-                         "\n".join([*usb_ids, "k:19f5:3246:838051e9", "", "[main]", ""]))
+                         "\n".join([*usb_ids, *bluetooth_ids, "", "[main]", ""]))
         self.assertEqual({n: v for n, v in self.wanted.items() if n != "air60.conf"},
                          {n: v for n, v in backend.desired().items() if n != "air60.conf"})
         record = {
@@ -286,7 +287,7 @@ class KeydTest(unittest.TestCase):
                 "usb": {"status": "verified", "keyd_ids": usb_ids,
                         "identity_record": "fixture-only journal covering all four USB keyboard-class interfaces"},
                 "bluetooth": {"status": "not-used", "reason": "identity unverified; disabled for testing",
-                              "disconnected": True, "keyd_ids": ["k:19f5:3246:838051e9"]},
+                              "disconnected": True, "keyd_ids": bluetooth_ids},
                 "receiver": {"status": "not-used", "reason": "receiver unplugged", "disconnected": True}
             }
         }
@@ -314,6 +315,7 @@ class KeydTest(unittest.TestCase):
             (("transports", "bluetooth", "disconnected"), "true"),
             (("transports", "bluetooth", "reason"), " "),
             (("transports", "bluetooth", "keyd_ids"), []),
+            (("transports", "bluetooth", "keyd_ids"), bluetooth_ids[:1]),
             (("transports", "bluetooth", "keyd_ids"), ["k:ffff:ffff:ffffffff"]),
             (("transports", "bluetooth", "keyd_ids"), "k:19f5:3246:838051e9"),
             (("transports", "bluetooth", "keyd_ids"), [{}]),

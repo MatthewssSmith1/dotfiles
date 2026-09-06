@@ -127,3 +127,46 @@ they approved changing it to `~` to match Toucan muscle memory.
   host fixtures omit a required Claude skill alias. All five reproduced from
   an isolated archive of unchanged HEAD `00b505b`.
 - Human confirmation of tilde output and power-cycle persistence remains pending.
+
+## Bluetooth Slot 1 Pass-Through Correction
+
+Session: 2026-09-06, host `mbook`, keyd reload 10:58:24 -05:00.
+User authorized the targeted host change and identified this as the only
+intended Bluetooth slot. This session supersedes the earlier Bluetooth deferral
+for slot 1 only; receiver and other Bluetooth slots remain untested.
+
+- `/proc/bus/input/devices` identified Bluetooth bus `0005`, VID/PID `19f5:3246`,
+  name `NuPhy Air60 V2-1 Keyboard`. The 09:52:10 keyd journal showed selector
+  `19f5:3246:7b6b2fa7` incorrectly matching `/etc/keyd/default.conf`.
+- The generic profile maps Left/Right Shift to brackets. Firmware-generated
+  home-row Shift therefore received a second remap, explaining reported `]r`
+  instead of `R` for held J + R. No raw key-event capture was performed.
+- Added `k:19f5:3246:7b6b2fa7` to the empty Air60 pass-through profile, preserving
+  all four USB selectors and historical `k:19f5:3246:838051e9`. The historical
+  selector's correspondence remains unverified; no extra Bluetooth slot is claimed.
+- Only `/etc/keyd/air60.conf` was replaced, atomically as root:root 0644, after
+  expected-hash checks and a complete directory backup. The one-file operation
+  included guarded recovery on failure. No firmware writes, whole-tree installer,
+  generic rollout, Bluetooth commands, or bond changes were performed.
+- Root-owned backup: `/var/lib/air60-bluetooth-backup.07YJx3Xn/before/`;
+  installed payload retained beside it as `desired.conf`.
+- Repository and installed Air60 profile SHA256:
+  `1ae855db0b4cb295d2b1b3021d26758acf11ae0c696411b23df8c428d11c4994`.
+- Generic, Toucan, and both shared includes retained the hashes in the original
+  table above; owner/mode checks also passed. Unrelated worktree edits were left
+  untouched.
+- All 23 keyd tests and 17 repository contract groups passed. Optional JSON Schema
+  validation was skipped because `python3-jsonschema` is unavailable. Real keyd
+  parser validation passed for the current live tree with only Air60 replaced,
+  and again after installation. `git diff --check` passed.
+- After reload, keyd remained active. The 10:58:24 journal confirmed
+  `19f5:3246:7b6b2fa7` matches `/etc/keyd/air60.conf`; mouse selector
+  `19f5:3246:e5787aef` remains ignored. Both Toucan interfaces retained pass-through
+  and the laptop keyboard retained the generic profile.
+
+Pending human checks: Enhanced D/J Shift chords, ordinary taps, physical brackets,
+Alt chords and modifier release; Plain-mode Shift; same-slot Bluetooth reconnect
+and power-cycle persistence. USB selectors are unchanged but USB behavior was not
+retested in this session. Routing is verified, not physical acceptance. Recovery
+to this session's pre-change profile would restore the known Bluetooth bug; use
+the laptop or previously verified USB connection while investigating.
