@@ -15,7 +15,7 @@
 
 Omarchy retains its regular `~/.local/bin/opencode` mise wrapper, `~/.config/opencode/opencode.json`, and `~/.config/opencode/tui.json`. Herdr retains `~/.config/opencode/tui.jsonc` and its integration scripts. The `agents` area separately owns only the `AGENTS.md` bridge. OpenCode owns its plugins, credentials, sessions, package metadata, caches, backups, and other generated state.
 
-The personal overlay pins `opencode-openai-codex-auth@4.4.0`, its reviewed OpenAI provider catalog, and GPT 5.6 Terra compaction. The work overlay declares only the reviewed TrueFoundry providers and reads its credential from `TFY_API_KEY`. OAuth credentials remain in OpenCode application state. A fresh personal startup may fetch the pinned plugin when absent from cache; dotfiles apply, check, and remove never fetch.
+The personal overlay declares no plugin and no provider block. It relies on OpenCode's native ChatGPT Plus/Pro OAuth (`/connect` → OpenAI → ChatGPT Plus/Pro, available since OpenCode 1.3.0), so models are auto-discovered from the subscription. The overlay sets GPT 5.6 Sol (low) for the `general` and `explore` subagents and GPT 5.6 Terra (low) for compaction. The work overlay declares only the reviewed TrueFoundry providers and reads its credential from `TFY_API_KEY`. OAuth credentials remain in OpenCode application state. Personal startup fetches nothing; dotfiles apply, check, and remove never fetch.
 
 OpenCode loads all existing global config names before the explicit overlay:
 

@@ -44,17 +44,18 @@ assert_managed_links() {
 personal_profile="$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/personal.jsonc"
 work_profile="$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/work.jsonc"
 tui_profile="$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/tui.jsonc"
-personal_provider_hash='e986bec224382f24e2334b152cdf23ffaf13ccefde895e3fe4c94d2702d3bce8'
 jq -e '
-  .plugin == ["opencode-openai-codex-auth@4.4.0"] and
-  .agent.compaction == {"model":"openai/gpt-5.6-terra","variant":"low"} and
-  (.provider.openai.models | keys) == [
-    "gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-max",
-    "gpt-5.1-codex-mini", "gpt-5.2", "gpt-5.2-codex"
-  ]
-' "$personal_profile" >/dev/null || fail 'personal OpenCode Codex OAuth profile drifted'
-[[ "$(jq -cS '.provider.openai' "$personal_profile" | sha256sum | cut -d ' ' -f1)" == "$personal_provider_hash" ]] ||
-  fail 'personal OpenCode provider catalog drifted'
+  (has("plugin") | not) and
+  (has("provider") | not) and
+  . == {
+    "$schema":"https://opencode.ai/config.json",
+    "agent":{
+      "explore":{"model":"openai/gpt-5.6-sol","variant":"low"},
+      "general":{"model":"openai/gpt-5.6-sol","variant":"low"},
+      "compaction":{"model":"openai/gpt-5.6-terra","variant":"low"}
+    }
+  }
+' "$personal_profile" >/dev/null || fail 'personal OpenCode native Codex OAuth profile drifted'
 jq -e '
   (has("plugin") | not) and
   (.provider | keys) == ["truefoundry-gateway", "truefoundry-gateway-openai"] and
