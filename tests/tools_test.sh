@@ -38,7 +38,7 @@ export DOTFILES_TEST_HIDE_COMMANDS='mise node pnpm wt'
 expect_failure 'mise is absent' "$home" "$ubuntu" "$DOTFILES" check tools
 assert_contains "$TEST_OUTPUT" 'mise install node@lts'
 assert_contains "$TEST_OUTPUT" 'mise install aqua:pnpm/pnpm@11.13.1'
-assert_contains "$TEST_OUTPUT" 'mise install aqua:max-sixty/worktrunk@0.68.0'
+assert_contains "$TEST_OUTPUT" 'mise install aqua:max-sixty/worktrunk@0.76.0'
 unset DOTFILES_TEST_HIDE_COMMANDS
 pass
 
@@ -46,8 +46,14 @@ pass
 make_tool mise 'mise 2026.7.7'
 make_tool node 'v24.0.0'
 make_tool pnpm '11.13.1'
-make_tool wt 'worktrunk 0.68.0'
+make_tool wt 'worktrunk 0.76.0'
 expect_success "$home" "$ubuntu" "$DOTFILES" check tools
+pass
+
+# An installed older release must not satisfy the selected version policy.
+make_tool wt 'worktrunk 0.75.0'
+expect_failure 'Worktrunk must resolve to 0.76.0' "$home" "$ubuntu" "$DOTFILES" check tools
+make_tool wt 'worktrunk 0.76.0'
 pass
 
 # Native tools deploy the shared launcher and native prune command without

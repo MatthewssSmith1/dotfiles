@@ -23,6 +23,12 @@ new_seeded_home() {
     lexical="$(realpath -m -s --relative-to="$parent" -- "$source")"
     ln -s "$lexical" "$home/$relative"
   done
+  mkdir -p "$home/.claude/skills"
+  for source in "$REPO_DIR/packages/common/agents/.agents/skills"/*; do
+    [[ -d "$source" && ! -L "$source" ]] || continue
+    relative="${source##*/}"
+    ln -s "../../.agents/skills/$relative" "$home/.claude/skills/$relative"
+  done
   shopt -u dotglob nullglob globstar
   mkdir -p "$home/.config/opencode" "$home/.claude"
   ln -s ../../.agents/AGENTS.md "$home/.config/opencode/AGENTS.md"
