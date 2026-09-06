@@ -1,8 +1,51 @@
 # Toucan Live Test
 
+## 2026-09-06: Personal Left Firmware
+
+Approved personal tap-preferred/200 ms left image built and flashed; right
+firmware and host remaps unchanged. Functions 3:0 and 3:41 are None.
+
+- Physical RST was difficult to press. The user assigned and saved a temporary
+  Nav+X Bootloader binding through Studio; independent readback confirmed only
+  that change. Nav+Z unlock stayed unchanged and backend guards were retained.
+- The left UF2 volume was identified by serial and bootloader metadata.
+  Preflash `CURRENT.UF2` was captured but is not a vetted restore image.
+- All 685568 trial-left bytes were copied; final fsync returned EIO as the UF2
+  volume disconnected. Runtime re-enumerated one second later. No automatic
+  reflash occurred and no postflash flash-memory hash was obtained.
+- The guarded backend restored Nav+X to Transparent (ID 23), saved and verified.
+  Backup/result: `~/.local/state/keyboards/toucan/apply-e6wqn56c/`.
+- Fresh independent verification and another after the user's left power cycle
+  returned `verified: true`, `changes: []`. All 168 bindings, stable order,
+  geometry and behavior metadata matched; no settings or bonds were cleared.
+- User reported both halves typing, overlapping rolls, intentional D/J Shift
+  (>200 ms), modifier chords, thumb layers, trackpad, display/LEDs and no stuck
+  keys passed. These are user reports, not instrumented HID traces. Longer
+  typing and separate BLE/battery tests remain pending; USB power does not
+  establish the selected host output transport.
+- Intermittent first-read `invalid protobuf tag` failures recurred; one
+  preflash retry timed out at `core.get_device_info`. Complete diagnostic/retry
+  captures passed with unchanged decoder, framing, identity and access checks.
+  The cause remains unresolved.
+
+The unchanged `postflash-evidence.tar.gz` under
+`~/.local/share/toucan-build-v03/` retains the before/temporary-binding snapshots,
+raw-frame diagnostic, bootloader records, runtime apply backup and
+`records/personal-postflash-verification.json` /
+`records/personal-powercycle-verification-retry.json`. It complements the
+candidate and personal archives. [FIRMWARE-PREP.md](FIRMWARE-PREP.md) lists exact
+UF2 hashes, retention/rebuild requirements and recovery limits. Original
+installed firmware remains unknown; recovery images restore personal compiled
+defaults, not the original image or saved settings.
+
+## 2026-09-05: Runtime Layout And Host Pass-Through
+
+The entries below preserve the earlier runtime-only session and its hashes;
+they do not describe the September 6 firmware image or current keymap hash.
+
 Session: 2026-09-05, host `mbook`, last automated check 23:26 -05:00.
 User approved home-row mods, Functions relocation/output controls, Symbols
-cleanup and Nav changes. Air60 Plain's missing Shift/Alt is deferred, not a gate.
+cleanup and Nav changes.
 
 ## Applied And Verified
 
@@ -48,7 +91,7 @@ because it would also deploy staged generic mappings. Keyd is running again.
 Local runtime records, not checked-in original snapshots:
 
 - Pre-apply snapshot: `~/.local/state/keyboards/toucan/snapshot-yeve7hvn/snapshot.json`
-- Firmware backup/result: `~/.local/state/keyboards/toucan/apply-uyyjdtt8/`
+- Runtime keymap backup/result (not firmware image or bonds): `~/.local/state/keyboards/toucan/apply-uyyjdtt8/`
 - Post-save snapshot: `~/.local/state/keyboards/toucan/snapshot-025irv4n/snapshot.json`
 - Post-power-cycle snapshot: `~/.local/state/keyboards/toucan/snapshot-umf58gi0/snapshot.json`
   (byte-identical to the post-save snapshot, with the same SHA256 below).
@@ -79,9 +122,10 @@ and stop keyd if necessary while diagnosing. Firmware restoration is not automat
   byte-for-byte; offline diff against the intended keymap was also empty.
 - Keyd remained active; both reconnected interfaces matched Toucan pass-through.
   All five host config hashes matched the post-apply state.
-- Bluetooth typing, battery operation and Air60/generic rollout remain deferred.
+- Bluetooth typing, battery operation and Air60/generic rollout were deferred
+  in this session. See the Air60 live record for its subsequent deployment.
 
-Toucan USB-directed acceptance and power-cycle persistence checks are complete.
+The September 5 USB-directed checks and power-cycle persistence passed.
 Physical results are user-reported, not an instrumented capture of emitted events.
 The intermittent first-read protobuf error remains an unresolved tooling issue;
 successful full readbacks do not explain or eliminate it.

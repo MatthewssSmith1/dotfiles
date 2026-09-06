@@ -6,7 +6,7 @@ Omarchy. **Toucan and Air60 applied; generic changes remain staged.** See the
 [Air60 test deployment](air60/LIVE-TEST.md). This is a separate module, not a
 Stow package or a `dotfiles.sh` area.
 
-- [SPEC.md](SPEC.md): authoritative design, exact positions, proposed choices.
+- [SPEC.md](SPEC.md): authoritative intended map and exact positions.
 - [reference.html](reference.html): standalone offline visual reference; open
   directly or use `./keyboards/keyboard reference` from the repository root.
 - Native implementations: [Toucan](toucan/README.md), [Air60](air60/README.md),
@@ -81,13 +81,14 @@ privileges to this user-writable checkout. All other commands run unprivileged.
 
 ## Capability Status
 
-| Target | Implemented and offline-tested | Still requires hardware verification |
+| Target | Current evidence | Still requires hardware verification |
 | --- | --- | --- |
-| Toucan | Captured protobuf fixtures, stable IDs, Mod-Tap assignment, save/readback, backup/failure handling | Setter acceptance, persistence, hold-tap feel, mouse/consumer output, conditional Functions |
-| Air60 | Pinned VIA v12 wire/custom codes, native matrix layout, immediate-write/readback handling | Installed firmware provenance, live protocol, setters, reconnect persistence, Plain/Enhanced typing |
-| keyd | Installed v2.6 parser, staged layouts, conflict checks, test-migration gate, backup/recovery | Device/transport selection, physical output, migration completion |
+| Toucan | Personal left tap-preferred/200 ms firmware flashed; 168 bindings verified after save and power cycle; initial physical checks reported passed; right untouched | Longer typing, separate BLE and battery tests |
+| Air60 | VIA v12 setters and all 816 cells verified; USB and Bluetooth slot 1 host routing verified | Plain/Enhanced physical acceptance, power-cycle persistence; other BLE slots and receiver untested; VIA cannot attest exact firmware build |
+| keyd | Parser and migration guards tested; Toucan USB/BLE and Air60 USB/BT slot 1 pass-through observed | Remaining device physical tests; generic rollout remains staged |
 
-Toucan hold-tap timing and conditional-layer definitions are not runtime getters.
+Toucan hold-tap timing and conditional-layer definitions are not runtime getters;
+compiled artifact inspection is separate evidence. No postflash memory hash was read.
 Air60's exact build cannot be attested by VIA; its compiled Mac-mode NKRO policy
 cannot be changed with this tool. No arbitrary firmware compatibility is claimed.
 See device READMEs for pinned evidence and concurrency limits.
@@ -106,9 +107,9 @@ See device READMEs for pinned evidence and concurrency limits.
 - Toucan Symbols' former bottom-row A/S/D/F outputs become None. Nav mouse
   bindings remain. Toucan Nav N stays transparent and period stays right Shift;
   Air60/generic Nav N/period are inert.
-- Two anomalous Toucan Functions bindings are retained untouched, not endorsed
-  as working controls. Preflight refuses to restore them through unsupported
-  setters. Toucan Functions retains its existing layer-specific thumb behavior.
+- Two anomalous Toucan Functions bindings (positions 0/41) are now deployed and
+  verified as explicit None. Preflight allows only that correction,
+  never restoring the anomalies afterward. Other Functions thumbs are unchanged.
 - Air60 Utilities layer 7 retains useful device/media controls. Destructive
   reset/DFU/factory-test bindings are omitted. Generic Nav's existing A/S/D/F
   dual-role modifiers and G=Enter remain explicit device differences.

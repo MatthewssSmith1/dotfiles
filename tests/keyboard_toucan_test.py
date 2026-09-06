@@ -306,10 +306,95 @@ class ToucanTest(unittest.TestCase):
             self.assertEqual(layers[1][p],old[1][p])
         self.assertEqual([layers[1][p]['param1'] for p in (32,33)],[0xc00ea,0xc00e9])
         for p in (0,41):
-            self.assertEqual(layers[3][p],old[3][p])
+            self.assertEqual(layers[3][p],{'behavior_id':4,'param1':0,'param2':0})
         self.assertEqual(layers[3][13:23],old[3][13:23])
         self.assertEqual([layers[3][p]['param2'] for p in (1,2,3)],[0,1,2])
         self.assertEqual([layers[3][p]['param1'] for p in (4,5)],[0x70044,0x70045])
+
+    def previous_personal_map(self):
+        previous = copy.deepcopy(DESIRED)
+        for pos in (0,41):
+            previous['layers'][-1]['bindings'][pos] = b.original()['keymap']['layers'][-1]['bindings'][pos]
+        # Pin the entire previous personal map, independently of Git/worktree state.
+        encoded = json.dumps(previous,sort_keys=True,separators=(',',':')).encode()
+        self.assertEqual(hashlib.sha256(encoded).hexdigest(),
+                         '47a756d7a97525b5b64d889a4083abd11d6cf2bf86af2759f7dc0d49b1ced38e')
+        return previous
+
+    def test_none_correction_two_only_delta_and_apply(self):
+        rpc = MockRPC()
+        rpc.state['keymap'] = self.previous_personal_map()
+        changes = b.diff(rpc.state,DESIRED)
+        self.assertEqual(changes,[
+            {'method':'set_layer_binding',
+             'request':{'layer_id':3,'key_position':pos,
+                        'binding':{'behavior_id':4,'param1':0,'param2':0}},
+             'before':rpc.state['keymap']['layers'][-1]['bindings'][pos]}
+            for pos in (0,41)])
+        with tempfile.TemporaryDirectory() as root:
+            result = b.apply(rpc,DESIRED,backup_root=root)
+        self.assertEqual(result['changes'],changes)
+        self.assertEqual(rpc.mutations(),['set_layer_binding','set_layer_binding','save_changes'])
+        self.assertEqual(rpc.state['keymap'],DESIRED)
+        self.assertTrue(b.verify(rpc,DESIRED)['verified'])
+
+    def test_legacy_snapshot_readonly_verification(self):
+        for keymap in (b.original()['keymap'],self.previous_personal_map()):
+            rpc = MockRPC()
+            rpc.state['keymap'] = keymap
+            fresh = b.snapshot(rpc)
+            self.assertEqual(b.diff(fresh,fresh['keymap']),[])
+            self.assertTrue(b.verify(rpc,fresh['keymap'])['verified'])
+            self.assertEqual(rpc.mutations(),[])
+
+    def test_anomaly_restoration_rejected_after_correction(self):
+        for pos in (0,41):
+            rpc = MockRPC()
+            rpc.state['keymap'] = self.previous_personal_map()
+            want = copy.deepcopy(rpc.state['keymap'])
+            rpc.state['keymap']['layers'][-1]['bindings'][pos] = copy.deepcopy(
+                DESIRED['layers'][-1]['bindings'][pos])
+            with self.subTest(pos=pos):
+                for operation in (lambda: b.diff(rpc.state,want),
+                                  lambda: b.verify(rpc,want),
+                                  lambda: b.apply(rpc,want)):
+                    with self.assertRaisesRegex(b.Error,'restoration unsupported'):
+                        operation()
+                self.assertEqual(rpc.mutations(),[])
+
+    def test_anomaly_alternatives_rejected_even_when_live_matches(self):
+        alternatives = [
+            {'behavior_id':23,'param1':0,'param2':0},
+            {'behavior_id':8,'param1':458795,'param2':0},
+            {'behavior_id':12,'param1':1,'param2':0},
+            {'behavior_id':4,'param1':1,'param2':0},
+            {'behavior_id':4,'param1':0,'param2':1},
+        ]
+        for pos in (0,41):
+            other_anomaly = b.original()['keymap']['layers'][-1]['bindings'][41-pos]
+            for binding in alternatives + [other_anomaly]:
+                for matching_live in (False,True):
+                    rpc = MockRPC()
+                    want = copy.deepcopy(DESIRED)
+                    want['layers'][-1]['bindings'][pos] = copy.deepcopy(binding)
+                    if matching_live:
+                        rpc.state['keymap'] = copy.deepcopy(want)
+                    with self.subTest(pos=pos,binding=binding,matching_live=matching_live):
+                        with self.assertRaises(b.Error):
+                            b.apply(rpc,want)
+                        with self.assertRaises(b.Error):
+                            b.diff(rpc.state,want)
+                        self.assertEqual(rpc.mutations(),[])
+
+    def test_none_correction_requires_firmware_metadata(self):
+        for kind in ('unadvertised','missing','changed'):
+            rpc = MockRPC()
+            if kind == 'unadvertised': rpc.state['available_behaviors']['behaviors'].remove(4)
+            if kind == 'missing': del rpc.state['behavior_details']['4']
+            if kind == 'changed': rpc.state['behavior_details']['4']['display_name'] = 'Different'
+            with self.subTest(kind=kind), self.assertRaisesRegex(b.Error,'identity/schema mismatch: 4'):
+                b.diff(rpc.state,DESIRED)
+            self.assertEqual(rpc.mutations(),[])
 
     def test_readonly(self):
         rpc = MockRPC()
@@ -344,7 +429,7 @@ class ToucanTest(unittest.TestCase):
             if kind == 'missing': del binding['param2']
             if kind == 'layer': want['layers'][0]['bindings'][37]['param1'] = 42
             if kind == 'unknown': binding['behavior_id'] = 999
-            if kind == 'anomaly': want['layers'][-1]['bindings'][41]['behavior_id'] = 4
+            if kind == 'anomaly': want['layers'][-1]['bindings'][41]['behavior_id'] = 23
             if kind == 'bond_clear': want['layers'][-1]['bindings'][1]['param1'] = 0
             with self.subTest(kind=kind), self.assertRaises(b.Error):
                 b.apply(rpc,want)
@@ -368,9 +453,13 @@ class ToucanTest(unittest.TestCase):
         self.assertEqual(rpc.mutations(),[])
 
     def test_protected_controls(self):
-        for index,position in ((0,37),(0,25),(2,25),(2,17),(2,28),(2,29),(3,39)):
+        protected = ([(index,pos) for index in range(4) for pos in range(36,42)
+                      if (index,pos) != (3,41)]
+                     + [(0,pos) for pos in range(24,36)]
+                     + [(2,pos) for pos in (17,25,28,29)])
+        for index,position in protected:
             desired = copy.deepcopy(DESIRED)
-            desired['layers'][index]['bindings'][position] = {'behavior_id':23,'param1':0,'param2':0}
+            desired['layers'][index]['bindings'][position] = {'behavior_id':4,'param1':0,'param2':0}
             with self.subTest(index=index,position=position), self.assertRaisesRegex(b.Error,'protected'):
                 b.validate(desired)
 

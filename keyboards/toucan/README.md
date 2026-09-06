@@ -1,12 +1,12 @@
 # Toucan Runtime Backend
 
-The intended configuration was applied and saved on 2026-09-05; independent
-readback passed, including after a power cycle. The user reported physical typing
-and control checks passed; Bluetooth-specific and battery tests remain deferred.
-See [LIVE-TEST.md](LIVE-TEST.md) for the host profile, backups and evidence.
-No firmware was flashed. Both halves should remain USB powered.
-Statements below about operations not run refer to the initial implementation,
-before this live test session.
+The personal tap-preferred/200 ms left firmware was built and flashed on
+2026-09-06; right firmware was untouched. All 168 bindings matched after save
+and a left power cycle. Functions 3:0 and 3:41 are None; Nav+X is transparent
+again and Nav+Z still unlocks Studio. Initial user-reported checks passed;
+longer typing and separate BLE/battery tests remain. Keep both halves USB powered.
+See [LIVE-TEST.md](LIVE-TEST.md) for dated results and runtime backups, and
+[FIRMWARE-PREP.md](FIRMWARE-PREP.md) for retained images and recovery limits.
 
 ## Files And Identity
 
@@ -20,8 +20,9 @@ serial `93F54E4E61BA5937`; RPC name `Toucan`, serial bytes `k/VOTmG6WTc=`.
 VID/PID alone is insufficient. Every recorded USB identity property and RPC
 identity is checked. Exact geometry and behavior metadata are checked before
 mutation. This does not prove a PCB revision or firmware commit.
-Validation also protects every thumb, the ordinary Base bottom row, Nav mouse
-bindings, and Nav+Z unlock against accidental edits to the desired document.
+Validation also protects thumbs (except the approved Functions 41 correction),
+the ordinary Base bottom row, Nav mouse bindings, and Nav+Z unlock against
+accidental edits to the desired document.
 
 `../snapshots/toucan/` contains byte-exact original JSON, wire evidence, decoded
 references, and original hash manifest. It is never used as a routine backup
@@ -49,18 +50,19 @@ status; `metadata.json` completes the successful advertised-behavior extraction.
   become explicit None. B stays transparent. Peripheral modifiers remain.
 - Base top-left is apostrophe; Symbols top-left is grave; Symbols left bracket
   position 24 provides direct tilde. These are US HID legends, host-layout dependent.
-- Functions F1..F10 remain at positions 13..22. Proposed, review-required change:
+- Functions F1..F10 remain at positions 13..22. Previously approved and applied:
   F11/F12 move from Q/W to R/T (4/5), making room for Bluetooth profiles 1/2/3
   at Q/W/E (1/2/3), parameters 0/1/2. USB/BLE output selection is assigned at
   backslash/Y (6/7). Previous/next Bluetooth profile actions at 32/33 remain.
   Selecting an empty profile allows pairing; no bond-clear bindings are added.
-- Functions position 0 keeps the invalid-looking momentary target `458795`;
-  position 41 keeps unknown behavior 0. They are **preserved anomalies, not
-  validated working controls**. Neither is sent through a setter. If either
-  differs live, preflight refuses rather than attempting unsupported restoration.
+- Functions positions 0 and 41 are explicitly None, replacing invalid momentary
+  target `458795` and unknown behavior 0. The backend permits only this exact
+  correction, with normal behavior-metadata validation. Historical anomalies
+  may be verified unchanged but cannot be restored over corrected live bindings.
 
-The proposed F11/F12 relocation, freed Symbols keys, output controls, and Nav
-N/period decision require layout review before a separate explicit apply.
+The F11/F12 relocation, freed Symbols keys, output controls, and Nav N/period
+decision passed the prior layout review. The two None corrections are now
+deployed and verified; no other layout changes were made permanent.
 
 ## API For Coordinator
 
@@ -78,7 +80,7 @@ with backend.SerialRPC(port, writable=False) as rpc:
     result = backend.verify(rpc, desired)  # raises on mismatch or unsaved state
 ```
 
-Future explicit apply only: open `SerialRPC(port, writable=True)` and call
+For explicit apply, open `SerialRPC(port, writable=True)` and call
 `backend.apply(rpc, desired, backup_root=optional_path)`. The coordinator must
 obtain explicit layout-review acknowledgment before opening a writable session;
 the low-level `apply` API remains unchanged. No API opens a connection
@@ -113,12 +115,12 @@ python3 keyboards/toucan/backend.py diff
 python3 keyboards/toucan/backend.py verify
 ```
 
-The final three commands are read-only device operations, **not run here**.
+The final three commands are read-only device operations.
 `snapshot` prints JSON to stdout; callers choose a private output file.
 `diff --from-snapshot PATH` uses a complete backend snapshot offline, not the
 incomplete historical first-session snapshot. `--keymap`, `--port`, and
 `--backup-root` are explicit overrides. No-argument usage cannot mutate hardware.
-The standalone `apply` command requires `--ack-layout-review` for a later
+The standalone `apply` command requires `--ack-layout-review` for an explicit
 user-authorized run. Without it, main returns nonzero before loading the keymap
 or opening any connection. The flag acknowledges review; it does not weaken
 identity, access, backup, pending-state, or readback checks.
@@ -146,8 +148,7 @@ coordinates cooperating clients. Pre-existing hidden same-user or other-user han
 processes that bypass kernel exclusivity, processes hidden by proc namespaces or
 mount policy, and UID/FD-transfer races are outside the audit's guarantee.
 Noncooperating races remain possible. Do not run sudo, elevate privileges, or
-stop unrelated credential/system services to remove a warning. No live access
-was required to implement or mock-test this boundary.
+stop unrelated credential/system services to remove a warning.
 
 Serial termios is restored on close; DTR/RTS are not explicitly toggled. A CDC
 open/close may have firmware-dependent effects; no reset behavior is assumed.
@@ -191,17 +192,20 @@ JSON, not merely this codec's own round-trip output.
 Setter/save interpretation also consulted the temporary snapshot's captured
 `reference-keymap_subsystem.c` and `reference-keymap.c`. Those were retrieved
 from upstream main, not pinned device firmware, and are not treated as proof of
-installed behavior. Firmware commit is unknown. Setter support and persistence
-have **mock validation only**, not hardware confirmation.
+original installed behavior. The original firmware commit remains unknown.
+Live setters, save/readback and power-cycle persistence passed; dated evidence
+is in the live record. No postflash flash-memory hash was obtained.
 
 Runtime metadata advertises Mod-Tap/Layer-Tap but does not expose hold-tap term,
 flavor, quick-tap, idle/positional settings, or underlying compiled bindings.
-The desired layout uses advertised Mod-Tap; ~200 ms is not a verified setting.
-RGB and battery-display actions are not advertised and are deferred. Mouse,
-consumer output, Bluetooth profile selection, output switching, modifier release,
-tri-layer access, and reconnect persistence need staged human/device verification.
-No USB-only implementation claim extends to BLE transport.
+The personal left build was inspected as tap-preferred/200 ms; getters cannot
+attest that compiled setting. RGB and battery-display actions are not advertised.
+Initial typing, modifiers, layers, trackpad and display checks passed by user
+report. Longer typing and separate BLE/battery acceptance remain pending.
+Intermittent first-read `invalid protobuf tag` failures remain unresolved;
+successful complete retries used unchanged framing, decoder and access checks.
+USB management does not prove which host output transport is selected.
 
-Do not remove overlapping keyd behavior until a coordinated, target-specific
-migration test; otherwise double home-row processing can mask firmware results.
+Toucan USB/BLE host pass-through is active. Coordinate any host recovery with
+the firmware map; duplicate home-row processing can mask firmware results.
 The backend never deploys keyd or participates in normal dotfiles deployment.

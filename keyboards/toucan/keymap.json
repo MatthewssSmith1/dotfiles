@@ -133,7 +133,7 @@
       {"behavior_id":8,"param1":458828,"param2":0}
     ]},
     {"id": 3, "name": "Functions", "bindings": [
-      {"behavior_id":12,"param1":458795,"param2":0},
+      {"behavior_id":4,"param1":0,"param2":0},
       {"behavior_id":22,"param1":3,"param2":0},
       {"behavior_id":22,"param1":3,"param2":1},
       {"behavior_id":22,"param1":3,"param2":2},
@@ -174,7 +174,7 @@
       {"behavior_id":8,"param1":458792,"param2":0},
       {"behavior_id":12,"param1":2,"param2":0},
       {"behavior_id":8,"param1":458982,"param2":0},
-      {"behavior_id":0,"param1":0,"param2":0}
+      {"behavior_id":4,"param1":0,"param2":0}
     ]}
   ],
   "available_layers": 3,

@@ -132,10 +132,10 @@ Pass    1       2       3       4       5       | 6       7       8       9     
                 Backspace Pass Space           | Tab Pass Delete
 
 Functions (3)
-Anomaly BLE1    BLE2    BLE3    F11     F12     | USB     BLE     Pass    Pass    Pass    Pass
+None    BLE1    BLE2    BLE3    F11     F12     | USB     BLE     Pass    Pass    Pass    Pass
 LCtrl   F1      F2      F3      F4      F5      | F6      F7      F8      F9      F10     Pass
 LCtrl   LShift  Pass    Pass    Pass    Pass    | Pass    Pass    BTprev  BTnext  RShift  RCtrl
-                Nav Space Enter                | Symbols RAlt Unknown0
+                Nav Space Enter                | Symbols RAlt None
 ```
 
 Nav mouse actions are G/index17 = right button (mask 2), V/28 = Mouse5
@@ -148,16 +148,16 @@ Base top-left is apostrophe/double quote, not grave/tilde. Symbols top-left
 is grave; Symbols index24 is direct tilde. Symbols index35 is the explicit
 chord **left Shift + right Ctrl**, not merely right Ctrl.
 
-**Review required:** F11/F12 move from Q/W to R/T (4/5), allowing BLE profiles
-at Q/W/E (1/2/3). USB/BLE output at backslash/Y (6/7) is proposed. Preserve
-BT previous/next at M/comma (32/33). Freed Symbols Z/X/C/V are None; B is Pass.
-Nav N/period choices and all retained peripheral modifier/chord bindings need
-review, as do the unusual Functions thumbs (not the Base thumb outputs).
+**Reviewed and applied:** F11/F12 moved from Q/W to R/T (4/5), allowing BLE
+profiles at Q/W/E (1/2/3), with USB/BLE output at backslash/Y (6/7). BT
+previous/next remain at M/comma (32/33). Freed Symbols Z/X/C/V are None; B is
+Pass. Nav N/period and retained peripheral modifier/chord bindings are unchanged.
 
-Functions index0 retains momentary target `458795`, an invalid-looking layer
-reference; index41 retains unadvertised behavior ID 0. Neither is a promised
-working control. They are preserved evidence, never sent to setters; live
-differences block application rather than triggering guessed restoration.
+Functions indices 0 and 41 are approved as explicit None on 2026-09-06,
+replacing invalid momentary target `458795` and unadvertised behavior ID 0.
+This correction is deployed and verified in personal left firmware. All
+other unusual Functions thumbs remain unchanged. Historical anomalies remain
+in the immutable snapshot; the backend refuses to restore them after correction.
 
 ZMK BLE1/2/3 use selection parameters 0/1/2. Selecting an empty profile allows
 pairing; clearing an occupied bond is separate and never automatic. No NuPhy-like
@@ -275,9 +275,12 @@ punctuation carry-forwards, Nav inert endpoints and Symbols fall-through choices
 
 ## Verification Boundary
 
-keyd explicitly sets 200 ms dual-role timing, 180 ms for Shift. Toucan getters
-and Air60 VIA do not expose equivalent runtime timing/flavor tuning; 200 ms is
-only a design/source baseline there. Engine equivalence is not promised.
+keyd explicitly sets 200 ms dual-role timing, 180 ms for Shift. The personal
+Toucan left artifact built and flashed on 2026-09-06 was inspected as
+tap-preferred/200 ms; no postflash flash-memory hash was obtained. Toucan
+getters cannot attest or tune these compiled properties. Air60 VIA likewise
+exposes no equivalent tuning; its 200 ms remains a source baseline, not a
+measured installed setting. Engine equivalence is not promised.
 
 Before migration, review native diffs and these exceptions; retain a fallback
 keyboard. Separately verify setter acceptance and persisted readback before

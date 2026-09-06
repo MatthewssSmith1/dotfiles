@@ -244,7 +244,7 @@ def snapshot(rpc):
 
 
 def validate(desired, current=None):
-    """Validate entire native keymap; legacy anomalies allowed only unchanged."""
+    """Validate native keymap; legacy anomalies may be retained, never restored."""
     baseline = original()
     current = baseline if current is None else current
     if current['device_info'] != baseline['device_info']:
@@ -276,14 +276,18 @@ def validate(desired, current=None):
                 raise Error('invalid binding schema')
             if any(type(v) is not int or not 0 <= v <= 0xffffffff for v in binding.values()):
                 raise Error('binding values must be uint32 integers')
+            anomaly_position = layer['id'] == 3 and pos in (0,41)
+            if anomaly_position:
+                # Permit read-only verification of an uncorrected snapshot.
+                if binding == old['bindings'][pos] == live['bindings'][pos]:
+                    continue
+                if binding != {'behavior_id':4,'param1':0,'param2':0}:
+                    raise Error(f'legacy anomaly 3:{pos}: only None correction allowed; restoration unsupported')
+                # Corrections still require the standard firmware metadata checks.
             protected = (pos >= 36 or (layer['id'] == 1 and pos in (17,25,28,29))
                          or (layer['id'] == 0 and 24 <= pos < 36))
-            if protected and binding != old['bindings'][pos]:
+            if protected and not anomaly_position and binding != old['bindings'][pos]:
                 raise Error(f'protected thumb, Base bottom row, mouse, or unlock binding: {layer["id"]}:{pos}')
-            if layer['id'] == 3 and pos in (0,41):
-                if binding != old['bindings'][pos] or binding != live['bindings'][pos]:
-                    raise Error(f'legacy anomaly 3:{pos} must remain unchanged; restoration unsupported')
-                continue
             bid = binding['behavior_id']
             metadata = current['behavior_details'].get(str(bid))
             if bid not in advertised or metadata != baseline['behavior_details'].get(str(bid)):
