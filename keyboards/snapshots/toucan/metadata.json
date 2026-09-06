@@ -1,0 +1,336 @@
+{
+  "started_utc": "2026-09-05T20:16:36.733732+00:00",
+  "behavior_details": {
+    "1": {
+      "id": 1,
+      "display_name": "Mouse Key Press",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "MB1",
+              "constant": 1
+            },
+            {
+              "name": "MB2",
+              "constant": 2
+            },
+            {
+              "name": "MB3",
+              "constant": 4
+            },
+            {
+              "name": "MB4",
+              "constant": 8
+            },
+            {
+              "name": "MB5",
+              "constant": 16
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "2": {
+      "id": 2,
+      "display_name": "mouse_move",
+      "metadata": []
+    },
+    "3": {
+      "id": 3,
+      "display_name": "mouse_scroll",
+      "metadata": []
+    },
+    "4": {
+      "id": 4,
+      "display_name": "None",
+      "metadata": []
+    },
+    "5": {
+      "id": 5,
+      "display_name": "Bootloader",
+      "metadata": []
+    },
+    "6": {
+      "id": 6,
+      "display_name": "Caps Word",
+      "metadata": []
+    },
+    "7": {
+      "id": 7,
+      "display_name": "External Power",
+      "metadata": []
+    },
+    "8": {
+      "id": 8,
+      "display_name": "Key Press",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Key",
+              "hid_usage": {
+                "keyboard_max": 255,
+                "consumer_max": 4095
+              }
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "9": {
+      "id": 9,
+      "display_name": "Grave/Escape",
+      "metadata": []
+    },
+    "10": {
+      "id": 10,
+      "display_name": "Key Repeat",
+      "metadata": []
+    },
+    "11": {
+      "id": 11,
+      "display_name": "Key Toggle",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Key",
+              "hid_usage": {
+                "keyboard_max": 255,
+                "consumer_max": 4095
+              }
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "12": {
+      "id": 12,
+      "display_name": "Momentary Layer",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Layer",
+              "layer_id": {}
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "13": {
+      "id": 13,
+      "display_name": "Layer-Tap",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Layer",
+              "layer_id": {}
+            }
+          ],
+          "param2": [
+            {
+              "name": "Key",
+              "hid_usage": {
+                "keyboard_max": 255,
+                "consumer_max": 4095
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "14": {
+      "id": 14,
+      "display_name": "Mod-Tap",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Key",
+              "hid_usage": {
+                "keyboard_max": 255,
+                "consumer_max": 4095
+              }
+            }
+          ],
+          "param2": [
+            {
+              "name": "Key",
+              "hid_usage": {
+                "keyboard_max": 255,
+                "consumer_max": 4095
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "15": {
+      "id": 15,
+      "display_name": "Output Selection",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Toggle Outputs",
+              "constant": 0
+            },
+            {
+              "name": "USB Output",
+              "constant": 1
+            },
+            {
+              "name": "BLE Output",
+              "constant": 2
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "16": {
+      "id": 16,
+      "display_name": "Sticky Key",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Key",
+              "hid_usage": {
+                "keyboard_max": 255,
+                "consumer_max": 4095
+              }
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "17": {
+      "id": 17,
+      "display_name": "Sticky Layer",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Layer",
+              "layer_id": {}
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "18": {
+      "id": 18,
+      "display_name": "Reset",
+      "metadata": []
+    },
+    "19": {
+      "id": 19,
+      "display_name": "To Layer",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Layer",
+              "layer_id": {}
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "20": {
+      "id": 20,
+      "display_name": "Toggle Layer",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Layer",
+              "layer_id": {}
+            }
+          ],
+          "param2": []
+        }
+      ]
+    },
+    "21": {
+      "id": 21,
+      "display_name": "z_so_off",
+      "metadata": []
+    },
+    "22": {
+      "id": 22,
+      "display_name": "Bluetooth",
+      "metadata": [
+        {
+          "param1": [
+            {
+              "name": "Next Profile",
+              "constant": 1
+            },
+            {
+              "name": "Previous Profile",
+              "constant": 2
+            },
+            {
+              "name": "Clear All Profiles",
+              "constant": 4
+            },
+            {
+              "name": "Clear Selected Profile",
+              "constant": 0
+            }
+          ],
+          "param2": []
+        },
+        {
+          "param1": [
+            {
+              "name": "Select Profile",
+              "constant": 3
+            },
+            {
+              "name": "Disconnect Profile",
+              "constant": 5
+            }
+          ],
+          "param2": [
+            {
+              "name": "Profile",
+              "range": {
+                "max": 5,
+                "min": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "23": {
+      "id": 23,
+      "display_name": "Transparent",
+      "metadata": []
+    },
+    "24": {
+      "id": 24,
+      "display_name": "Studio Unlock",
+      "metadata": []
+    }
+  },
+  "lock_state_before": "ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED",
+  "unsaved_after": false,
+  "lock_state_after": "ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED",
+  "status": "complete",
+  "finished_utc": "2026-09-05T20:16:36.782121+00:00",
+  "total_request_count": 34
+}

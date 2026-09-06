@@ -1,0 +1,65 @@
+# All bindings use physical input positions, not remapped Base outputs.
+[main]
+z = overloadt(nav, z, 200)
+x = overloadt(nav, x, 200)
+c = overloadt(nav, c, 200)
+v = overloadt(nav, v, 200)
+b = overloadt(nav, b, 200)
+
+[nav]
+g = enter
+u = home
+i = pagedown
+o = pageup
+p = end
+j = left
+k = down
+l = up
+semicolon = right
+# Intended unused outputs are inert, not inherited layer-taps.
+m = noop
+comma = volumedown
+dot = volumeup
+slash = noop
+
+[symbols]
+grave = grave
+tab = grave
+leftshift = ~
+1 = f1
+2 = f2
+3 = f3
+4 = f4
+5 = f5
+6 = f6
+7 = f7
+8 = f8
+9 = f9
+0 = f10
+minus = f11
+equal = f12
+q = !
+w = @
+e = #
+r = $
+t = %
+y = ^
+u = &
+i = *
+o = (
+p = )
+a = 1
+s = 2
+d = 3
+f = 4
+g = 5
+h = 6
+j = 7
+k = 8
+l = 9
+semicolon = 0
+n = slash
+m = _
+comma = -
+dot = +
+slash = equal

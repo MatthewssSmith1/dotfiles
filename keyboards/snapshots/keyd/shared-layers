@@ -1,0 +1,75 @@
+[main]
+# Tap normally; hold a left-side key for navigation and media controls.
+z = overloadt(nav, z, 200)
+x = overloadt(nav, x, 200)
+c = overloadt(nav, c, 200)
+v = overloadt(nav, v, 200)
+
+# Tap normally; hold a center or right-side key for numbers and symbols.
+b = overloadt(num, b, 200)
+n = overloadt(num, n, 200)
+m = overloadt(num, m, 200)
+comma = overloadt(num, comma, 200)
+dot = overloadt(num, dot, 200)
+slash = overloadt(num, slash, 200)
+
+[nav]
+g = enter
+h = left
+j = down
+k = up
+l = right
+
+y = home
+u = pagedown
+i = pageup
+o = end
+p = print
+
+m = volumedown
+comma = volumeup
+
+[num]
+tab = grave
+leftshift = ~
+
+1 = f1
+2 = f2
+3 = f3
+4 = f4
+5 = f5
+6 = f6
+7 = f7
+8 = f8
+9 = f9
+0 = f10
+minus = f11
+equal = f12
+
+q = !
+w = @
+e = #
+r = $
+t = %
+y = ^
+u = &
+i = *
+o = (
+p = )
+
+a = 1
+s = 2
+d = 3
+f = 4
+g = 5
+h = 6
+j = 7
+k = 8
+l = 9
+semicolon = 0
+
+b = _
+n = _
+m = -
+comma = +
+dot = equal

@@ -1,0 +1,24 @@
+{
+  "all_requests_getter_allowlisted": true,
+  "requests": {
+    "core.get_device_info": 1,
+    "core.get_lock_state": 3,
+    "keymap.check_unsaved_changes": 2,
+    "keymap.get_keymap": 1,
+    "keymap.get_physical_layouts": 1,
+    "behaviors.list_all_behaviors": 1,
+    "behaviors.get_behavior_details": 25
+  },
+  "request_count": 34,
+  "matched_responses": 34,
+  "layers": 4,
+  "bindings": 168,
+  "available_behaviors_with_metadata": 24,
+  "unresolved_behavior_ids": [
+    0
+  ],
+  "serial_hex": "93F54E4E61BA5937",
+  "unsaved_before": false,
+  "unsaved_after": false,
+  "lock_state_final_observed": "ZMK_STUDIO_CORE_LOCK_STATE_UNLOCKED"
+}

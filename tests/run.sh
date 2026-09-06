@@ -37,6 +37,12 @@ readonly TEST_FILES=(
   "$TEST_DIR/windows_terminal_test.sh"
   "$TEST_DIR/desktop_shortcuts_generator_test.py"
   "$TEST_DIR/desktop_shortcuts_cli_test.py"
+  "$TEST_DIR/keyboard_cli_test.py"
+  "$TEST_DIR/keyboard_toucan_test.py"
+  "$TEST_DIR/keyboard_air60_test.py"
+  "$TEST_DIR/keyboard_backup_test.py"
+  "$TEST_DIR/keyboard_keyd_test.py"
+  "$TEST_DIR/keyboard_reference_test.py"
 )
 
 # Start historically long suites first; every other suite follows in canonical

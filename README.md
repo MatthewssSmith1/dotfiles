@@ -52,6 +52,7 @@ The `dotfiles.sh` deployment lifecycle never runs as root, invokes `sudo` or a d
 
 ## Documentation
 
+- [Keyboards](keyboards/README.md): shared spec, offline visual reference, and separately invoked runtime configuration tools (Omarchy).
 - [Architecture](docs/architecture.md) — profiles, areas, ownership
 - [Deployment](docs/deployment.md) — packages, command contract, network/state
 - [Upstream](docs/upstream.md) — pinned sources and synchronization

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Keyboard Atlas | Intended Layout</title>
+<script>
+// Resolve before paint; file URLs and privacy settings may deny storage.
+document.documentElement.dataset.theme='dark';
+try{const saved=localStorage.getItem('keyboard-atlas-theme');if(saved==='light'||saved==='dark')document.documentElement.dataset.theme=saved;}catch{}
+</script>
+<style>
+:root{color-scheme:light;--paper:#f3f0e7;--ink:#20342f;--muted:#53645d;--line:#bac4b7;--accent:#a84120;--green:#dce9d7;--control:#fffdf7;--card:#faf9f3;--key:#fff;--key-line:#84988b;--hint:#315b35;--pass:#efeee8;--none:#ece7e1;--warn:#f7dfcf}
+@media screen{:root:not([data-theme="light"]){color-scheme:dark;--paper:#19221f;--ink:#eeeade;--muted:#b6c2b8;--line:#52645a;--accent:#efaa87;--green:#304936;--control:#26332d;--card:#202c26;--key:#2b3931;--key-line:#81988a;--hint:#b9dab0;--pass:#26312b;--none:#38332e;--warn:#4b3429}}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,sans-serif}main{max-width:1320px;margin:auto;padding:32px 24px}header{border-top:6px solid var(--ink);padding:24px 0}h1{font:clamp(40px,7vw,76px)/1 Georgia,serif;margin:8px 0 16px;letter-spacing:-2px}h2{font:30px Georgia,serif;margin:0}h3{font-size:16px;margin:0 0 8px}.eyebrow{text-transform:uppercase;letter-spacing:.18em;font-size:12px;font-weight:750;color:var(--accent)}p{max-width:88ch;margin:10px 0}a{color:inherit;text-underline-offset:3px}.intro{display:flex;gap:28px;align-items:end;justify-content:space-between}.stamp{border:1px solid var(--accent);padding:12px;color:var(--accent);min-width:185px;font-size:13px}.controls{display:flex;flex-wrap:wrap;gap:16px;align-items:end;padding:20px 0;border-block:1px solid var(--line);margin-bottom:24px}label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}select,button{font:inherit;background:#fffdf7;color:var(--ink);border:1px solid var(--muted);border-radius:4px;padding:10px;min-height:44px}button{cursor:pointer}select:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible,.scroll:focus-visible{outline:3px solid var(--accent);outline-offset:4px}.legend{font-size:13px;color:var(--muted)}.device-note{border-left:4px solid var(--accent);padding:2px 18px;margin:20px 0}.card{background:#faf9f3;border:1px solid var(--line);border-radius:8px;margin:24px 0;padding:20px}.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.layer-id{font:12px monospace;color:var(--muted)}.scroll{overflow-x:auto;padding:12px 0 8px}.board{position:relative;min-width:960px;height:340px}.key{position:absolute;background:white;border:1px solid #84988b;border-bottom:3px solid #84988b;border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:2px;overflow:hidden}.key strong{font-size:15px;text-align:center;white-space:pre-line}.key small{font:9px/1.2 monospace;color:var(--muted);margin-top:4px;text-align:center}.key .hint{font:9px/1.2 system-ui,sans-serif;color:#315b35}.key.dual{background:var(--green)}.key.pass{background:#efeee8;border-style:dashed}.key.none{background:#ece7e1}.key.warn{background:#f7dfcf;border-color:var(--accent)}.key.pass strong{color:var(--muted);font-size:12px}.notes{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;border-top:1px solid var(--line);padding-top:24px;font-size:14px}footer{margin-top:32px;border-top:1px solid var(--line);padding-top:16px;font-size:12px;color:var(--muted)}[hidden]{display:none!important}noscript{display:block;padding:24px;border:2px solid var(--accent)}details{margin-top:12px}summary{cursor:pointer}table{border-collapse:collapse;font-size:13px;width:100%}th,td{text-align:left;border-bottom:1px solid var(--line);padding:6px}caption{text-align:left;font-weight:bold;padding:10px 0}
+select,button{background:var(--control)}.card{background:var(--card)}.key{background:var(--key);border-color:var(--key-line)}.key .hint{color:var(--hint)}.key.pass{background:var(--pass)}.key.none{background:var(--none)}.key.warn{background:var(--warn);border-color:var(--accent)}
+#theme[aria-pressed="true"]::after{content:" / on"}#theme[aria-pressed="false"]::after{content:" / off"}
+.key strong,.key small{max-width:100%;overflow-wrap:anywhere}.key.long strong{font-size:11px}
+@media(max-width:650px){main{padding:20px 12px}.intro{display:block}.stamp{display:inline-block;margin-top:12px}.notes{grid-template-columns:1fr;gap:16px}.card{padding:12px}.controls>div{flex:1 1 150px}select{width:100%}.board{min-width:960px}.card-head{align-items:start}h2{font-size:25px}}
+@media print{@page{size:landscape;margin:12mm}body{background:white;font-size:11px}main{max-width:none;padding:0}header{padding:8px 0}h1{font-size:32px}.controls,.screen-only,details{display:none!important}.card{break-inside:avoid;padding:10px;margin:14px 0}.card[hidden]{display:block!important}.device[hidden]{display:none!important}.scroll{overflow:visible;padding:4px 0}.board{min-width:0!important}.key strong{font-size:11px}.key small,.key .hint{font-size:7px}.notes{gap:12px}h2{font-size:22px}.stamp{padding:5px}.key{print-color-adjust:exact;-webkit-print-color-adjust:exact}footer{margin-top:12px}}
+</style>
+</head>
+<body><main>
+<header><div class="eyebrow">Field Reference / 01</div><div class="intro"><div><h1>Keyboard Atlas</h1><p>One typing language. Different physical instruments.</p></div><div class="stamp"><strong>INTENDED CONFIGURATION</strong><br>Prepared for review. Not live state.<br>No settings applied by this page.</div></div></header>
+<nav class="controls" aria-label="Reference controls">
+<div><label for="device">Device</label><select id="device"><option value="toucan">Toucan</option><option value="enhanced">Air60 Enhanced</option><option value="plain">Air60 Plain</option><option value="generic">Generic / keyd</option></select></div>
+<div><label for="layer">Layer</label><select id="layer"></select></div>
+<button id="theme" type="button" aria-label="Dark theme" aria-pressed="true">Dark theme</button>
+<button id="print" type="button">Print device / all layers</button>
+<a href="SPEC.md">Full specification</a>
+</nav>
+<p class="legend"><strong>Read the big label as output, not keycap.</strong> Small labels identify physical positions. Green keys show tap / hold. <strong>Pass</strong> (dashed) falls through active lower layers; <strong>None</strong> emits nothing. Anomalies are not working-control claims.</p>
+<p class="screen-only legend">On narrow screens, scroll each board horizontally without losing physical alignment. Expand its position table for a compact textual alternative.</p>
+<p id="status" class="legend" role="status" aria-live="polite"></p>
+<noscript>The interactive maps require local JavaScript, but no network. Read <a href="SPEC.md">SPEC.md</a> for the complete intended maps and exceptions.</noscript>
+<div id="maps"></div>
+<section class="notes" aria-label="Important exceptions">
+<div><h3>Pairing is device-specific</h3><p>Toucan BLE1/2/3 select ZMK profiles 0/1/2. An empty profile allows pairing; bonds are never cleared automatically. Air60 short RF/BLE presses select, long holds pair in vendor firmware; ignored in USB link mode. Do not long-hold just to test.</p></div>
+<div><h3>Review before applying</h3><p>F11/F12 placement, unused Symbols keys, Nav endpoints, utility placements and peripheral modifiers need review. Toucan keeps two anomalous Functions bindings. Air60 Mac is Enhanced; Windows is Plain with dedicated Shift/Alt. Generic Nav modifiers remain dual-role. See the spec before approving.</p></div>
+<div><h3>One remap owner</h3><p>Persisted firmware readback and transport identity evidence gate explicit keyd test pass-through. Then test physical behavior without duplicate host remaps and record completion. Generic uses keyd. This page cannot inspect or apply a device.</p></div>
+</section>
+<footer>Manually maintained alongside SPEC.md and native Toucan, VIA and keyd files. US HID legends; host layout affects characters. Standalone, offline, no CDN or build. Printing includes all layers of the selected device.</footer>
+</main>
+<script>
+'use strict';
+const themeButton=document.getElementById('theme');
+themeButton.setAttribute('aria-pressed',String(document.documentElement.dataset.theme==='dark'));
+themeButton.addEventListener('click',()=>{
+ const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';
+ document.documentElement.dataset.theme=theme;
+ themeButton.setAttribute('aria-pressed',String(theme==='dark'));
+ try{localStorage.setItem('keyboard-atlas-theme',theme);}catch{}
+});
+// Presentation-only transcription. Pass is deliberately not resolved to Base:
+// Functions/Utilities can inherit other active overlays, not just Base.
+const words = s => s.split(' ');
+const toucanBase = words("' Q W E R T \\ Y U I O P Esc A S D F G ; H J K L Enter [ Z X C V B / N M , . ] Backspace Nav Space Tab Symbols Delete");
+const toucanLayers = {
+ Base: toucanBase.slice(),
+ Nav: words('Pass Pass Pass Pass Pass Pass Pass Home PgDn PgUp End PrintScreen Pass LSuper LAlt LShift LCtrl MouseRight Pass Left Down Up Right Pass Pass StudioUnlock Pass Pass Mouse5 Mouse4 Pass Pass Vol- Vol+ RShift RCtrl Backspace Pass Space Tab Pass Delete'),
+ Symbols: words('Grave ! @ # $ % ^ & * ( ) RShift Pass 1 2 3 4 5 6 7 8 9 0 Pass ~ None None None None Pass Pass _ - + = LShift+RCtrl Backspace Pass Space Tab Pass Delete'),
+ Functions: words('Anomaly BLE1 BLE2 BLE3 F11 F12 USB BLE Pass Pass Pass Pass LCtrl F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 Pass LCtrl LShift Pass Pass Pass Pass Pass Pass BTprev BTnext RShift RCtrl Nav Space Enter Symbols RAlt Unknown0')
+};
+const mods = {A:'LSuper',S:'LAlt',D:'LShift',F:'LCtrl',H:'RCtrl',J:'RShift',K:'RAlt',L:'RSuper'};
+const toucanGeometry = [];
+for(let row=0;row<3;row++) for(let c=0;c<12;c++) toucanGeometry.push({x:c<6?c:c+2,y:row+[.37,.37,.12,0,.12,.24,.24,.12,0,.12,.37,.37][c],w:1});
+[[3.5,3.12,0,0,0],[4.5,3.12,12,4.5,4.12],[5.48,3.28,24,5.48,4.33],[7.52,3.28,-24,8.52,4.33],[8.5,3.12,-12,9.5,4.12],[9.5,3.12,0,0,0]].forEach(([x,y,r,rx,ry])=>toucanGeometry.push({x,y,w:1,r,rx,ry}));
+// VIA physical order and widths, not a rectangular rendering of its 6x17 matrix.
+const airRows = [
+ ['0,0',...Array.from({length:13},(_,i)=>`1,${i+1}`)],
+ Array.from({length:14},(_,i)=>`2,${i}`),
+ [...Array.from({length:12},(_,i)=>`3,${i}`),'3,13'],
+ ['4,0',...Array.from({length:10},(_,i)=>`4,${i+2}`),'4,13','4,15','2,14'],
+ ['5,0','5,1','5,2','5,6','5,9','5,10','5,14','5,15','5,16']
+];
+const airWidths = [{13:2},{0:1.5,13:1.5},{0:1.75,12:2.25},{0:2},{0:1.25,1:1.25,2:1.25,3:6.25}];
+const airGeometry=[], airPositions=airRows.flat();
+airRows.forEach((row,y)=>{let x=0;row.forEach((p,i)=>{const w=airWidths[y][i]||1;airGeometry.push({x,y,w});x+=w;});});
+const airEnhancedBase = words("Esc 1 2 3 4 5 - 6 7 8 9 0 = Backspace ' Q W E R T Tab \\ Y U I O P \\ Esc A S D F G Caps ; H J K L Enter [ Z X C V B F9 / N M , . ] Functions LCtrl LSuper Backspace Space Delete Left Down Up Right");
+const airPlainBase = words("Esc 1 2 3 4 5 - 6 7 8 9 0 = Backspace Tab Q W E R T ' \\ Y U I O P \\ Caps A S D F G Delete ; H J K L Enter LShift Z X C V B [ / N M , . ] Functions LCtrl LSuper LAlt Space RAlt Left Down Up Right");
+const airLayers = {Base:airEnhancedBase.slice(),Nav:Array(64).fill('Pass'),Symbols:Array(64).fill('Pass'),Functions:Array(64).fill('Pass'),Utilities:Array(64).fill('Pass'),'Retired 1':Array(64).fill('Pass'),'Retired 2':Array(64).fill('Pass')};
+function airBind(layer,positions,outputs){positions.split(' ').forEach((p,i)=>{airLayers[layer][airPositions.indexOf(p)]=outputs[i];});}
+airBind('Nav','2,0 2,8 2,9 2,10 2,11 3,1 3,2 3,3 3,4 3,8 3,9 3,10 3,11 4,9 4,10 4,11 4,13',words('Grave Home PgDn PgUp End LSuper LAlt LShift LCtrl Left Down Up Right None Vol- Vol+ None'));
+airBind('Symbols','0,0 2,0 2,1 2,2 2,3 2,4 2,5 2,7 2,8 2,9 2,10 2,11 3,1 3,2 3,3 3,4 3,5 3,7 3,8 3,9 3,10 3,11 4,9 4,10 4,11 4,13',words('~ Grave ! @ # $ % ^ & * ( ) 1 2 3 4 5 6 7 8 9 0 _ - + ='));
+airBind('Symbols','4,0',['~']);
+airBind('Functions','0,0 2,0 2,1 2,2 2,3 2,4 2,5 2,11 2,12 2,13',words('~ Grave BLE1 BLE2 BLE3 RF USB Battery F11 F12'));
+airBind('Functions','3,1 3,2 3,3 3,4 3,5 3,7 3,8 3,9 3,10 3,11',Array.from({length:10},(_,i)=>`F${i+1}`));
+airBind('Functions',Array.from({length:12},(_,i)=>`1,${i+1}`).join(' '),Array.from({length:12},(_,i)=>`F${i+1}`));
+airBind('Functions','4,0 4,8 4,9 4,10 4,15 5,14 5,15 5,16',words('RGB-light- Utilities RGB-speed- RGB-speed+ RGB-light+ RGB-mode RGB-light- RGB-hue'));
+airBind('Utilities',Array.from({length:12},(_,i)=>`1,${i+1}`).join(' '),words('Display- Display+ Mac-task Mac-search Mac-voice Mac-DND Previous Play/pause Next Mute Vol- Vol+'));
+airBind('Utilities','2,1 2,2 2,3 2,4 2,5 2,9 2,10 2,11 2,12 4,9 4,10 4,15 5,14 5,15 5,16',words('Mac-task Mac-search Mac-voice Mac-console Mac-DND Shot-area Shot-whole Sleep-toggle Battery Side-speed- Side-speed+ Side-light+ Side-mode Side-light- Side-color'));
+const genericRows = [words('esc'),words('grave 1 2 3 4 5 6 7 8 9 0 minus equal backspace'),words('tab q w e r t y u i o p leftbrace rightbrace backslash'),words('capslock a s d f g h j k l semicolon apostrophe enter'),words('leftshift z x c v b n m comma dot slash rightshift'),words('leftcontrol leftmeta leftalt space rightalt rightmeta menu rightcontrol left down up right')];
+const genericWidths = [{},{13:2},{0:1.5,13:1.5},{0:1.75,12:2.25},{0:2.25,11:2.75},{0:1.25,1:1.25,2:1.25,3:6.25,4:1.25,5:1.25,6:1.25,7:1.25}];
+const genericGeometry=[],genericPositions=genericRows.flat();
+genericRows.forEach((row,y)=>{let x=0;row.forEach((p,i)=>{if(y===5&&i===8)x+=.5;const w=genericWidths[y][i]||1;genericGeometry.push({x,y:y===0?0:y+.25,w});x+=w;});});
+const genericNames={esc:'Caps',grave:'Grave',minus:'-',equal:'=',backspace:'Backspace',tab:'Tab',leftbrace:'P',rightbrace:'\\',backslash:'\\',capslock:'Esc',semicolon:'L',apostrophe:"'",enter:'Enter',leftshift:'[',rightshift:']',leftcontrol:'LCtrl',rightcontrol:'RCtrl',leftmeta:'LSuper',rightmeta:'RSuper',leftalt:'Backspace',rightalt:'Delete',space:'Space',menu:'Menu',left:'Left',down:'Down',up:'Up',right:'Right',y:'\\',u:'Y',i:'U',o:'I',p:'O',h:';',j:'H',k:'J',l:'K',n:'/',m:'N',comma:'M',dot:',',slash:'.'};
+const genericBase=genericPositions.map(p=>genericNames[p]||p.toUpperCase());
+const genericLayers={Base:genericBase.slice(),Nav:Array(genericBase.length).fill('Pass'),Symbols:Array(genericBase.length).fill('Pass')};
+function genericBind(layer,positions,outputs){positions.split(' ').forEach((p,i)=>{genericLayers[layer][genericPositions.indexOf(p)]=outputs[i];});}
+genericBind('Nav','g u i o p j k l semicolon m comma dot slash',words('Enter Home PgDn PgUp End Left Down Up Right None Vol- Vol+ None'));
+genericBind('Symbols','grave tab leftshift 1 2 3 4 5 6 7 8 9 0 minus equal q w e r t y u i o p a s d f g h j k l semicolon n m comma dot slash',words('Grave Grave ~ F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 F11 F12 ! @ # $ % ^ & * ( ) 1 2 3 4 5 6 7 8 9 0 / _ - + ='));
+const devices={
+ toucan:{name:'Toucan',geometry:toucanGeometry,positions:toucanBase.map((_,i)=>String(i)),base:toucanBase,layers:toucanLayers,width:14,height:4.6,ids:{Base:0,Nav:1,Symbols:2,Functions:3},note:'42 keys / captured column stagger and thumb pivots. Base: hold middle left thumb for Nav, middle right for Symbols, both for Functions. Functions changes every thumb. RGB and battery display deferred; both halves USB-powered.',access:{Base:'Ordinary bottom-row letters; home-row tap / hold modifiers.',Nav:'Hold left middle thumb (37). G = right mouse, V = Mouse5, B = Mouse4; Z unlocks Studio.',Symbols:'Hold right middle thumb (40). Z/X/C/V are None; B is transparent.',Functions:'Hold both middle thumbs. Review F11/F12 relocation and thumb changes. Pass inherits Symbols/Nav; anomalies at 0 and 41 are preserved, not validated controls.'}},
+ enhanced:{name:'Air60 Enhanced',geometry:airGeometry,positions:airPositions,base:airEnhancedBase,layers:airLayers,width:15,height:5,ids:{Base:0,Nav:4,Symbols:5,Functions:6,Utilities:7,'Retired 1':1,'Retired 2':2},note:'Mac switch / base 0. Stock vendor NKRO off. Exact VIA physical widths and coordinates, not electrical matrix spacing. Hold Z/X/C/V/B for Nav; slash/N/M/comma/period for Symbols. Dedicated Fn reaches Functions. Center END [4,7] emits F9 for Omarchy voxtype.',access:{}},
+ plain:{name:'Air60 Plain',geometry:airGeometry,positions:airPositions,base:airPlainBase,layers:{Base:airPlainBase.slice(),...Object.fromEntries(['Functions','Utilities','Retired 1','Retired 2'].map(k=>[k,airLayers[k]]))},width:15,height:5,ids:{Base:3,Functions:6,Utilities:7,'Retired 1':1,'Retired 2':2},note:'Windows switch / base 3. Stock vendor NKRO on. Immediate letters, no MT/LT; Nav and Symbols are unreachable. NOT stock QWERTY. Physical Tab/Caps/left Shift restored; LAlt/RAlt flank Space. Center INS/CMD/END emit quote/Delete/left bracket. Ctrl/Super remain ordinary modifiers.',access:{}},
+ generic:{name:'Generic / keyd',geometry:genericGeometry,positions:genericPositions,base:genericBase,layers:genericLayers,width:19.5,height:6.25,ids:{Base:'main',Nav:'nav',Symbols:'symbols + F1-F12'},note:'Representative ANSI typing block, not an exact laptop/ISO model. Small labels are physical Linux input names. Extra keys remain unchanged. Physical Alt keys flank Space as Backspace/Delete. Physical Shifts emit brackets.',access:{Base:'Hold Z/X/C/V/B for Nav; physical N/M/comma/dot/slash for Symbols. Keyd: 200 ms, Shift 180 ms.',Nav:'Hold a left bottom-row trigger. G = Enter; A/S/D/F remain inherited dual-role keys, not immediate modifiers. Dedicated Ctrl/Super remain available.',Symbols:'Hold a right bottom-row trigger. Physical 1..0/minus/equal = F1..F12 (no separate Functions layer). Hold another trigger for direct operators.'}}
+};
+for(const id of ['enhanced','plain']) devices[id].access={Base:id==='plain'?'Immediate ordinary letters and dedicated Ctrl/Super/Shift/Alt. Fn still reaches Functions.':'Home-row tap / hold modifiers; bottom-row tap / hold layers.',Nav:'Hold Z/X/C/V/B. A/S/D/F are immediate modifiers. N/period explicitly emit nothing.',Symbols:'Hold slash/N/M/comma/period; keep another trigger held while typing operators. Left bottom-row letters fall through, not legacy A/S/D/F.',Functions:'Hold Fn [2,14]. F1-F12 duplicate across physical number row. Hold slash [4,8] next for Utilities. Grave stays at physical Tab [2,0]; RGB-light- stays at physical left Shift [4,0] in both modes.',Utilities:'Keep Fn held, then hold slash [4,8]. Pass inherits Functions, including F1-F10 on the home row. Sleep toggle persists when pressed.','Retired 1':'Unreachable retired layer: all 64 physical keys transparent. Absent matrix cells remain KC_NO.','Retired 2':'Unreachable retired layer: all 64 physical keys transparent. Absent matrix cells remain KC_NO.'};
+function holdHint(id,layer,i,value){
+ const base=devices[id].base[i];
+ if(layer==='Base'&&id!=='plain'&&mods[base]) return 'hold '+(id==='generic'?mods[base].slice(1):mods[base]);
+ if(layer==='Base'&&(id==='enhanced'||id==='generic')){if(words('Z X C V B').includes(base))return 'hold Nav';if(['/', 'N','M',',','.'].includes(base))return 'hold Symbols';}
+ if((id==='toucan'&&['Nav','Symbols'].includes(value))||(['enhanced','plain'].includes(id)&&['Functions','Utilities'].includes(value)))return 'hold layer';
+ return '';
+}
+const maps=document.getElementById('maps');
+for(const [id,d] of Object.entries(devices)){
+ const section=document.createElement('section');section.className='device';section.dataset.device=id;section.setAttribute('aria-label',d.name);
+ const note=document.createElement('p');note.className='device-note';note.textContent=d.note;section.append(note);
+ for(const [layer,values] of Object.entries(d.layers)){
+  if(values.length!==d.geometry.length)throw new Error(`${id}/${layer}: geometry mismatch`);
+  const card=document.createElement('article');card.className='card';card.dataset.layer=layer;
+  const heading=document.createElement('div');heading.className='card-head';const title=document.createElement('h2');title.textContent=layer==='Symbols'&&id==='generic'?'Symbols / Functions':layer;const badge=document.createElement('span');badge.className='layer-id';badge.textContent=`${d.name} / native ${d.ids[layer]}`;heading.append(title,badge);card.append(heading);
+  const instruction=document.createElement('p');instruction.className='legend';instruction.textContent=d.access[layer];card.append(instruction);
+  const scroll=document.createElement('div');scroll.className='scroll';scroll.tabIndex=0;scroll.setAttribute('role','region');scroll.setAttribute('aria-label',`${d.name} ${layer} physical map, horizontally scrollable`);
+  const board=document.createElement('div');board.className='board';board.style.minWidth=`${Math.max(960,d.width*60)}px`;board.style.height=`${d.height*64}px`;board.setAttribute('aria-hidden','true');
+  const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Position / output table';details.append(summary);
+  const table=document.createElement('table');const caption=document.createElement('caption');caption.textContent=`${d.name}: ${layer}`;table.append(caption);const tr=document.createElement('tr');for(const text of ['Physical position','Base output','Layer action','Hold']){const th=document.createElement('th');th.scope='col';th.textContent=text;tr.append(th);}const thead=document.createElement('thead');thead.append(tr);table.append(thead);const tbody=document.createElement('tbody');
+  values.forEach((value,i)=>{
+   const g=d.geometry[i],hint=holdHint(id,layer,i,value);const key=document.createElement('div');key.className='key'+(value.length>6?' long':'')+(value==='Pass'?' pass':value==='None'?' none':/Anomaly|Unknown/.test(value)?' warn':hint?' dual':'');
+   key.style.left=`${g.x/d.width*100}%`;key.style.top=`${g.y*64}px`;key.style.width=`calc(${g.w/d.width*100}% - 4px)`;key.style.height='60px';
+   if(g.r){key.style.transform=`rotate(${g.r}deg)`;key.style.transformOrigin=`${(g.rx-g.x)/g.w*100}% ${(g.ry-g.y)*64}px`;}
+   const output=document.createElement('strong');output.textContent=value.replaceAll('-speed','\nspeed').replaceAll('-light','\nlight');const small=document.createElement('small');small.textContent=id==='toucan'?`#${i}`:id==='generic'?d.positions[i]:`[${d.positions[i]}]`;key.append(output,small);
+   if(hint){const sub=document.createElement('span');sub.className='hint';sub.textContent=hint;key.append(sub);}board.append(key);
+   const row=document.createElement('tr');for(const text of [d.positions[i],d.base[i],value,hint||'']){const td=document.createElement('td');td.textContent=text;row.append(td);}tbody.append(row);
+  });table.append(tbody);details.append(table);scroll.append(board);card.append(scroll,details);section.append(card);
+ }maps.append(section);
+}
+const deviceSelect=document.getElementById('device'),layerSelect=document.getElementById('layer');
+function selectDevice(){const previous=layerSelect.value;layerSelect.replaceChildren();for(const name of ['All layers',...Object.keys(devices[deviceSelect.value].layers)]){const option=document.createElement('option');option.value=name;option.textContent=name==='Symbols'&&deviceSelect.value==='generic'?'Symbols / Functions':name;layerSelect.append(option);}layerSelect.value=[...layerSelect.options].some(o=>o.value===previous)?previous:'Base';selectLayer();}
+function selectLayer(){for(const section of maps.children){section.hidden=section.dataset.device!==deviceSelect.value;for(const card of section.querySelectorAll('.card'))card.hidden=layerSelect.value!=='All layers'&&card.dataset.layer!==layerSelect.value;}document.getElementById('status').textContent=`${devices[deviceSelect.value].name} / ${layerSelect.value}. Intended layout only.`;}
+deviceSelect.addEventListener('change',selectDevice);layerSelect.addEventListener('change',selectLayer);document.getElementById('print').addEventListener('click',()=>window.print());selectDevice();
+</script>
+</body>
+</html>

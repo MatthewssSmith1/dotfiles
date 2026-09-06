@@ -1,0 +1,11 @@
+[main]
+# Tap for the letter; hold for the mirrored home-row modifier after its timeout.
+a = overloadt(meta, a, 200)
+s = overloadt(alt, s, 200)
+d = overloadt(shift, d, 180)
+f = overloadt(control, f, 200)
+
+h = overloadt(control, h, 200)
+j = overloadt(shift, j, 180)
+k = overloadt(alt, k, 200)
+l = overloadt(meta, l, 200)
