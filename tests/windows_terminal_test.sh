@@ -6,6 +6,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 
 readonly MANAGED="$REPO_DIR/windows/terminal/managed-settings.json"
 readonly APPLY="$REPO_DIR/windows/terminal/apply.ps1"
+readonly MERGE="$REPO_DIR/windows/common.ps1"
 
 jq -e '
   keys == ["profileDefaults", "schemes"] and
@@ -46,11 +47,11 @@ pass
 
 # The script may touch only managed profile-default keys, their per-profile
 # shadows, and schemes selected by name. Actions and keybindings stay manual.
-grep -Fq '$managed.profileDefaults.PSObject.Properties' "$APPLY" || fail 'profile-default merge is missing'
-grep -Fq '$live.profiles.defaults' "$APPLY" || fail 'profile defaults are not the merge target'
-grep -Fq '$live.profiles.list' "$APPLY" || fail 'per-profile managed-key cleanup is missing'
-grep -Fq '$live.schemes' "$APPLY" || fail 'scheme merge is missing'
-if grep -E '^[[:space:]]*[^#].*\$live\.(actions|keybindings)' "$APPLY" >/dev/null; then
+grep -Fq 'Merge-ManagedObject $live.profiles.defaults $managed.profileDefaults' "$MERGE" || fail 'profile-default merge is missing'
+grep -Fq '$live.profiles.defaults' "$MERGE" || fail 'profile defaults are not the merge target'
+grep -Fq '$live.profiles.list' "$MERGE" || fail 'per-profile managed-key cleanup is missing'
+grep -Fq '$live.schemes' "$MERGE" || fail 'scheme merge is missing'
+if grep -E '^[[:space:]]*[^#].*\$live\.(actions|keybindings)' "$APPLY" "$MERGE" >/dev/null; then
   fail 'merge script manages actions or keybindings'
 fi
 if grep -Fq 'windows/terminal/apply.ps1' "$DOTFILES"; then

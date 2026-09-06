@@ -1,0 +1,10 @@
+[
+  { "id": "Git.Git", "source": "winget", "name": "Git", "uninstallName": "^Git$", "appx": "" },
+  { "id": "jdx.mise", "source": "winget", "name": "mise", "uninstallName": "^mise-en-place$", "appx": "" },
+  { "id": "jqlang.jq", "source": "winget", "name": "jq", "uninstallName": "^jq$", "appx": "" },
+  { "id": "GitHub.cli", "source": "winget", "name": "GitHub CLI", "uninstallName": "^GitHub CLI$", "appx": "" },
+  { "id": "9PLM9XGG6VKS", "source": "msstore", "name": "Codex desktop", "uninstallName": "", "appx": "OpenAI.Codex" },
+  { "id": "Tailscale.Tailscale", "source": "winget", "name": "Tailscale", "uninstallName": "^Tailscale$", "appx": "" },
+  { "id": "Microsoft.WindowsTerminal", "source": "winget", "name": "Windows Terminal", "uninstallName": "", "appx": "Microsoft.WindowsTerminal" },
+  { "id": "ZedIndustries.Zed", "source": "winget", "name": "Zed", "uninstallName": "^Zed( \\(User\\))?$", "appx": "" }
+]
