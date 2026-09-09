@@ -60,7 +60,7 @@ wsl_host="$(make_host wsl wsl ubuntu 24.04)"
 
 # Supported Ubuntu releases select only the ubuntu profile; retired names are
 # rejected by the CLI rather than being interpreted as overrides.
-for host in "$ubuntu_host" "$ubuntu_new_host"; do
+for host in "$ubuntu_host" "$ubuntu_new_host" "$wsl_host"; do
   home="$(new_seeded_home "ubuntu-${host##*/}")"
   expect_success "$home" "$host" "$DOTFILES" check agents
   assert_contains "$TEST_OUTPUT" "selected profile 'ubuntu'"
@@ -74,13 +74,20 @@ expect_failure 'usage:' "$home" "$ubuntu_host" "$DOTFILES" --provision
 expect_failure 'usage:' "$home" "$ubuntu_host" "$DOTFILES" --retire-provisioned claude-code
 pass
 
-# WSL refusal precedes every other host signal, including a complete Omarchy
-# installation, and no override can make it deployable.
+# WSL keeps Ubuntu release/distribution constraints and refuses native Omarchy.
 home="$(new_seeded_home wsl)"
-expect_failure 'WSL hosts are not supported' "$home" "$wsl_host" "$DOTFILES" check agents
+root="$(make_host wsl-old wsl ubuntu 22.04)"
+expect_failure 'unsupported Ubuntu release: 22.04' "$home" "$root" "$DOTFILES" check agents
+root="$(make_host wsl-debian wsl debian 13)"
+expect_failure 'unsupported Linux distribution: ID=debian' "$home" "$root" "$DOTFILES" check agents
+root="$(make_host wsl-current wsl ubuntu 26.04)"
+expect_success "$home" "$root" "$DOTFILES" check agents
+expect_success "$home" "$root" "$DOTFILES" apply agents
+expect_success "$home" "$root" "$DOTFILES" check agents
 prepare_omarchy "$wsl_host" "$home"
+expect_failure 'contradictory host signals' "$home" "$wsl_host" "$DOTFILES" check agents
 printf 'ID="omarchy"\nVERSION_ID="4"\n' > "$wsl_host/etc/os-release"
-expect_failure 'WSL hosts are not supported' "$home" "$wsl_host" "$DOTFILES" check --profile omarchy agents
+expect_failure 'Omarchy requires a native Linux host' "$home" "$wsl_host" "$DOTFILES" check --profile omarchy agents
 pass
 
 # A native v4 host requires regular system signals, ID=omarchy, and identical

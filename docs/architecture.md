@@ -4,7 +4,7 @@ Configuration separates pinned upstream baselines, Ubuntu portability adapters, 
 
 ## Profiles
 
-`omarchy` requires exact native Omarchy v4 signals and package authority. `ubuntu` requires non-WSL Ubuntu 24.04 or newer. A Microsoft kernel marker is detected first and refused; WSL has no profile or payload. Explicit profile overrides cannot cross the detected host class.
+`omarchy` requires exact native Omarchy v4 signals and package authority. `ubuntu` requires Ubuntu 24.04 or newer, including WSL Ubuntu. A Microsoft kernel marker identifies WSL and prevents native Omarchy selection; WSL uses the existing Ubuntu profile and payload. Explicit profile overrides cannot cross the detected host class.
 
 ## Areas
 

@@ -7,9 +7,8 @@ Omarchy is the reference Linux environment; Ubuntu reproduces its pinned, review
 ## Environments
 
 - `omarchy` — native Omarchy v4, keeps package-owned baselines and guarded attachments
-- `ubuntu` — Ubuntu 24.04+ (non-WSL), pinned snapshots plus portability adapters
+- `ubuntu` — Ubuntu 24.04+, including WSL Ubuntu, pinned snapshots plus portability adapters
 - `windows` — Windows Terminal theming from the Windows host (`windows/`)
-- WSL is detected and refused
 
 `dotfiles.sh` auto-detects `omarchy` or `ubuntu`; `--profile` can only select within the detected host class.
 

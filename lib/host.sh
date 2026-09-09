@@ -61,9 +61,12 @@ detect_host() {
     [[ "$kernel" == *microsoft* ]] && IS_WSL=true
   fi
   [[ "$system" == Linux ]] || die "unsupported host operating system: $system"
-  [[ "$IS_WSL" == false ]] || die 'WSL hosts are not supported'
 
   parse_os_release
+  # WSL uses the Ubuntu closure; native Omarchy ownership is never valid there.
+  if [[ "$IS_WSL" == true && "$OS_ID" == omarchy ]]; then
+    die 'Omarchy requires a native Linux host; WSL supports Ubuntu 24.04 or newer'
+  fi
   [[ -e "$version_path" || -L "$version_path" ]] && version_present=true
   [[ -e "$command_path" || -L "$command_path" ]] && command_present=true
   if [[ "$version_present" != "$command_present" ]]; then
