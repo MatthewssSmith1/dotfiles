@@ -19,7 +19,7 @@ for directory in "${path_entries[@]}"; do
   [[ -n "$directory" ]] || directory=.
   candidate="$directory/opencode"
   [[ -f "$candidate" && -x "$candidate" ]] || continue
-  OPENCODE_CONFIG="$config" OPENCODE_TUI_CONFIG="$tui_config" exec "$candidate" "$@"
+  OPENCODE_DISABLE_CLAUDE_CODE=1 OPENCODE_CONFIG="$config" OPENCODE_TUI_CONFIG="$tui_config" exec "$candidate" "$@"
 done
 
 printf 'opencode-launch: no opencode executable found on PATH\n' >&2

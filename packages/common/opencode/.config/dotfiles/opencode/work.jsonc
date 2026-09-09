@@ -1,5 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "codex": "deny",
+      "codex *": "deny",
+      "*/codex": "deny",
+      "*/codex *": "deny"
+    }
+  },
   "enabled_providers": [
     "truefoundry-gateway",
     "truefoundry-gateway-openai"

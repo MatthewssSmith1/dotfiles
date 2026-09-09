@@ -18,7 +18,7 @@ record_pacman_ownership "$native" 'omarchy 4.0.0-1' /usr/share/omarchy/version /
 seed_native_home() {
   local home="$1"
   mkdir -p "$home/.local/bin" "$home/.config/opencode"
-  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_TUI_CONFIG"\nprintf "<%%s>\\n" "$@"\nexit "${FAKE_OPENCODE_STATUS:-0}"\n' > "$home/.local/bin/opencode"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_TUI_CONFIG" "$OPENCODE_DISABLE_CLAUDE_CODE"\nprintf "<%%s>\\n" "$@"\nexit "${FAKE_OPENCODE_STATUS:-0}"\n' > "$home/.local/bin/opencode"
   chmod 0755 "$home/.local/bin/opencode"
   printf '{"$schema":"https://opencode.ai/config.json","autoupdate":false}\n' > "$home/.config/opencode/opencode.json"
   printf '{"theme":"system"}\n' > "$home/.config/opencode/tui.json"
@@ -47,7 +47,7 @@ tui_profile="$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/tui.js
 jq -e '
   (has("plugin") | not) and
   (has("provider") | not) and
-  . == {
+  del(.permission) == {
     "$schema":"https://opencode.ai/config.json",
     "agent":{
       "explore":{"model":"openai/gpt-5.6-sol","variant":"low"},
@@ -65,6 +65,15 @@ jq -e '
     "variant":"low"
   }
 ' "$work_profile" >/dev/null || fail 'work OpenCode profile boundary drifted'
+for profile in "$personal_profile" "$work_profile"; do
+  jq -e '
+    .permission == {"bash": {
+      "codex":"deny", "codex *":"deny",
+      "*/codex":"deny", "*/codex *":"deny"
+    }} and
+    ([.agent[] | has("permission")] | any | not)
+  ' "$profile" >/dev/null || fail "OpenCode Codex CLI restrictions drifted: $profile"
+done
 jq -e '.keybinds == {
   "app_exit":"<leader>q",
   "input_clear":"<leader>k",
@@ -133,15 +142,15 @@ seed_native_home "$home"
 expect_success "$home" "$ubuntu" "$DOTFILES" apply opencode
 launcher_path="$home/.local/bin:/usr/bin:/bin"
 set +e
-output="$(HOME="$home" PATH="$launcher_path" FAKE_OPENCODE_STATUS=37 \
+output="$(HOME="$home" PATH="$launcher_path" OPENCODE_DISABLE_CLAUDE_CODE=0 FAKE_OPENCODE_STATUS=37 \
   "$home/.local/bin/opencode-personal" 'two words' '' -- '*' 2>&1)"
 status=$?
 set -e
 ((status == 37)) || fail "OpenCode launcher changed status: $status"
-expected="$home/.config/dotfiles/opencode/personal.jsonc"$'\n'"$home/.config/dotfiles/opencode/tui.jsonc"$'\n<two words>\n<>\n<-->\n<*>'
+expected="$home/.config/dotfiles/opencode/personal.jsonc"$'\n'"$home/.config/dotfiles/opencode/tui.jsonc"$'\n1\n<two words>\n<>\n<-->\n<*>'
 [[ "$output" == "$expected" ]] || fail 'personal launcher changed overlays or arguments'
-output="$(HOME="$home" PATH="$launcher_path" "$home/.local/bin/opencode-work" literal)"
-[[ "$output" == "$home/.config/dotfiles/opencode/work.jsonc"$'\n'"$home/.config/dotfiles/opencode/tui.jsonc"$'\n<literal>' ]] ||
+output="$(HOME="$home" PATH="$launcher_path" OPENCODE_DISABLE_CLAUDE_CODE=0 "$home/.local/bin/opencode-work" literal)"
+[[ "$output" == "$home/.config/dotfiles/opencode/work.jsonc"$'\n'"$home/.config/dotfiles/opencode/tui.jsonc"$'\n1\n<literal>' ]] ||
   fail 'work launcher selected the wrong overlays'
 set +e
 output="$(HOME="$home" PATH=/usr/bin:/bin "$home/.local/share/dotfiles/bin/opencode-launch" personal 2>&1)"

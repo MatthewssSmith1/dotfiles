@@ -42,6 +42,12 @@ The Bash function falls back to `command opencode` when the optional launcher is
 
 The TUI order begins with native `tui.json`, Herdr's `tui.jsonc`, then the explicit dotfiles overlay. Project TUI configuration may load later. The overlay maps `Ctrl+Enter`, `Shift+Enter`, `Alt+Enter`, and `Ctrl+J` to newline; `Ctrl+S` stashes a prompt; `Ctrl+Y` restores the latest stash; `Ctrl+X K` clears; and `Ctrl+X Q` quits.
 
+### Harness separation and Codex CLI restrictions
+
+The shared launcher sets `OPENCODE_DISABLE_CLAUDE_CODE=1` for both profiles, disabling OpenCode's automatic Claude Code prompt and skill discovery. Shared `.agents/skills` and OpenCode-native skills remain discoverable. This covers `opencode-personal`, `opencode-work`, and managed interactive Bash's plain `opencode` command.
+
+Both overlays deny Bash commands invoking `codex`, with or without arguments, including direct paths ending in `/codex`. Primary agents and subagents inherit these permissions. This blocks ordinary Codex CLI attempts, including `codex -p subagent exec`; it does not isolate subprocesses or prevent indirect execution through scripts. Later project or agent permission overrides can supersede these rules. Direct native/noninteractive OpenCode bypasses the managed launcher and overlays.
+
 ## Lifecycle
 
 ```bash
