@@ -12,6 +12,11 @@ The installed `omarchy-nvim` package owns `~/.config/nvim`; dotfiles never rewri
 
 Ubuntu deploys `upstream/nvim`, `ubuntu/nvim`, and `common/nvim`. The adapter contains the exact `aqua:neovim/neovim@0.12.4` selector and the explicit `nvim-restore` helper. The area is package-only and writes no deployment state.
 
+The Ubuntu theme adapter fetches `monokai-pro.nvim` from its original
+[`loctvl842` repository](https://github.com/loctvl842/monokai-pro.nvim/commit/5b06ae0736813b1c65d76a4be9edbe92be0b9c74),
+because the baseline's `gthelding` fork is unavailable. The existing locked
+commit and upstream snapshot remain unchanged.
+
 Ordinary startup requires an existing lazy.nvim checkout at the commit in the committed `lazy-lock.json`. Missing-plugin installation, the periodic checker, lock updates, Lua rocks, inherited automatic Mason/Treesitter work, and Blink binary downloads are disabled during ordinary startup.
 
 Run `~/.local/share/dotfiles/bin/nvim-restore` explicitly with connectivity to restore plugins. It validates `lazy-lock.json`, fetches and checks out `lazy.nvim` at that exact lock entry, sets `DOTFILES_NVIM_RESTORING=1`, and runs headless `Lazy! restore`. It verifies that the lock bytes remain unchanged. The helper does not write deployment state, invoke callbacks, preserve or rename checkouts, or migrate any runtime root.
