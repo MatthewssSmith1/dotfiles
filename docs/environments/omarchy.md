@@ -40,6 +40,35 @@ The desktop area owns natural touchpad scrolling in a private fragment, the `idl
 
 `SUPER+SHIFT+K` opens the generated shortcut submenu. Its actions call `dotfiles-omarchy-compose-shortcut` with stable IDs and replay the corresponding `Multi_key` sequence through `wtype`; XCompose remains authoritative. The clipboard is unchanged and actions do not submit Enter. Name and email are read-only references to definitions in native `~/.XCompose`; em dash references Omarchy's packaged default. Their private output is never copied into the repository, and managed CRUD cannot edit or delete them.
 
+The generated binding unbinds the manifest key before registering it with
+`dont_inhibit = true` and `allow_input_capture = true`, then loads the handwritten
+`~/.config/dotfiles/omarchy/hypr/capture-bypass.lua`. That fragment preserves 36
+existing actions: Super+F fullscreen, Super+physical 1–0 workspace switching,
+Super+Shift+physical 1–0 window moves, Super+Ctrl+physical 1–9 bar panels,
+Super+Ctrl+A/W/D/B/P shell panels, and Super+K keybindings. Each unbinds before
+replacement, so repeated loading does not accumulate bindings. Personal shortcuts
+remain generated only once from the manifest. Both fragments are stowed with the
+desktop package; generation never rewrites the handwritten fragment.
+
+These overrides apply to all capturing apps, including remote desktop clients;
+they are not scoped to WorkSpaces, and no WorkSpaces settings are changed. They
+preserve the working host's tested Lua Hyprland API: `hl.unbind`, `o.bind` with
+both capture flags, and `hl.dsp.focus`, `hl.dsp.window.move`, and
+`hl.dsp.window.fullscreen({ mode = "fullscreen" })`. Offline tests record those
+API calls and check exact actions, physical codes, flags, and repeated loading;
+they do not prove compositor behavior.
+
+During one-time migration, back up and remove only the old unmanaged trailing
+capture block from `~/.config/hypr/bindings.lua` (starting with
+`-- Keep desktop navigation local`), preserving the guarded dotfiles loader and
+all unrelated host bindings. Deployment and migration must be coordinated before
+reloading because a live fragment can already be symlinked into the checkout.
+After deployment, explicitly reload Hyprland and check `hyprctl configerrors`.
+With a capturing app focused, verify Ctrl+Space still reaches the app and the
+listed local shortcuts work; test Super+F entering and leaving fullscreen and
+repeat the navigation/panel checks while fullscreen. This live verification is a
+separate operator step, not performed by the offline gates.
+
 Use these operator workflows:
 
 ```bash

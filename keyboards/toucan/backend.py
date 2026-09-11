@@ -295,7 +295,9 @@ def validate(desired, current=None):
             # The backend intentionally supports only reviewed behavior families.
             if bid not in (1,4,8,12,13,14,15,22,23,24):
                 raise Error(f'unreviewed behavior {bid}')
-            if bid == 22 and binding['param1'] not in (1,2,3):
+            if bid == 22 and binding['param1'] not in (1,2,3) and not (
+                    layer['id'] == 3 and pos == 30
+                    and binding == {'behavior_id':22,'param1':0,'param2':0}):
                 raise Error('bond clear/disconnect binding forbidden')
             sets = metadata['metadata'] or [{'param1': [], 'param2': []}]
             def accepts(value, choices):

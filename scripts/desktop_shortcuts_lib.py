@@ -204,7 +204,10 @@ command -v wtype >/dev/null 2>&1 || {{
 exec wtype -s 180 -k "${{sequence[0]}}" -k "${{sequence[1]}}" -k "${{sequence[2]}}"
 '''
     binding_fragment = (
+        f'hl.unbind({compact(binding["keys"])})\n'
         f'o.bind({compact(binding["keys"])}, {compact(binding["description"])}, '
-        f'{compact("omarchy-menu toggle " + menu["id"])})\n'
+        f'{compact("omarchy-menu toggle " + menu["id"])}, '
+        '{ dont_inhibit = true, allow_input_capture = true })\n'
+        'dofile(os.getenv("HOME") .. "/.config/dotfiles/omarchy/hypr/capture-bypass.lua")\n'
     )
     return {"xcompose": xcompose, "menu": menu_fragment, "helper": helper, "binding": binding_fragment}

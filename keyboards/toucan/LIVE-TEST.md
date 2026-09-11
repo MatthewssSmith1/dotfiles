@@ -1,5 +1,57 @@
 # Toucan Live Test
 
+## 2026-09-07: Functions Bluetooth Placements
+
+User authorized runtime edits and live USB apply only. Independent verification
+completed at 14:47 -05:00. No firmware build/flash, host remap, behavior execution,
+bond clear, reset, commit or push was performed. Immutable snapshots and retained
+firmware archives were untouched.
+
+Read-only live diff matched exactly these four stable layer 3 bindings, with
+no layer renames or other changes. Tuples are behavior ID, param1, param2:
+
+| Position / Physical Key | Before | After |
+| --- | --- | --- |
+| 30 / slash | Transparent `{23,0,0}` | Clear selected profile `{22,0,0}` |
+| 32 / M | Previous `{22,2,0}` | None `{4,0,0}` |
+| 33 / comma | Next `{22,1,0}` | Previous `{22,2,0}` |
+| 34 / period | RShift `{8,458981,0}` | Next `{22,1,0}` |
+
+- Ran `python3 -B keyboards/toucan/backend.py apply --ack-layout-review` once.
+  All four setters completed, full RAM readback matched, save was acknowledged,
+  and post-save verification passed with no pending changes.
+- Exact private backup: `/home/matt/.local/state/keyboards/toucan/apply-m9r9b0_1/`.
+  Contains `before.json`, `desired.json`, `diff.json`, and successful `result.json`
+  (`ok: true`, exactly four completed setters). This backs up runtime settings,
+  not firmware or Bluetooth bonds.
+- Fresh-connection `python3 -B keyboards/toucan/backend.py verify` returned
+  `{"verified": true, "changes": []}`. Correct USB/RPC identity, unlocked state,
+  all 168 bindings, stable layer order, geometry and behavior metadata passed;
+  both pending-state checks were false. Q/W/E selection, T F12, right bracket
+  RCtrl and every other binding remain unchanged.
+- Native `keymap.json` SHA256:
+  `1d626eaaf52efc7342a728819de1dcbf4bb3b58cee8a199b335f936487de4a5f`.
+- Each live session warned that the same-effective-UID access audit was
+  incomplete. Existing flock/TIOCEXCL and visible-handle checks remained intact;
+  this is not system-wide exclusivity. No protobuf error occurred in this
+  diff/apply/verify sequence and no retry was needed. The previously observed
+  intermittent `invalid protobuf tag` remains unresolved.
+- Offline gates passed: contract (17 groups), Toucan (33 tests), keyboard CLI
+  (15), reference (6). Contract warned that unavailable `python3-jsonschema`
+  caused schema validation skips. Read-only Codex review found no mapping or
+  safety defects; its missing-current-live-record finding is addressed here.
+
+**Pending user tests:** physical Functions access, M emitting nothing,
+comma/period previous/next cycling, Q/W/E selection and preserved T F12 / right
+bracket RCtrl; then physical power cycle and fresh read-only verification.
+No physical or power-cycle pass is claimed for this update. Keep a fallback
+keyboard and both halves USB powered. **Do not press Functions + slash for
+coverage:** Clear immediately clears the selected profile's bond, not all
+profiles, and is not long-hold pairing. Installing it did not execute it.
+
+Archived September 6 UF2 defaults retain the old four placements. This saved
+runtime overlay does not alter those images or their earlier test evidence.
+
 ## 2026-09-06: Personal Left Firmware
 
 Approved personal tap-preferred/200 ms left image built and flashed; right

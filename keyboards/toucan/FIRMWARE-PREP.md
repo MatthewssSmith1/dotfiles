@@ -101,9 +101,15 @@ Compiled tapping term is 200 ms for all eight home-row mods. Quick-tap and
 prior-idle remain disabled; Layer-Tap is unchanged. Intentional modifiers must
 reach the hold timeout. This is not a promise of identical keyd event handling.
 
+The 2026-09-07 Bluetooth placement update is runtime-only. These unchanged
+archives retain the September 6 defaults: Functions slash (30) Pass, M (32)
+previous, comma (33) next, period (34) RShift. They do not contain the newer
+Clear/None/previous/next placements in `keymap.json`. Saved settings overlay
+compiled defaults; after recovery, inspect the live diff before applying.
+
 ## Inspection Findings
 
-- All 168 personal bindings matched both resolved DTS and compiled ELF.
+- All 168 September 6 personal bindings matched both resolved DTS and compiled ELF.
   Geometry matched all 42 ordered keys, including signed thumb rotations.
   Four named layers, three reserved slots, tri-layer and protected controls
   remain. Functions 3:0 and 3:41 are None; Nav+Z unlock is unchanged.

@@ -36,7 +36,7 @@ select,button{background:var(--control)}.card{background:var(--card)}.key{backgr
 <noscript>The interactive maps require local JavaScript, but no network. Read <a href="SPEC.md">SPEC.md</a> for the complete intended maps and exceptions.</noscript>
 <div id="maps"></div>
 <section class="notes" aria-label="Important exceptions">
-<div><h3>Pairing is device-specific</h3><p>Toucan BLE1/2/3 select ZMK profiles 0/1/2. An empty profile allows pairing; bonds are never cleared automatically. Air60 short RF/BLE presses select, long holds pair in vendor firmware; ignored in USB link mode. Do not long-hold just to test.</p></div>
+<div><h3>Pairing is device-specific</h3><p>Toucan BLE1/2/3 select ZMK profiles 0/1/2. An empty profile allows pairing. Functions + physical slash (30), Clear, immediately clears the selected profile's bond: not all profiles, not long-hold pairing. Do not press for coverage. Applying the binding does not execute it. Air60 short RF/BLE presses select, long holds pair in vendor firmware; ignored in USB link mode. Do not long-hold just to test.</p></div>
 <div><h3>Review before applying</h3><p>Confirm the intended device and mapping before applying. Toucan's two invalid Functions bindings are now corrected to None and verified. Air60 Mac is Enhanced; Windows is Plain with dedicated Shift/Alt. Generic Nav modifiers remain dual-role. See the spec for review and live-test status.</p></div>
 <div><h3>One remap owner</h3><p>Persisted firmware readback and transport identity evidence gate explicit keyd test pass-through. Then test physical behavior without duplicate host remaps and record completion. Generic uses keyd. This page cannot inspect or apply a device.</p></div>
 </section>
@@ -60,7 +60,7 @@ const toucanLayers = {
  Base: toucanBase.slice(),
  Nav: words('Pass Pass Pass Pass Pass Pass Pass Home PgDn PgUp End PrintScreen Pass LSuper LAlt LShift LCtrl MouseRight Pass Left Down Up Right Pass Pass StudioUnlock Pass Pass Mouse5 Mouse4 Pass Pass Vol- Vol+ RShift RCtrl Backspace Pass Space Tab Pass Delete'),
  Symbols: words('Grave ! @ # $ % ^ & * ( ) RShift Pass 1 2 3 4 5 6 7 8 9 0 Pass ~ None None None None Pass Pass _ - + = LShift+RCtrl Backspace Pass Space Tab Pass Delete'),
- Functions: words('None BLE1 BLE2 BLE3 F11 F12 USB BLE Pass Pass Pass Pass LCtrl F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 Pass LCtrl LShift Pass Pass Pass Pass Pass Pass BTprev BTnext RShift RCtrl Nav Space Enter Symbols RAlt None')
+ Functions: words('None BLE1 BLE2 BLE3 F11 F12 USB BLE Pass Pass Pass Pass LCtrl F1 F2 F3 F4 F5 F6 F7 F8 F9 F10 Pass LCtrl LShift Pass Pass Pass Pass Clear Pass None BTprev BTnext RCtrl Nav Space Enter Symbols RAlt None')
 };
 const mods = {A:'LSuper',S:'LAlt',D:'LShift',F:'LCtrl',H:'RCtrl',J:'RShift',K:'RAlt',L:'RSuper'};
 const toucanGeometry = [];

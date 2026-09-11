@@ -104,6 +104,10 @@ See device READMEs for pinned evidence and concurrency limits.
   behavior still requires separate verification.
 - Toucan F11/F12 move to R/T on Functions to free Q/W/E for Bluetooth profiles.
   Air60 F11/F12 remain at P/rightmost backslash, plus its number-row F keys.
+- Toucan Functions slash (30) clears the selected Bluetooth profile's bond;
+  M (32) is None, comma/period (33/34) select previous/next. Clear is immediate,
+  not long-hold pairing: never press for coverage. Applying does not execute it.
+  This runtime-only update leaves archived UF2 defaults unchanged.
 - Toucan Symbols' former bottom-row A/S/D/F outputs become None. Nav mouse
   bindings remain. Toucan Nav N stays transparent and period stays right Shift;
   Air60/generic Nav N/period are inert.

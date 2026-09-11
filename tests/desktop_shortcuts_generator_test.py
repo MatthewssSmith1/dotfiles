@@ -59,6 +59,17 @@ class DesktopShortcutsGeneratorTest(unittest.TestCase):
         for private_output in ("user@example.com", "Example User"):
             self.assertNotIn(private_output, "".join(rendered.values()))
 
+    def test_binding_uses_manifest_and_loads_handwritten_capture_overrides(self):
+        self.manifest["binding"] = {"keys": "SUPER + SHIFT + J", "description": "My shortcuts"}
+        self.manifest["menu"]["id"] = "my-shortcuts"
+        self.assertEqual(
+            render(self.manifest)["binding"],
+            'hl.unbind("SUPER + SHIFT + J")\n'
+            'o.bind("SUPER + SHIFT + J", "My shortcuts", "omarchy-menu toggle my-shortcuts", '
+            '{ dont_inhibit = true, allow_input_capture = true })\n'
+            'dofile(os.getenv("HOME") .. "/.config/dotfiles/omarchy/hypr/capture-bypass.lua")\n',
+        )
+
     def test_exact_fields_and_text_shapes(self):
         self.assert_invalid(lambda data: data.update(extra=True), "manifest fields")
         self.assert_invalid(lambda data: data["groups"][0].update(label="General"), "group fields")

@@ -209,7 +209,7 @@ def toucan_binding(binding):
         return {1: "Nav", 2: "Symbols"}[p1], "hold layer"
     if behavior == 22:
         return ({0: "BLE1", 1: "BLE2", 2: "BLE3"}[p2] if p1 == 3
-                else {2: "BTprev", 1: "BTnext"}[p1]), ""
+                else {0: "Clear", 2: "BTprev", 1: "BTnext"}[p1]), ""
     if behavior == 15:
         return {1: "USB", 2: "BLE"}[p1], ""
     if behavior == 1:

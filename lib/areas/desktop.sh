@@ -6,6 +6,7 @@ readonly DESKTOP_XCOMPOSE='.XCompose'
 readonly DESKTOP_XCOMPOSE_ALIASES='.config/dotfiles/omarchy/XCompose'
 readonly DESKTOP_BINDINGS='.config/hypr/bindings.lua'
 readonly DESKTOP_BINDINGS_FRAGMENT='.config/dotfiles/omarchy/hypr/bindings.lua'
+readonly DESKTOP_CAPTURE_FRAGMENT='.config/dotfiles/omarchy/hypr/capture-bypass.lua'
 readonly DESKTOP_SHELL='.config/omarchy/shell.json'
 readonly DESKTOP_MENU_PLUGIN='.config/omarchy/plugins/matt.menu'
 readonly DESKTOP_MENU_WIDGET_POINTER='/bar/layout/left/0/id'
@@ -125,10 +126,13 @@ validate_desktop_shortcuts() {
     die 'desktop Compose shortcut helper is not an accepted executable payload'
   bash -n "$helper" || die 'desktop Compose shortcut helper has invalid Bash syntax'
   expected_binding="$(jq -r \
-    '"o.bind(\(.binding.keys | tojson), \(.binding.description | tojson), \"omarchy-menu toggle shortcuts\")"' \
+    '"hl.unbind(\(.binding.keys | tojson))\no.bind(\(.binding.keys | tojson), \(.binding.description | tojson), \(("omarchy-menu toggle " + .menu.id) | tojson), { dont_inhibit = true, allow_input_capture = true })\ndofile(os.getenv(\"HOME\") .. \"/.config/dotfiles/omarchy/hypr/capture-bypass.lua\")"' \
     "$DOTFILES_DIR/manifests/desktop-shortcuts.json")" || die 'desktop shortcut manifest binding is unreadable'
   [[ -f "$fragment" && ! -L "$fragment" && "$(< "$fragment")" == "$expected_binding" ]] ||
     die 'desktop shortcut binding fragment is not exact'
+  [[ -f "$package/$DESKTOP_CAPTURE_FRAGMENT" && ! -L "$package/$DESKTOP_CAPTURE_FRAGMENT" &&
+    "$(stat -c %a -- "$package/$DESKTOP_CAPTURE_FRAGMENT")" == 644 ]] ||
+    die 'desktop capture bypass fragment is missing or unsafe'
   [[ -f "$menu" && ! -L "$menu" ]] || die 'desktop shortcut menu fragment is missing or unsafe'
   [[ -f "$launcher" && ! -L "$launcher" && -x "$launcher" && "$(stat -c %a -- "$launcher")" == 755 ]] ||
     die 'desktop shortcut manager launcher is not an accepted executable payload'

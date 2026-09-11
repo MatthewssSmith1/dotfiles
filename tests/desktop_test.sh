@@ -29,6 +29,7 @@ readonly XCOMPOSE_REL='.XCompose'
 readonly ALIASES_REL='.config/dotfiles/omarchy/XCompose'
 readonly BINDINGS_REL='.config/hypr/bindings.lua'
 readonly BINDINGS_FRAGMENT_REL='.config/dotfiles/omarchy/hypr/bindings.lua'
+readonly CAPTURE_FRAGMENT_REL='.config/dotfiles/omarchy/hypr/capture-bypass.lua'
 readonly MENU_FRAGMENT_REL='.config/dotfiles/omarchy/menu-shortcuts.jsonc'
 readonly SHELL_REL='.config/omarchy/shell.json'
 readonly MENU_REL='.config/omarchy/extensions/omarchy-menu.jsonc'
@@ -112,9 +113,13 @@ expected_fragment=$'hl.config({\n  input = {\n    touchpad = {\n      natural_sc
 expected_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p> <b> : "Continue discussing with me briefly."\n<Multi_key> <p> <d> : "Continue discussing with me, focussing on points we have yet to agree on."\n<Multi_key> <p> <p> : "Write an implementation plan for this; put it in a temporary *.md file outside this repo."\n<Multi_key> <p> <t> : "What do you think/recommend? Discuss with me."'
 [[ "$(< "$fragment")" == "$expected_fragment" ]] || fail 'desktop fragment is not exact'
 [[ "$(< "$aliases")" == "$expected_aliases" ]] || fail 'desktop Compose aliases are not exact'
-[[ "$(< "$bindings_fragment")" == 'o.bind("SUPER + SHIFT + K", "Personal shortcuts", "omarchy-menu toggle shortcuts")' ]] ||
-  fail 'desktop shortcut binding is not exact'
-[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 14 &&
+if command -v lua >/dev/null 2>&1; then
+  lua "$REPO_DIR/tests/desktop_capture_test.lua" "$REPO_DIR/packages/omarchy/desktop" ||
+    fail 'desktop capture binding actions, flags, or repeated loading differ'
+else
+  printf 'SKIP: lua unavailable; capture binding runtime checks skipped\n'
+fi
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 15 &&
   ! -e "$REPO_DIR/packages/omarchy/desktop/$MENU_REL" ]] || fail 'desktop package payload inventory is not exact'
 [[ -x "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_REL" &&
   -f "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_DESKTOP_REL" ]] ||
@@ -470,7 +475,7 @@ jq -e '
 ' "$state" >/dev/null || fail 'desktop state does not contain complete origins'
 assert_file "$home/$INPUT_REL"
 assert_file "$home/$SHELL_REL"
-[[ -L "$home/$FRAGMENT_REL" && -L "$home/$ALIASES_REL" && -L "$home/$BINDINGS_FRAGMENT_REL" &&
+[[ -L "$home/$FRAGMENT_REL" && -L "$home/$ALIASES_REL" && -L "$home/$BINDINGS_FRAGMENT_REL" && -L "$home/$CAPTURE_FRAGMENT_REL" &&
   -L "$home/$MENU_FRAGMENT_REL" && -L "$home/$COMPOSE_SHORTCUT_REL" && -L "$home/$SHORTCUTS_REL" &&
   -L "$home/$MENU_PLUGIN_REL/Menu.qml" &&
   -f "$home/$MENU_REL" && ! -L "$home/$MENU_REL" && -L "$home/$SWITCHER_REL" && -L "$home/$MENU_ADAPTER_REL" &&

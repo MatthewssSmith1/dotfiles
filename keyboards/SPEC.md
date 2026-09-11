@@ -134,7 +134,7 @@ Pass    1       2       3       4       5       | 6       7       8       9     
 Functions (3)
 None    BLE1    BLE2    BLE3    F11     F12     | USB     BLE     Pass    Pass    Pass    Pass
 LCtrl   F1      F2      F3      F4      F5      | F6      F7      F8      F9      F10     Pass
-LCtrl   LShift  Pass    Pass    Pass    Pass    | Pass    Pass    BTprev  BTnext  RShift  RCtrl
+LCtrl   LShift  Pass    Pass    Pass    Pass    | Clear   Pass    None    BTprev  BTnext  RCtrl
                 Nav Space Enter                | Symbols RAlt None
 ```
 
@@ -149,8 +149,10 @@ is grave; Symbols index24 is direct tilde. Symbols index35 is the explicit
 chord **left Shift + right Ctrl**, not merely right Ctrl.
 
 **Reviewed and applied:** F11/F12 moved from Q/W to R/T (4/5), allowing BLE
-profiles at Q/W/E (1/2/3), with USB/BLE output at backslash/Y (6/7). BT
-previous/next remain at M/comma (32/33). Freed Symbols Z/X/C/V are None; B is
+profiles at Q/W/E (1/2/3), with USB/BLE output at backslash/Y (6/7).
+The 2026-09-07 approved runtime update assigns Functions slash (30) to Clear,
+M (32) to None, and comma/period (33/34) to BT previous/next. Q/W/E selection,
+T F12 and right bracket (35) RCtrl are unchanged. Freed Symbols Z/X/C/V are None; B is
 Pass. Nav N/period and retained peripheral modifier/chord bindings are unchanged.
 
 Functions indices 0 and 41 are approved as explicit None on 2026-09-06,
@@ -160,8 +162,14 @@ other unusual Functions thumbs remain unchanged. Historical anomalies remain
 in the immutable snapshot; the backend refuses to restore them after correction.
 
 ZMK BLE1/2/3 use selection parameters 0/1/2. Selecting an empty profile allows
-pairing; clearing an occupied bond is separate and never automatic. No NuPhy-like
-long-hold pairing is invented. RGB/battery display are not advertised and deferred.
+pairing. Functions Clear is immediate `BT_CLR`, clearing only the selected
+profile's bond, not all profiles; it is not long-hold pairing. Installing the
+binding does not execute it. Backend validation permits only `{22,0,0}` at
+stable layer 3, position 30 with normal metadata checks; clear elsewhere,
+clear-all and disconnect remain forbidden. Do not press Clear for coverage.
+The archived September 6 UF2 defaults retain slash Pass, M/comma previous/next
+and period RShift; this runtime change does not rebuild those images.
+RGB/battery display are not advertised and deferred.
 
 ## Air60 Maps And Exceptions
 

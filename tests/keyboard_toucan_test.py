@@ -313,6 +313,12 @@ class ToucanTest(unittest.TestCase):
 
     def previous_personal_map(self):
         previous = copy.deepcopy(DESIRED)
+        for pos, binding in {
+                30: {'behavior_id':23,'param1':0,'param2':0},
+                32: {'behavior_id':22,'param1':2,'param2':0},
+                33: {'behavior_id':22,'param1':1,'param2':0},
+                34: {'behavior_id':8,'param1':458981,'param2':0}}.items():
+            previous['layers'][-1]['bindings'][pos] = binding
         for pos in (0,41):
             previous['layers'][-1]['bindings'][pos] = b.original()['keymap']['layers'][-1]['bindings'][pos]
         # Pin the entire previous personal map, independently of Git/worktree state.
@@ -324,7 +330,10 @@ class ToucanTest(unittest.TestCase):
     def test_none_correction_two_only_delta_and_apply(self):
         rpc = MockRPC()
         rpc.state['keymap'] = self.previous_personal_map()
-        changes = b.diff(rpc.state,DESIRED)
+        corrected = copy.deepcopy(rpc.state['keymap'])
+        for pos in (0,41):
+            corrected['layers'][-1]['bindings'][pos] = {'behavior_id':4,'param1':0,'param2':0}
+        changes = b.diff(rpc.state,corrected)
         self.assertEqual(changes,[
             {'method':'set_layer_binding',
              'request':{'layer_id':3,'key_position':pos,
@@ -332,11 +341,62 @@ class ToucanTest(unittest.TestCase):
              'before':rpc.state['keymap']['layers'][-1]['bindings'][pos]}
             for pos in (0,41)])
         with tempfile.TemporaryDirectory() as root:
-            result = b.apply(rpc,DESIRED,backup_root=root)
+            result = b.apply(rpc,corrected,backup_root=root)
         self.assertEqual(result['changes'],changes)
         self.assertEqual(rpc.mutations(),['set_layer_binding','set_layer_binding','save_changes'])
+        self.assertEqual(rpc.state['keymap'],corrected)
+        self.assertTrue(b.verify(rpc,corrected)['verified'])
+
+    def test_bluetooth_four_only_delta_and_apply(self):
+        rpc = MockRPC()
+        rpc.state['keymap'] = self.previous_personal_map()
+        for pos in (0,41):
+            rpc.state['keymap']['layers'][-1]['bindings'][pos] = {'behavior_id':4,'param1':0,'param2':0}
+        changes = b.diff(rpc.state,DESIRED)
+        self.assertEqual(changes,[
+            {'method':'set_layer_binding',
+             'request':{'layer_id':3,'key_position':pos,
+                        'binding':{'behavior_id':bid,'param1':p1,'param2':0}},
+             'before':rpc.state['keymap']['layers'][-1]['bindings'][pos]}
+            for pos,bid,p1 in ((30,22,0),(32,4,0),(33,22,2),(34,22,1))])
+        with tempfile.TemporaryDirectory() as root:
+            result = b.apply(rpc,DESIRED,backup_root=root)
+        self.assertEqual(result['changes'],changes)
+        self.assertEqual(rpc.mutations(),['set_layer_binding']*4+['save_changes'])
         self.assertEqual(rpc.state['keymap'],DESIRED)
         self.assertTrue(b.verify(rpc,DESIRED)['verified'])
+
+    def test_clear_only_at_reviewed_position(self):
+        for index in range(4):
+            for pos in range(42):
+                for p1,p2 in ((0,0),(0,1),(4,0),(5,0)):
+                    if (index,pos,p1,p2) == (3,30,0,0):
+                        continue
+                    want = copy.deepcopy(DESIRED)
+                    want['layers'][index]['bindings'][pos] = {'behavior_id':22,'param1':p1,'param2':p2}
+                    rpc = MockRPC()
+                    with self.subTest(index=index,pos=pos,p1=p1,p2=p2):
+                        with self.assertRaises(b.Error):
+                            b.apply(rpc,want)
+                        rpc.state['keymap'] = copy.deepcopy(want)
+                        with self.assertRaises(b.Error):
+                            b.diff(rpc.state,want)
+                        self.assertEqual(rpc.mutations(),[])
+
+    def test_clear_requires_firmware_metadata(self):
+        for kind in ('unadvertised','missing','changed','invalid_parameters'):
+            rpc = MockRPC()
+            if kind == 'unadvertised': rpc.state['available_behaviors']['behaviors'].remove(22)
+            if kind == 'missing': del rpc.state['behavior_details']['22']
+            if kind == 'changed': rpc.state['behavior_details']['22']['display_name'] = 'Different'
+            if kind == 'invalid_parameters':
+                choices = rpc.state['behavior_details']['22']['metadata'][0]['param1']
+                choices[:] = [choice for choice in choices if choice['constant'] != 0]
+            with self.subTest(kind=kind), self.assertRaises(b.Error):
+                # Matching captured metadata still must accept the clear parameters.
+                with patch.object(b,'original',return_value=copy.deepcopy(rpc.state)) if kind == 'invalid_parameters' else contextlib.nullcontext():
+                    b.diff(rpc.state,DESIRED)
+            self.assertEqual(rpc.mutations(),[])
 
     def test_legacy_snapshot_readonly_verification(self):
         for keymap in (b.original()['keymap'],self.previous_personal_map()):

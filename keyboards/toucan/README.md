@@ -1,8 +1,10 @@
 # Toucan Runtime Backend
 
 The personal tap-preferred/200 ms left firmware was built and flashed on
-2026-09-06; right firmware was untouched. All 168 bindings matched after save
-and a left power cycle. Functions 3:0 and 3:41 are None; Nav+X is transparent
+2026-09-06; right firmware was untouched. That day's 168 bindings matched after
+save and a left power cycle. The 2026-09-07 four-binding Bluetooth runtime update
+passed save/readback and independent verification; its physical and power-cycle
+tests remain pending. Functions 3:0 and 3:41 are None; Nav+X is transparent
 again and Nav+Z still unlocks Studio. Initial user-reported checks passed;
 longer typing and separate BLE/battery tests remain. Keep both halves USB powered.
 See [LIVE-TEST.md](LIVE-TEST.md) for dated results and runtime backups, and
@@ -53,8 +55,15 @@ status; `metadata.json` completes the successful advertised-behavior extraction.
 - Functions F1..F10 remain at positions 13..22. Previously approved and applied:
   F11/F12 move from Q/W to R/T (4/5), making room for Bluetooth profiles 1/2/3
   at Q/W/E (1/2/3), parameters 0/1/2. USB/BLE output selection is assigned at
-  backslash/Y (6/7). Previous/next Bluetooth profile actions at 32/33 remain.
-  Selecting an empty profile allows pairing; no bond-clear bindings are added.
+   backslash/Y (6/7). The approved 2026-09-07 runtime update sets slash (30)
+   to Clear, M (32) to None, comma (33) to previous and period (34) to next.
+   Q/W/E selection, T F12, right bracket (35) RCtrl and every other binding remain.
+   Selecting an empty profile allows pairing. Clear is immediate `BT_CLR` for
+   the selected profile's bond, not all profiles or long-hold pairing. Do not
+   press it for coverage; applying this binding does not execute it.
+   Validation permits only `{behavior_id:22,param1:0,param2:0}` at stable layer
+   3, position 30, with normal metadata checks. Clear elsewhere, clear-all and
+   disconnect remain forbidden.
 - Functions positions 0 and 41 are explicitly None, replacing invalid momentary
   target `458795` and unknown behavior 0. The backend permits only this exact
   correction, with normal behavior-metadata validation. Historical anomalies
@@ -62,7 +71,10 @@ status; `metadata.json` completes the successful advertised-behavior extraction.
 
 The F11/F12 relocation, freed Symbols keys, output controls, and Nav N/period
 decision passed the prior layout review. The two None corrections are now
-deployed and verified; no other layout changes were made permanent.
+deployed and verified. The new Bluetooth placements are runtime settings,
+not a firmware rebuild. Archived September 6 personal UF2 defaults still have
+slash Pass, M/comma previous/next and period RShift. See the dated live record
+for runtime verification and pending physical/power-cycle tests.
 
 ## API For Coordinator
 
@@ -193,7 +205,7 @@ Setter/save interpretation also consulted the temporary snapshot's captured
 `reference-keymap_subsystem.c` and `reference-keymap.c`. Those were retrieved
 from upstream main, not pinned device firmware, and are not treated as proof of
 original installed behavior. The original firmware commit remains unknown.
-Live setters, save/readback and power-cycle persistence passed; dated evidence
+Earlier live setters, save/readback and power-cycle persistence passed; dated evidence
 is in the live record. No postflash flash-memory hash was obtained.
 
 Runtime metadata advertises Mod-Tap/Layer-Tap but does not expose hold-tap term,
