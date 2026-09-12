@@ -545,7 +545,7 @@ lean_preflight_links() {
 }
 
 lean_run_stow_preflight() {
-  local mode="$1" package layer name output status cache_key
+  local mode="$1" package layer name output status cache_key line
   local action=(--stow)
   [[ "$mode" != remove ]] || action=(--delete)
   cache_key="$mode ${LEAN_AREA:-} ${LEAN_PACKAGES[*]}"
@@ -555,7 +555,13 @@ lean_run_stow_preflight() {
     name="${package#*/}"
     status=0
     output="$(stow --dir="$DOTFILES_DIR/packages/$layer" --target="$HOME" --no-folding "${action[@]}" "$name" --simulate 2>&1)" || status=$?
-    [[ -z "$output" ]] || printf '%s\n' "$output" >&2
+    if ((status == 0)) && [[ -n "$output" ]]; then
+      while IFS= read -r line; do
+        [[ "$line" == 'WARNING: in simulation mode so not modifying filesystem.' ]] || printf '%s\n' "$line" >&2
+      done <<< "$output"
+    elif [[ -n "$output" ]]; then
+      printf '%s\n' "$output" >&2
+    fi
     ((status == 0)) || die "Stow conflict preflight failed for $package"
   done
   LEAN_STOW_PREFLIGHT_MEMO="$cache_key"

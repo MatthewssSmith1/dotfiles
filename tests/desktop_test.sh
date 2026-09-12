@@ -38,6 +38,8 @@ readonly COMPOSE_SHORTCUT_REL='.local/bin/dotfiles-omarchy-compose-shortcut'
 readonly SHORTCUTS_REL='.local/bin/dotfiles-shortcuts'
 readonly MENU_ADAPTER_REL='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
 readonly MENU_PLUGIN_REL='.config/omarchy/plugins/matt.menu'
+readonly DOTFILES_MENU_FRAGMENT_REL='.config/dotfiles/omarchy/menu-dotfiles.jsonc'
+readonly DOTFILES_MENU_HELPER_REL='.local/libexec/dotfiles-menu'
 readonly WINDOWS_VM_REL='.local/bin/dotfiles-omarchy-windows-vm'
 readonly WINDOWS_VM_DESKTOP_REL='.local/share/applications/windows-vm.desktop'
 readonly BEGIN='-- >>> dotfiles desktop input >>>'
@@ -119,16 +121,11 @@ if command -v lua >/dev/null 2>&1; then
 else
   printf 'SKIP: lua unavailable; capture binding runtime checks skipped\n'
 fi
-[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 15 &&
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 13 &&
   ! -e "$REPO_DIR/packages/omarchy/desktop/$MENU_REL" ]] || fail 'desktop package payload inventory is not exact'
 [[ -x "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_REL" &&
   -f "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_DESKTOP_REL" ]] ||
   fail 'desktop Windows VM launcher payloads are missing'
-plugin="$REPO_DIR/packages/omarchy/desktop/$MENU_PLUGIN_REL"
-jq -e '.id == "matt.menu" and .omarchy.clonedFrom == "omarchy.menu"' "$plugin/manifest.json" >/dev/null ||
-  fail 'desktop menu clone manifest is not exact'
-grep -Fq 'Style.space(420)' "$plugin/Menu.qml" || fail 'desktop menu clone width is not 420'
-! grep -Fq 'maxRowsHeight' "$plugin/Menu.qml" || fail 'desktop menu clone retains the starting height ceiling'
 "$REPO_DIR/scripts/generate-desktop-shortcuts" || fail 'desktop shortcut generated files are stale'
 cat > "$fake_bin/wtype" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -156,6 +153,10 @@ if command -v xkbcli >/dev/null 2>&1; then
 else
   printf 'SKIP: xkbcli unavailable; exact Compose aliases were checked\n'
 fi
+pass
+
+# Approved Dotfiles menu hierarchy, helper dispatch, and focused lifecycle.
+bash "$TEST_DIR/desktop_menu_test.sh" || fail 'Dotfiles desktop menu contracts failed'
 pass
 
 # The Windows VM launcher has a separate, fully isolated runtime contract suite.
@@ -228,6 +229,24 @@ expect_failure 'unmanaged desktop route' "$windows_menu_home" "$windows_menu_hos
 assert_same "$windows_menu_home/$MENU_REL" "$TEST_ROOT/windows-menu.original"
 pass
 
+# Unmanaged Dotfiles roots and descendants conflict both outside and alongside
+# an otherwise exact old managed block, without partial deployment.
+for location in outside-old-block beside-old-block; do
+  for route in dotfiles dotfiles.foreign; do
+    read -r dotfiles_conflict_host dotfiles_conflict_home < <(prepare_native_desktop "dotfiles-conflict-$location-${route//./-}")
+    if [[ "$location" == beside-old-block ]]; then
+      expect_success "$dotfiles_conflict_home" "$dotfiles_conflict_host" "$DOTFILES" apply desktop
+      sed -i '$i\  '"\"$route\": {\"action\":\"unmanaged\"}," "$dotfiles_conflict_home/$MENU_REL"
+    else
+      printf '%s\n' '{' "  \"$route\": {\"action\":\"unmanaged\"}" '}' > "$dotfiles_conflict_home/$MENU_REL"
+    fi
+    cp -a "$dotfiles_conflict_home/$MENU_REL" "$TEST_ROOT/dotfiles-conflict-$location-${route//./-}.original"
+    expect_failure 'unmanaged Dotfiles route' "$dotfiles_conflict_home" "$dotfiles_conflict_host" "$DOTFILES" apply desktop
+    assert_same "$dotfiles_conflict_home/$MENU_REL" "$TEST_ROOT/dotfiles-conflict-$location-${route//./-}.original"
+  done
+done
+pass
+
 # Missing managed menu content does not strand the remaining package links or
 # ownership state during deliberate removal.
 read -r missing_menu_host missing_menu_home < <(prepare_native_desktop missing-menu-remove)
@@ -269,17 +288,130 @@ expect_failure 'attachment set differs' "$old_home" "$old_host" "$DOTFILES" chec
 expect_failure 'attachment set differs' "$old_home" "$old_host" "$DOTFILES" remove desktop
 expect_success "$old_home" "$old_host" "$DOTFILES" apply desktop
 jq -e '.version == 3 and (.attachments | length) == 4 and
-  .resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"] == {
-    type:"string", original:"omarchy.menu", managed:"matt.menu"
-  }' "$old_state" >/dev/null || fail 'apply did not expand old desktop state'
+  (.resources[".config/omarchy/shell.json"].fields | keys) == ["/idle/lock", "/idle/screensaver"]' \
+  "$old_state" >/dev/null || fail 'apply did not expand old desktop attachments without owning the menu widget'
 expect_success "$old_home" "$old_host" "$DOTFILES" check desktop
-# Retry recovers if migration stopped after activating the cloned widget but
-# before publishing expanded state.
-jq 'del(.resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"])' \
-  "$old_state" > "$old_home/interrupted-state.json"
-mv -fT "$old_home/interrupted-state.json" "$old_state"
 expect_success "$old_home" "$old_host" "$DOTFILES" apply desktop
 expect_success "$old_home" "$old_host" "$DOTFILES" check desktop
+pass
+
+# Recreate the old ownership contract, including dangling links left by a
+# checkout that has already removed the clone payloads.
+prepare_retired_menu() {
+  local home="$1" native="$2" name state
+  expect_success "$home" "$native" "$DOTFILES" apply desktop
+  state="$home/.local/state/dotfiles/v2/desktop.json"
+  jq '.resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"] = {
+    type:"string", original:"omarchy.menu", managed:"matt.menu"
+  }' "$state" > "$home/old-state.json"
+  mv "$home/old-state.json" "$state"
+  jq '.bar.layout.left[0].id = "matt.menu"' "$home/$SHELL_REL" > "$home/old-shell.json"
+  mv "$home/old-shell.json" "$home/$SHELL_REL"
+  chmod 0640 "$home/$SHELL_REL"
+  mkdir -p "$home/$MENU_PLUGIN_REL"
+  for name in BarWidget.qml Menu.qml MenuModel.js manifest.json; do
+    ln -s "$(realpath -m -s --relative-to="$home/$MENU_PLUGIN_REL" \
+      "$REPO_DIR/packages/omarchy/desktop/$MENU_PLUGIN_REL/$name")" "$home/$MENU_PLUGIN_REL/$name"
+  done
+}
+
+# Migration preserves extensions, unrelated shell data, and idle origins. Both
+# version-2 and version-3 records converge; direct removal also retires the clone.
+for operation in apply-v2 apply-v3 remove missing-shell-remove; do
+  read -r retired_host retired_home < <(prepare_native_desktop "retired-$operation")
+  prepare_retired_menu "$retired_home" "$retired_host"
+  retired_state="$retired_home/.local/state/dotfiles/v2/desktop.json"
+  cp "$retired_home/$MENU_REL" "$TEST_ROOT/retired-menu.original"
+  printf '%s\n' 'personal note' > "$retired_home/$MENU_PLUGIN_REL/notes.txt"
+  if [[ "$operation" == apply-v2 ]]; then
+    jq '.version = 2 | .attachments |= map_values({id,origin,before_sha256})' "$retired_state" > "$retired_home/v2.json"
+    mv "$retired_home/v2.json" "$retired_state"
+  fi
+  before="$(sha256sum "$retired_state" "$retired_home/$SHELL_REL")"
+  expect_failure 'retired menu clone requires migration' "$retired_home" "$retired_host" "$DOTFILES" check desktop
+  [[ "$(sha256sum "$retired_state" "$retired_home/$SHELL_REL")" == "$before" ]] || fail 'migration check mutated state'
+  if [[ "$operation" == apply-* ]]; then
+    expect_success "$retired_home" "$retired_host" "$DOTFILES" apply desktop
+    expect_success "$retired_home" "$retired_host" "$DOTFILES" check desktop
+    assert_same "$retired_home/$MENU_REL" "$TEST_ROOT/retired-menu.original"
+    jq -e '(.resources[".config/omarchy/shell.json"].fields | keys) == ["/idle/lock", "/idle/screensaver"] and
+      .resources[".config/omarchy/shell.json"].fields["/idle/lock"].original == 300' \
+      "$retired_state" >/dev/null || fail 'menu retirement lost idle origins or retained widget ownership'
+    jq -e '.idle == {screensaver:600,lock:900} and .bar.layout.left[0].id == "omarchy.menu" and
+      .bar.layout.right[0].id == "omarchy.tailscale" and .unrelated.array == [3,1,2]' \
+      "$retired_home/$SHELL_REL" >/dev/null || fail 'menu retirement changed unrelated shell settings'
+    expect_success "$retired_home" "$retired_host" "$DOTFILES" apply desktop
+  fi
+  [[ "$operation" != missing-shell-remove ]] || rm "$retired_home/$SHELL_REL"
+  expect_success "$retired_home" "$retired_host" "$DOTFILES" remove desktop
+  for name in BarWidget.qml Menu.qml MenuModel.js manifest.json; do
+    [[ ! -e "$retired_home/$MENU_PLUGIN_REL/$name" && ! -L "$retired_home/$MENU_PLUGIN_REL/$name" ]] ||
+      fail 'retirement retained a clone link'
+  done
+  [[ "$(< "$retired_home/$MENU_PLUGIN_REL/notes.txt")" == 'personal note' &&
+    ! -e "$retired_state" && ! -e "$retired_home/desktop-command.trace" ]] || fail 'retirement lost unrelated data or invoked runtime commands'
+  if [[ "$operation" != missing-shell-remove ]]; then
+    jq -e '.idle == {screensaver:150,lock:300} and .bar.layout.left[0].id == "omarchy.menu"' \
+      "$retired_home/$SHELL_REL" >/dev/null || fail 'post-migration removal lost original idle settings'
+  fi
+done
+pass
+
+# Interruption before state publication is retryable, including after the links
+# have gone. The old record remains until both shell restoration and unlinking.
+for point in desktop-after-menu-restore lean-before-state-rename; do
+  read -r retired_host retired_home < <(prepare_native_desktop "retired-interrupt-$point")
+  prepare_retired_menu "$retired_home" "$retired_host"
+  hold="$TEST_ROOT/retired-$point-hold"
+  mkdir "$hold"
+  HOME="$retired_home" PATH="$fake_bin:$PATH" DOTFILES_TESTING=1 DOTFILES_TEST_HOST_ROOT="$retired_host" \
+    DOTFILES_TEST_HOLD_AT="$point" DOTFILES_TEST_HOLD_DIR="$hold" FAKE_STOW_TRACE="$FAKE_STOW_TRACE" \
+    "$DOTFILES" apply desktop > "$TEST_ROOT/retired-$point.log" 2>&1 &
+  child=$!
+  wait_for_file "$hold/$point.ready"
+  jq -e '.bar.layout.left[0].id == "omarchy.menu"' "$retired_home/$SHELL_REL" >/dev/null || fail 'migration did not restore native menu first'
+  kill -TERM "$child"
+  : > "$hold/$point.release"
+  if wait "$child"; then fail 'interrupted clone migration unexpectedly succeeded'; fi
+  expect_success "$retired_home" "$retired_host" "$DOTFILES" apply desktop
+  expect_success "$retired_home" "$retired_host" "$DOTFILES" check desktop
+  [[ ! -e "$retired_home/$MENU_PLUGIN_REL" ]] || fail 'migration retry retained clone directory'
+done
+pass
+
+# Changed links, original values, widget layout, and idle drift refuse before
+# retirement writes. A replaced regular file must never be treated as a link.
+for conflict in regular foreign-link parent original widget idle; do
+  read -r retired_host retired_home < <(prepare_native_desktop "retired-conflict-$conflict")
+  prepare_retired_menu "$retired_home" "$retired_host"
+  retired_state="$retired_home/.local/state/dotfiles/v2/desktop.json"
+  case "$conflict" in
+    regular)
+      rm "$retired_home/$MENU_PLUGIN_REL/Menu.qml"
+      printf '%s\n' 'personal replacement' > "$retired_home/$MENU_PLUGIN_REL/Menu.qml" ;;
+    foreign-link)
+      rm "$retired_home/$MENU_PLUGIN_REL/Menu.qml"
+      ln -s /unrelated/Menu.qml "$retired_home/$MENU_PLUGIN_REL/Menu.qml" ;;
+    parent)
+      mv "$retired_home/$MENU_PLUGIN_REL" "$retired_home/retired-plugin"
+      ln -s "$retired_home/retired-plugin" "$retired_home/$MENU_PLUGIN_REL" ;;
+    original)
+      jq '.resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"].original = "other.menu"' \
+        "$retired_state" > "$retired_home/replacement"
+      mv "$retired_home/replacement" "$retired_state" ;;
+    widget|idle)
+      if [[ "$conflict" == widget ]]; then expression='.bar.layout.left += [{id:"omarchy.menu"}]'
+      else expression='.idle.lock = 901'; fi
+      jq "$expression" "$retired_home/$SHELL_REL" > "$retired_home/replacement"
+      mv "$retired_home/replacement" "$retired_home/$SHELL_REL" ;;
+  esac
+  before="$(sha256sum "$retired_state" "$retired_home/$SHELL_REL" "$retired_home/$MENU_REL")"
+  for verb in apply remove; do
+    expect_failure '' "$retired_home" "$retired_host" "$DOTFILES" "$verb" desktop
+    [[ "$(sha256sum "$retired_state" "$retired_home/$SHELL_REL" "$retired_home/$MENU_REL")" == "$before" &&
+      -L "$retired_home/$MENU_PLUGIN_REL/manifest.json" ]] || fail 'retirement conflict caused mutation'
+  done
+done
 pass
 
 # An exactly generated version-1 menu remains owned drift: check reports it,
@@ -319,6 +451,7 @@ cp -a "$TEST_ROOT/legacy-generated-menu.valid" "$legacy_generated_menu"
 expect_failure 'differs from the current managed version' "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" check desktop
 expect_success "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" apply desktop
 grep -Fq '"shortcuts.manage"' "$legacy_menu_home/$MENU_REL" || fail 'legacy menu was not upgraded'
+grep -Fq '"dotfiles.areas"' "$legacy_menu_home/$MENU_REL" || fail 'legacy menu upgrade omitted Dotfiles routes'
 grep -Fq '"unrelated.keep"' "$legacy_menu_home/$MENU_REL" || fail 'legacy menu upgrade lost unrelated content'
 expect_success "$legacy_menu_home" "$legacy_menu_host" "$legacy_menu_repo/dotfiles.sh" check desktop
 cp "$TEST_ROOT/legacy-menu.exact" "$legacy_menu_home/$MENU_REL"
@@ -469,33 +602,37 @@ jq -e '
   (.attachments | keys) == [".XCompose", ".config/hypr/bindings.lua", ".config/hypr/input.lua", ".config/omarchy/extensions/omarchy-menu.jsonc"] and
   .resources[".config/omarchy/shell.json"].fields["/idle/screensaver"].original == 150 and
   .resources[".config/omarchy/shell.json"].fields["/idle/lock"].original == 300 and
-  .resources[".config/omarchy/shell.json"].fields["/bar/layout/left/0/id"] == {
-    type:"string", original:"omarchy.menu", managed:"matt.menu"
-  }
+  (.resources[".config/omarchy/shell.json"].fields | keys) == ["/idle/lock", "/idle/screensaver"]
 ' "$state" >/dev/null || fail 'desktop state does not contain complete origins'
 assert_file "$home/$INPUT_REL"
 assert_file "$home/$SHELL_REL"
 [[ -L "$home/$FRAGMENT_REL" && -L "$home/$ALIASES_REL" && -L "$home/$BINDINGS_FRAGMENT_REL" && -L "$home/$CAPTURE_FRAGMENT_REL" &&
   -L "$home/$MENU_FRAGMENT_REL" && -L "$home/$COMPOSE_SHORTCUT_REL" && -L "$home/$SHORTCUTS_REL" &&
-  -L "$home/$MENU_PLUGIN_REL/Menu.qml" &&
+  ! -e "$home/$MENU_PLUGIN_REL/manifest.json" &&
   -f "$home/$MENU_REL" && ! -L "$home/$MENU_REL" && -L "$home/$SWITCHER_REL" && -L "$home/$MENU_ADAPTER_REL" &&
   "$(stat -c %a "$home/$INPUT_REL")" == 640 &&
   "$(stat -c %a "$home/$XCOMPOSE_REL")" == 640 && "$(stat -c %a "$home/$SHELL_REL")" == 640 ]] ||
   fail 'desktop apply changed regular-file or mode contracts'
 [[ "$(readlink -f "$home/$SHORTCUTS_REL")" == "$REPO_DIR/packages/omarchy/desktop/$SHORTCUTS_REL" ]] ||
   fail 'desktop shortcut launcher does not resolve to the repository payload'
+[[ -L "$home/$DOTFILES_MENU_FRAGMENT_REL" && -L "$home/$DOTFILES_MENU_HELPER_REL" ]] ||
+  fail 'desktop apply did not deploy Dotfiles menu payloads'
 [[ "$(grep -cFx '  "remove.windows": {"when":"false"},' "$home/$MENU_REL")" == 1 ]] ||
   fail 'desktop menu must hide Remove > Windows exactly once'
 grep -Fq '"style.theme": {"icon":"󰸌"' "$home/$MENU_REL" || fail 'desktop menu action was not attached'
 grep -Fq '"shortcuts.prompts.t": {"label":"t · Ask for recommendation"' "$home/$MENU_REL" ||
   fail 'desktop shortcut menu was not attached'
-attached_shortcuts="$(awk -v begin="$MENU_BEGIN" -v end="$MENU_END" '
+grep -Fq '"dotfiles": {"icon":"󰒓","label":"Dotfiles"' "$home/$MENU_REL" ||
+  fail 'Dotfiles menu was not attached'
+attached_menu_fragments="$(awk -v begin="$MENU_BEGIN" -v end="$MENU_END" '
   $0 == begin { inside=1; next }
   $0 == end { inside=0 }
   inside && $0 !~ /"style.theme"|"remove.windows"/
 ' "$home/$MENU_REL")"
-[[ "$attached_shortcuts" == "$(< "$REPO_DIR/packages/omarchy/desktop/$MENU_FRAGMENT_REL")" ]] ||
-  fail 'desktop shortcut menu attachment is not the exact generated fragment'
+expected_menu_fragments="$(cat "$REPO_DIR/packages/omarchy/desktop/$MENU_FRAGMENT_REL" \
+  "$REPO_DIR/packages/omarchy/desktop/$DOTFILES_MENU_FRAGMENT_REL")"
+[[ "$attached_menu_fragments" == "$expected_menu_fragments" ]] ||
+  fail 'desktop shortcut and Dotfiles menu attachments are not exact'
 [[ "$(grep -cFx -- "$BEGIN" "$home/$INPUT_REL")" == 1 && "$(grep -cFx -- "$END" "$home/$INPUT_REL")" == 1 ]] ||
   fail 'desktop loader was not attached exactly once'
 [[ "$(grep -cFx -- "$XCOMPOSE_BEGIN" "$home/$XCOMPOSE_REL")" == 1 &&
@@ -507,7 +644,7 @@ attached_shortcuts="$(awk -v begin="$MENU_BEGIN" -v end="$MENU_END" '
 xcompose_block_line="$(grep -nFx -- "$XCOMPOSE_BEGIN" "$home/$XCOMPOSE_REL" | cut -d: -f1)"
 sed -n "1,$((xcompose_block_line - 1))p" "$home/$XCOMPOSE_REL" > "$TEST_ROOT/xcompose-prefix"
 assert_same "$TEST_ROOT/xcompose-prefix" "$TEST_ROOT/xcompose.original"
-jq -e '.idle.screensaver == 600 and .idle.lock == 900 and .bar.layout.left[0].id == "matt.menu" and .bar.layout.right[0].id == "omarchy.tailscale" and .plugins[0].options.nested == true and .unrelated.array == [3,1,2]' \
+jq -e '.idle.screensaver == 600 and .idle.lock == 900 and .bar.layout.left[0].id == "omarchy.menu" and .bar.layout.right[0].id == "omarchy.tailscale" and .plugins[0].options.nested == true and .unrelated.array == [3,1,2]' \
   "$home/$SHELL_REL" >/dev/null || fail 'desktop JSON update lost managed or unrelated semantics'
 [[ ! -e "$home/desktop-command.trace" && "$(sha256sum "$stock")" == "$stock_hash" ]] ||
   fail 'desktop apply invoked a shell/reload command or changed stock input'
@@ -559,6 +696,7 @@ cp "$home/$MENU_REL" "$TEST_ROOT/menu.refreshed"
 expect_failure 'recorded guarded attachment is absent' "$home" "$native" "$DOTFILES" check desktop
 expect_success "$home" "$native" "$DOTFILES" apply desktop
 grep -Fq '"open.future": {"action":"future"}' "$home/$MENU_REL" || fail 'menu refresh reapply lost unrelated content'
+grep -Fq '"dotfiles.areas"' "$home/$MENU_REL" || fail 'menu refresh did not recover Dotfiles routes'
 pass
 
 # A refresh to an unaccepted baseline and malformed/duplicate/modified blocks
@@ -601,22 +739,16 @@ expect_failure 'managed JSON fields conflict' "$home" "$native" "$DOTFILES" appl
 expect_failure 'managed JSON fields conflict' "$home" "$native" "$DOTFILES" remove desktop
 pass
 
-# A pre-existing local clone or duplicate source/clone entries are never
-# silently adopted or normalized.
-for kind in unmanaged-clone duplicate-menu; do
-  read -r bad_host bad_home < <(prepare_native_desktop "menu-plugin-$kind")
-  if [[ "$kind" == unmanaged-clone ]]; then
-    jq '.bar.layout.left[0].id = "matt.menu"' "$bad_home/$SHELL_REL" > "$bad_home/shell-replacement.json"
-    expected='already uses an unmanaged clone'
-  else
-    jq '.bar.layout.left += [{"id":"matt.menu"}]' "$bad_home/$SHELL_REL" > "$bad_home/shell-replacement.json"
-    expected='JSON resource'
-  fi
-  mv -fT "$bad_home/shell-replacement.json" "$bad_home/$SHELL_REL"
-  expect_failure "$expected" "$bad_home" "$bad_host" "$DOTFILES" apply desktop
-  [[ ! -e "$bad_home/.local/state/dotfiles/v2/desktop.json" && ! -e "$bad_home/$MENU_PLUGIN_REL" ]] ||
-    fail "$kind conflict wrote desktop ownership"
-done
+# The menu widget and its bar position are outside new desktop ownership.
+read -r layout_host layout_home < <(prepare_native_desktop native-menu-layout)
+jq '.bar.layout.center = .bar.layout.left | .bar.layout.left = []' \
+  "$layout_home/$SHELL_REL" > "$layout_home/replacement"
+mv "$layout_home/replacement" "$layout_home/$SHELL_REL"
+expect_success "$layout_home" "$layout_host" "$DOTFILES" apply desktop
+expect_success "$layout_home" "$layout_host" "$DOTFILES" check desktop
+expect_success "$layout_home" "$layout_host" "$DOTFILES" remove desktop
+jq -e '.bar.layout.left == [] and .bar.layout.center == [{id:"omarchy.menu"}]' \
+  "$layout_home/$SHELL_REL" >/dev/null || fail 'desktop changed the native menu placement'
 pass
 
 # Removal restores only recorded fields, preserves unrelated semantic changes,
@@ -633,6 +765,7 @@ expect_success "$home" "$native" "$DOTFILES" remove desktop
 [[ ! -e "$state" && ! -e "$home/$FRAGMENT_REL" && ! -e "$home/$ALIASES_REL" &&
   ! -e "$home/$BINDINGS_FRAGMENT_REL" && ! -e "$home/$MENU_FRAGMENT_REL" &&
   ! -e "$home/$COMPOSE_SHORTCUT_REL" && ! -e "$home/$SHORTCUTS_REL" && ! -e "$home/$MENU_ADAPTER_REL" &&
+  ! -e "$home/$DOTFILES_MENU_FRAGMENT_REL" && ! -e "$home/$DOTFILES_MENU_HELPER_REL" &&
   ! -e "$home/$WINDOWS_VM_REL" && ! -e "$home/$WINDOWS_VM_DESKTOP_REL" &&
   ! -e "$home/$MENU_PLUGIN_REL/manifest.json" &&
   -f "$home/$MENU_REL" && ! -L "$home/$MENU_REL" && ! -e "$home/$SWITCHER_REL" ]] ||

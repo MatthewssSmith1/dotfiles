@@ -20,23 +20,47 @@ Fresh installs, migrations, or `omarchy refresh applications` may restore these 
 
 ## Hardware Workarounds
 
-Applying the tools area also installs `dotfiles-omarchy-amdgpu-ips`. This manual helper targets the Framework Laptop 13 AMD Ryzen AI 300 Series with board `FRANMGCP09` and AMD display device `1002:150e`; it refuses every other hardware tuple. It addresses the AMDGPU IPS/DMUB display-idle hard lock tracked in [Omarchy issue 6223](https://github.com/omacom/omarchy/issues/6223) by adding `amdgpu.dcdebugmask=0x800` to Limine's default kernel command line.
+Applying the tools area also installs `dotfiles-amdgpu-ips`. This manual helper targets the Framework Laptop 13 AMD Ryzen AI 300 Series with board `FRANMGCP09` and AMD display device `1002:150e`; it refuses every other hardware tuple. It addresses the AMDGPU IPS/DMUB display-idle hard lock tracked in [Omarchy issue 6223](https://github.com/omacom/omarchy/issues/6223) by adding `amdgpu.dcdebugmask=0x800` to Limine's default kernel command line.
 
 Disabling IPS may increase idle power use. Normal dotfiles apply, check, and remove only deploy or remove the inert helper and never alter `/etc`, rebuild boot images, or apply the kernel argument.
 
 Inspect, configure, or remove the workaround explicitly:
 
 ```bash
-dotfiles-omarchy-amdgpu-ips status
-dotfiles-omarchy-amdgpu-ips apply
-dotfiles-omarchy-amdgpu-ips remove
+dotfiles-amdgpu-ips status
+dotfiles-amdgpu-ips apply
+dotfiles-amdgpu-ips remove
 ```
 
 `apply` and `remove` manage only `/etc/limine-entry-tool.d/90-dotfiles-amdgpu-ips.conf`, refuse unexpected content or competing assignments, and rebuild Limine entries. They never reboot. After either mutation, reboot deliberately and run `status` again; success after apply is an exact managed configuration and exactly one active `amdgpu.dcdebugmask=0x800` token. Remove the workaround and reboot after an upstream kernel fix is confirmed.
 
+Hosts that previously deployed `dotfiles-omarchy-amdgpu-ips` must unlink that stale user-owned symlink explicitly after applying tools; package-only Stow deployment does not track renamed paths. The system path and workaround semantics are unchanged.
+
+## Fingerprint Policy
+
+The tools area installs `dotfiles-polkit-fingerprint`, a second inert administration helper. Dotfiles lifecycle commands never run it or change PAM. Use `status`, `apply`, or `remove` explicitly; apply/remove cross one sudo boundary and manage the exact `/etc/pam.d/polkit-1` policy plus a root-owned `/usr/local/libexec/dotfiles-polkit-fingerprint` runtime predicate. No change is applied live by ordinary dotfiles deployment.
+
+The predicate skips fingerprint authentication for Polkit when Omarchy reports the lid closed **or** every internal eDP/LVDS/DSI connector reports `disabled`. A password is still required; login, lock-screen, and sudo policies are unchanged. Unknown display state preserves the lid-only behavior. DRM logical routing is used deliberately; DPMS state is not considered.
+
+```bash
+dotfiles-polkit-fingerprint status
+dotfiles-polkit-fingerprint apply
+dotfiles-polkit-fingerprint remove
+```
+
+After explicit apply, verify a fresh Polkit prompt with the internal display enabled, explicitly disabled, and the lid closed. Idle blanking must not select password-only mode. Fixture tests do not replace this hardware/UI verification.
+
+`status` reports absent, exact, orphaned-helper, or conflicting state without sudo. Apply/remove accept only exact stock or managed content and safe ownership/modes. On drift, inspect rather than overwrite. Recovery is `remove` when status identifies an exact orphan; otherwise restore the reviewed Omarchy v4 PAM baseline and remove only a verified exact runtime helper before retrying. An Omarchy update that changes the stock PAM body is intentional drift requiring review, not automatic migration.
+
 ## Desktop
 
-The desktop area owns natural touchpad scrolling in a private fragment, the `idle.screensaver=600` and `idle.lock=900` values, and the menu widget ID in the regular Omarchy `shell.json`. The widget ID activates a supported user clone, `matt.menu`: normal routes are 420 logical pixels wide, dmenu and special 520-wide routes keep their native widths, and submenus grow downward from a frozen top edge under the native 70% screen-height cap. Removal restores `omarchy.menu` without replacing unrelated shell configuration. The area also owns a generated package XCompose fragment with managed aliases, guards the `Style > Theme` entry and a `Shortcuts` submenu in the regular personal menu extension, and owns `dotfiles-omarchy-theme-switcher`. That row still uses Omarchy's native image carousel and `omarchy-theme-set`, but hides these bundled theme directories: `ethereal`, `flexoki-light`, `hackerman`, `last-horizon`, `lumon`, `lupine`, `miasma`, `rose-pine`, `vantablack`, and `white`. User-installed themes remain visible, and new bundled themes appear unless added to that exact denylist (canonical list: `manifests/hidden-themes.txt`). Hidden themes remain installed and directly selectable with `omarchy theme set NAME`. Background double-right-click remains native and unfiltered; dotfiles does not intercept or replace its selector. The selector exposes a filtered themes-only root during preview discovery, then a scoped `omarchy-menu-images` adapter restores `/usr/share/omarchy` for shell IPC. The filtered root is never exposed to `omarchy-shell`.
+The desktop area owns natural touchpad scrolling in a private fragment and the `idle.screensaver=600` and `idle.lock=900` values in the regular Omarchy `shell.json`. Shortcuts, Dotfiles operations, and the theme selector extend the native `omarchy.menu` through `~/.config/omarchy/extensions/omarchy-menu.jsonc`; menu sizing, layout, and bar placement stay native. No menu plugin clone is deployed.
+
+Older deployments activated `matt.menu` to widen the entire menu and change submenu growth, not just the Shortcuts extension. Omarchy 4.0.3 broke application-library access for cloned menus ([upstream issue #11282](https://github.com/omacom/omarchy/issues/11282)). `check desktop` reports that these deployments need `apply desktop`. Apply validates the exact old widget record and clone symlinks, restores the old JSON resource, removes those links, and releases widget ownership before applying idle preferences. Recorded idle origins survive for later removal. An interrupted migration can be retried; direct `remove desktop` also handles old clone ownership. Modified files, unsafe links, or conflicting recorded fields are refused. Unrelated files in the former plugin directory are preserved. Deployment never restarts the shell; its file watchers consume the native widget change.
+
+The area also owns a generated package XCompose fragment with managed aliases, guards the `Style > Theme` entry and a `Shortcuts` submenu in the regular personal menu extension, and owns `dotfiles-omarchy-theme-switcher`. That row still uses Omarchy's native image carousel and `omarchy-theme-set`, but hides these bundled theme directories: `ethereal`, `flexoki-light`, `hackerman`, `last-horizon`, `lumon`, `lupine`, `miasma`, `rose-pine`, `vantablack`, and `white`. User-installed themes remain visible, and new bundled themes appear unless added to that exact denylist (canonical list: `manifests/hidden-themes.txt`). Hidden themes remain installed and directly selectable with `omarchy theme set NAME`. Background double-right-click remains native and unfiltered; dotfiles does not intercept or replace its selector. The selector exposes a filtered themes-only root during preview discovery, then a scoped `omarchy-menu-images` adapter restores `/usr/share/omarchy` for shell IPC. The filtered root is never exposed to `omarchy-shell`.
+
+The guarded block also maps a `Dotfiles` submenu from the reviewed `menu-dotfiles.jsonc` fragment. It offers whole-configuration check/apply, per-area check/apply/remove, AMD graphics and fingerprint policy Status/Enable/Disable (mapped to `status`/`apply`/`remove`), default-app pruning, profiles and areas, and command help. Actions dispatch to `~/.local/libexec/dotfiles-menu`, which opens an Omarchy terminal, prints the exact command, reports its exit code, and waits for Enter before closing. Per-area selection uses native `omarchy menu select` dialogs, reads `manifests/areas.tsv`, and labels optional areas. Dotfiles refuses unmanaged `dotfiles` or `dotfiles.*` routes outside its markers, including during upgrades from an older managed block.
 
 `SUPER+SHIFT+K` opens the generated shortcut submenu. Its actions call `dotfiles-omarchy-compose-shortcut` with stable IDs and replay the corresponding `Multi_key` sequence through `wtype`; XCompose remains authoritative. The clipboard is unchanged and actions do not submit Enter. Name and email are read-only references to definitions in native `~/.XCompose`; em dash references Omarchy's packaged default. Their private output is never copied into the repository, and managed CRUD cannot edit or delete them.
 
@@ -83,7 +107,7 @@ A guarded include attaches that fragment to the regular Omarchy-owned `~/.XCompo
 
 If an Omarchy refresh replaces `~/.XCompose`, reapplying the desktop area restores the guarded include without duplication.
 
-First adoption requires separate explicit confirmation before the single-file native reset `omarchy refresh config hypr/input.lua`, followed by `dotfiles.sh apply desktop`. Do not substitute the broader Hyprland refresh. Omarchy creates `~/.config/omarchy/extensions/omarchy-menu.jsonc` as a regular stock template. Dotfiles keeps it regular, inserts one marked `style.theme` entry after the opening `{`, and preserves compatible unrelated entries byte for byte, including multiline objects, partial overrides, submenus, providers, and target links. If refresh removes the markers, check reports drift; deliberate apply re-adopts the refreshed compatible baseline. Unmanaged `style.theme`, malformed or wrapped `items` objects, ambiguous anchors, and unsafe paths are refused.
+First adoption requires separate explicit confirmation before the single-file native reset `omarchy refresh config hypr/input.lua`, followed by `dotfiles.sh apply desktop`. Do not substitute the broader Hyprland refresh. Omarchy creates `~/.config/omarchy/extensions/omarchy-menu.jsonc` as a regular stock template. Dotfiles keeps it regular, inserts one marked block after the opening `{`, and preserves compatible unrelated entries byte for byte, including multiline objects, partial overrides, submenus, providers, and target links. If refresh removes the markers, check reports drift; deliberate apply re-adopts the refreshed compatible baseline. Conflicting unmanaged routes, malformed or wrapped `items` objects, ambiguous anchors, and unsafe paths are refused.
 
 For tmux, the native `~/.config/tmux/tmux.conf` remains the regular Omarchy-owned baseline. The validation-only area checks exact package identity, runtime output, stock bytes, safe owner/mode, key prefixes, terminal, and parsing without writing files or state.
 

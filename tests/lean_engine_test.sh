@@ -150,6 +150,38 @@ check_structured() { register_structured "${1:-omarchy}"; lean_check_area; }
 remove_structured() { register_structured "${1:-omarchy}"; lean_remove_area; }
 apply_json_only() { register_json_only; lean_apply_area; }
 
+# Successful Stow simulations suppress only Stow's standard simulation notice;
+# failures retain the complete diagnostic output.
+reset_lean_home stow-preflight-output
+stow() {
+  printf '%s' "$STOW_TEST_OUTPUT" >&2
+  return "$STOW_TEST_STATUS"
+}
+LEAN_PACKAGES=(common/one)
+LEAN_AREA=fixture
+LEAN_STOW_PREFLIGHT_MEMO=
+STOW_TEST_STATUS=0
+STOW_TEST_OUTPUT=$'WARNING: in simulation mode so not modifying filesystem.\n'
+capture_direct lean_run_stow_preflight apply
+((TEST_RC == 0)) || fail 'notice-only Stow preflight failed'
+[[ -z "$TEST_OUTPUT" ]] || fail 'successful Stow simulation notice was not suppressed'
+
+LEAN_STOW_PREFLIGHT_MEMO=
+STOW_TEST_OUTPUT=$'kept before\nWARNING: in simulation mode so not modifying filesystem.\nkept after\n'
+capture_direct lean_run_stow_preflight apply
+((TEST_RC == 0)) || fail 'mixed-output Stow preflight failed'
+[[ "$TEST_OUTPUT" == $'kept before\nkept after' ]] || fail 'successful Stow preflight changed non-notice diagnostics'
+
+LEAN_STOW_PREFLIGHT_MEMO=
+STOW_TEST_STATUS=7
+STOW_TEST_OUTPUT=$'failure detail\nWARNING: in simulation mode so not modifying filesystem.\n'
+capture_direct lean_run_stow_preflight apply
+((TEST_RC != 0)) || fail 'failed Stow preflight unexpectedly succeeded'
+assert_contains "$TEST_OUTPUT" $'failure detail\nWARNING: in simulation mode so not modifying filesystem.'
+assert_contains "$TEST_OUTPUT" 'Stow conflict preflight failed for common/one'
+unset -f stow
+pass
+
 # Numeric JSON pointer segments address existing array elements without
 # replacing neighboring values.
 reset_lean_home json-array

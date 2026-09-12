@@ -27,7 +27,8 @@ expect_success "$home" "$ubuntu" "$DOTFILES" apply tools
 [[ -L "$home/.config/mise/conf.d/20-dotfiles-tools.toml" && -L "$home/.config/mise/conf.d/30-dotfiles-tools-ubuntu.toml" ]] ||
   fail 'Ubuntu mise fragments were not deployed'
 [[ ! -e "$home/.local/bin/dotfiles-omarchy-prune" &&
-  ! -e "$home/.local/bin/dotfiles-omarchy-amdgpu-ips" ]] ||
+  ! -e "$home/.local/bin/dotfiles-amdgpu-ips" &&
+  ! -e "$home/.local/bin/dotfiles-polkit-fingerprint" ]] ||
   fail 'Ubuntu deployed an Omarchy administration command'
 [[ ! -e "$home/.local/state/dotfiles/v2" ]] || fail 'package-only tools wrote ownership state'
 [[ ! -e "$home/network-attempted" ]] || fail 'tools apply attempted installation'
@@ -67,15 +68,149 @@ chmod 0755 "$fake_bin/omarchy"
 native_home="$(new_home native)"
 expect_success "$native_home" "$native" "$DOTFILES" apply tools
 [[ -L "$native_home/.local/bin/dotfiles" && -L "$native_home/.local/bin/dotfiles-omarchy-prune" &&
-  -L "$native_home/.local/bin/dotfiles-omarchy-amdgpu-ips" ]] ||
+  -L "$native_home/.local/bin/dotfiles-amdgpu-ips" &&
+  -L "$native_home/.local/bin/dotfiles-polkit-fingerprint" ]] ||
   fail 'native tools launchers were not deployed'
 expect_success "$native_home" "$native" "$DOTFILES" check tools
 expect_success "$native_home" "$native" "$DOTFILES" remove tools
 [[ ! -e "$native_home/.local/bin/dotfiles" && ! -e "$native_home/.local/bin/dotfiles-omarchy-prune" &&
-  ! -e "$native_home/.local/bin/dotfiles-omarchy-amdgpu-ips" ]] ||
+  ! -e "$native_home/.local/bin/dotfiles-amdgpu-ips" &&
+  ! -e "$native_home/.local/bin/dotfiles-polkit-fingerprint" ]] ||
   fail 'native tools removal retained launchers'
 expect_success "$native_home" "$native" "$DOTFILES" remove tools
 [[ ! -e "$native_home/prune-unexpected.trace" ]] || fail 'tools lifecycle executed the prune command'
+pass
+
+# The polkit helper delegates one guarded transaction to sudo. Its installed,
+# root-owned predicate never executes user files and fails neutral on unknown DRM state.
+polkit="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-polkit-fingerprint"
+polkit_home="$(new_home polkit)"
+polkit_root="$(make_system_fixture polkit)"
+mkdir -p "$polkit_root/etc/pam.d" "$polkit_root/usr/local" "$polkit_root/usr/bin" \
+  "$polkit_root/sys/class/drm/card0-eDP-1"
+stock_guard='auth      [success=1 default=ignore] pam_exec.so quiet /usr/bin/omarchy-hw-laptop-closed'
+managed_guard='auth      [success=1 default=ignore] pam_exec.so quiet /usr/local/libexec/dotfiles-polkit-fingerprint'
+write_polkit_pam() {
+  printf '%s\nauth      sufficient pam_fprintd.so\nauth      required pam_unix.so\n\naccount   required pam_unix.so\npassword  required pam_unix.so\nsession   required pam_unix.so\n' "$1" > "$polkit_root/etc/pam.d/polkit-1"
+}
+write_polkit_pam "$stock_guard"
+chmod 0644 "$polkit_root/etc/pam.d/polkit-1"
+cat > "$fake_bin/omarchy" <<'SCRIPT'
+#!/usr/bin/env bash
+[[ "$*" == version ]] && { printf '4.0.1-1\n'; exit 0; }
+exit 99
+SCRIPT
+cat > "$fake_bin/sudo" <<'SCRIPT'
+#!/usr/bin/env bash
+printf 'sudo|%s\n' "$*" >> "$HOME/polkit-admin.trace"
+exec "$@"
+SCRIPT
+chmod 0755 "$fake_bin/sudo"
+
+run_polkit() {
+  if TEST_OUTPUT="$(HOME="$polkit_home" PATH="$fake_bin:$PATH" DOTFILES_TESTING=1 \
+    DOTFILES_TEST_SYSTEM_ROOT="$polkit_root" "$polkit" "$@" 2>&1)"; then
+    TEST_RC=0
+  else
+    TEST_RC=$?
+  fi
+}
+
+run_polkit status
+((TEST_RC == 1)) || fail 'polkit absent status did not request apply'
+[[ ! -e "$polkit_home/polkit-admin.trace" ]] || fail 'polkit status invoked sudo'
+run_polkit apply
+((TEST_RC == 0)) || fail "polkit apply failed: $TEST_OUTPUT"
+grep -qxF "$managed_guard" "$polkit_root/etc/pam.d/polkit-1" || fail 'polkit apply missed managed guard'
+grep -qxF 'auth      sufficient pam_fprintd.so' "$polkit_root/etc/pam.d/polkit-1" || fail 'polkit apply changed fingerprint rule'
+runtime="$polkit_root/usr/local/libexec/dotfiles-polkit-fingerprint"
+[[ -f "$runtime" && ! -L "$runtime" && "$(stat -c '%a' "$runtime")" == 755 ]] || fail 'polkit runtime helper metadata is unsafe'
+run_polkit apply
+((TEST_RC == 0)) || fail 'polkit repeated apply failed'
+[[ "$(grep -c '^sudo|' "$polkit_home/polkit-admin.trace")" == 2 ]] || fail 'polkit mutations did not use one explicit sudo boundary each'
+
+printf '#!/usr/bin/env bash\nexit 1\n' > "$polkit_root/usr/bin/omarchy-hw-laptop-closed"
+chmod 0755 "$polkit_root/usr/bin/omarchy-hw-laptop-closed"
+printf 'enabled\n' > "$polkit_root/sys/class/drm/card0-eDP-1/enabled"
+"$runtime" "$polkit_root" && fail 'predicate skipped fingerprint with enabled internal display'
+printf 'Off\n' > "$polkit_root/sys/class/drm/card0-eDP-1/dpms"
+"$runtime" "$polkit_root" && fail 'predicate treated DPMS blanking as disabled routing'
+printf 'exit 0\n' > "$polkit_home/hostile-bash-env"
+BASH_ENV="$polkit_home/hostile-bash-env" "$runtime" "$polkit_root" &&
+  fail 'predicate executed inherited BASH_ENV'
+printf 'disabled\n' > "$polkit_root/sys/class/drm/card0-eDP-1/enabled"
+"$runtime" "$polkit_root" || fail 'predicate retained fingerprint with disabled internal display'
+mkdir "$polkit_root/sys/class/drm/card1-eDP-2"
+printf 'enabled\n' > "$polkit_root/sys/class/drm/card1-eDP-2/enabled"
+"$runtime" "$polkit_root" && fail 'predicate ignored another enabled internal connector'
+printf 'unknown\n' > "$polkit_root/sys/class/drm/card1-eDP-2/enabled"
+"$runtime" "$polkit_root" && fail 'predicate accepted malformed internal connector state'
+rm "$polkit_root/sys/class/drm/card1-eDP-2/enabled"
+rm "$polkit_root/sys/class/drm/card0-eDP-1/enabled"
+"$runtime" "$polkit_root" && fail 'predicate did not fail neutral on unknown display state'
+printf '#!/usr/bin/env bash\nexit 0\n' > "$polkit_root/usr/bin/omarchy-hw-laptop-closed"
+"$runtime" "$polkit_root" || fail 'predicate failed to preserve closed-lid behavior'
+
+run_polkit remove
+((TEST_RC == 0)) || fail 'polkit remove failed'
+grep -qxF "$stock_guard" "$polkit_root/etc/pam.d/polkit-1" || fail 'polkit remove did not restore stock guard'
+[[ ! -e "$runtime" ]] || fail 'polkit remove retained runtime helper'
+run_polkit remove
+((TEST_RC == 0)) || fail 'polkit repeated remove failed'
+
+# Exact body validation rejects reordered or altered auth stacks, while remove
+# safely cleans an exact helper orphan left after PAM was already restored.
+printf '%s\nauth      required pam_unix.so\nauth      sufficient pam_fprintd.so\n\naccount   required pam_unix.so\npassword  required pam_unix.so\nsession   required pam_unix.so\n' "$stock_guard" > "$polkit_root/etc/pam.d/polkit-1"
+run_polkit status
+((TEST_RC == 2)) || fail 'polkit status accepted a reordered auth stack'
+assert_contains "$TEST_OUTPUT" 'configuration: conflicting'
+write_polkit_pam "$stock_guard"
+run_polkit apply
+((TEST_RC == 0)) || fail 'polkit orphan setup apply failed'
+cp "$runtime" "$polkit_home/runtime.saved"
+write_polkit_pam "$stock_guard"
+run_polkit status
+((TEST_RC == 1)) || fail 'polkit status did not identify exact orphan helper'
+assert_contains "$TEST_OUTPUT" 'configuration: orphan-helper'
+run_polkit remove
+((TEST_RC == 0)) && [[ ! -e "$runtime" ]] || fail 'polkit remove did not clean exact orphan helper'
+
+run_polkit apply
+((TEST_RC == 0)) || fail 'polkit interrupted-remove setup failed'
+rm "$runtime"
+run_polkit remove
+((TEST_RC == 0)) || fail 'polkit remove did not restore managed PAM with missing helper'
+grep -qxF "$stock_guard" "$polkit_root/etc/pam.d/polkit-1" || fail 'polkit interrupted remove did not restore stock PAM'
+
+chmod 0775 "$polkit_root/usr/local"
+run_polkit status
+((TEST_RC == 2)) || fail 'polkit status accepted writable installation ancestors'
+chmod 0755 "$polkit_root/usr/local"
+
+cat > "$fake_bin/omarchy" <<'SCRIPT'
+#!/usr/bin/env bash
+[[ "$*" == version ]] && { printf '5.0.0-1\n'; exit 0; }
+exit 99
+SCRIPT
+run_polkit status
+((TEST_RC == 2)) || fail 'polkit helper accepted unsupported Omarchy'
+assert_contains "$TEST_OUTPUT" 'requires native Omarchy v4, found 5.0.0-1'
+cat > "$fake_bin/omarchy" <<'SCRIPT'
+#!/usr/bin/env bash
+[[ "$*" == version ]] && { printf '4.0.1-1\n'; exit 0; }
+exit 99
+SCRIPT
+
+printf '%s\n%s\nauth sufficient pam_fprintd.so\n' "$stock_guard" "$managed_guard" > "$polkit_root/etc/pam.d/polkit-1"
+run_polkit apply
+((TEST_RC == 2)) || fail 'polkit apply accepted conflicting PAM guards'
+assert_contains "$TEST_OUTPUT" 'refusing unrecognized PAM configuration'
+mkdir -p "$polkit_root/usr/local/libexec"
+ln -s /tmp/not-owned "$polkit_root/usr/local/libexec/dotfiles-polkit-fingerprint"
+write_polkit_pam "$stock_guard"
+run_polkit apply
+((TEST_RC == 2)) || fail 'polkit apply accepted an existing helper symlink'
+assert_contains "$TEST_OUTPUT" 'refusing existing runtime helper'
 pass
 
 # The prune command validates invocation and Omarchy version before mutation.
@@ -113,7 +248,7 @@ pass
 
 # The AMDGPU IPS helper is hardware-gated, reports boot/configuration state,
 # and mutates only its dedicated fixture path through recorded boundaries.
-ips="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-amdgpu-ips"
+ips="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-amdgpu-ips"
 ips_home="$(new_home ips)"
 ips_root="$(make_system_fixture ips)"
 mkdir -p "$ips_root/etc/limine-entry-tool.d" "$ips_root/etc/default" \
@@ -178,7 +313,7 @@ run_ips() {
 
 run_ips
 ((TEST_RC == 2)) || fail 'AMDGPU IPS helper accepted a missing command'
-assert_contains "$TEST_OUTPUT" 'usage: dotfiles-omarchy-amdgpu-ips status|apply|remove'
+assert_contains "$TEST_OUTPUT" 'usage: dotfiles-amdgpu-ips status|apply|remove'
 run_ips unexpected
 ((TEST_RC == 2)) || fail 'AMDGPU IPS helper accepted an unknown command'
 [[ ! -s "$ips_home/admin.trace" && ! -s "$ips_home/limine.trace" ]] ||

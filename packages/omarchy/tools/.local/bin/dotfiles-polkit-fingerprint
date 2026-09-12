@@ -1,0 +1,187 @@
+#!/usr/bin/bash
+
+set -Eeuo pipefail
+
+readonly COMMAND_NAME='dotfiles-polkit-fingerprint'
+SYSTEM_ROOT=''
+
+usage() { printf 'usage: %s status|apply|remove\n' "$COMMAND_NAME" >&2; }
+die() { printf '%s: %s\n' "$COMMAND_NAME" "$*" >&2; exit 2; }
+
+if (($# != 1)); then usage; exit 2; fi
+case "$1" in status|apply|remove) ;; *) usage; exit 2 ;; esac
+
+if [[ -n "${DOTFILES_TEST_SYSTEM_ROOT:-}" ]]; then
+  [[ "${DOTFILES_TESTING:-0}" == 1 ]] || die 'test system root requires DOTFILES_TESTING=1'
+  [[ "$DOTFILES_TEST_SYSTEM_ROOT" == /* && "$DOTFILES_TEST_SYSTEM_ROOT" != *'/../'* &&
+    "$DOTFILES_TEST_SYSTEM_ROOT" != */.. && "$DOTFILES_TEST_SYSTEM_ROOT" != *'/./'* ]] || die 'invalid test system root'
+  SYSTEM_ROOT="${DOTFILES_TEST_SYSTEM_ROOT%/}"
+fi
+
+((EUID != 0)) || die 'must run as the desktop user, not root'
+command -v omarchy >/dev/null 2>&1 || die 'requires native Omarchy v4'
+version="$(LC_ALL=C omarchy version 2>/dev/null || true)"
+[[ "$version" =~ ^4([.-]|$) ]] || die "requires native Omarchy v4, found ${version:-missing}"
+[[ "$1" == status ]] || command -v sudo >/dev/null 2>&1 || die 'requires sudo'
+
+admin_payload() {
+  cat <<'ADMIN'
+set -Eeuo pipefail
+PATH='/usr/bin:/bin'
+LC_ALL=C
+export PATH LC_ALL
+
+command_name='dotfiles-polkit-fingerprint'
+command="$1"
+root="$2"
+pam="$root/etc/pam.d/polkit-1"
+helper_dir="$root/usr/local/libexec"
+helper="$helper_dir/dotfiles-polkit-fingerprint"
+expected_owner='0:0'
+[[ -z "$root" ]] || expected_owner="$(id -u):$(id -g)"
+
+die() { printf '%s: %s\n' "$command_name" "$*" >&2; exit 2; }
+
+stock_pam() {
+  cat <<'PAM'
+auth      [success=1 default=ignore] pam_exec.so quiet /usr/bin/omarchy-hw-laptop-closed
+auth      sufficient pam_fprintd.so
+auth      required pam_unix.so
+
+account   required pam_unix.so
+password  required pam_unix.so
+session   required pam_unix.so
+PAM
+}
+
+managed_pam() {
+  cat <<'PAM'
+auth      [success=1 default=ignore] pam_exec.so quiet /usr/local/libexec/dotfiles-polkit-fingerprint
+auth      sufficient pam_fprintd.so
+auth      required pam_unix.so
+
+account   required pam_unix.so
+password  required pam_unix.so
+session   required pam_unix.so
+PAM
+}
+
+helper_payload() {
+  cat <<'HELPER'
+#!/usr/bin/bash -p
+set -u
+PATH='/usr/bin:/bin'
+LC_ALL=C
+export PATH LC_ALL
+
+root="${1:-}"
+if [[ -n "$root" && ( "$root" != /* || "$root" == *'/../'* || "$root" == */.. || "$root" == *'/./'* ) ]]; then
+  exit 1
+fi
+
+# Preserve Omarchy's closed-lid result; DRM "enabled" is logical routing, not DPMS.
+/usr/bin/bash -p "$root/usr/bin/omarchy-hw-laptop-closed" >/dev/null 2>&1 && exit 0
+shopt -s nullglob
+connectors=("$root"/sys/class/drm/card*-eDP-*/enabled "$root"/sys/class/drm/card*-LVDS-*/enabled "$root"/sys/class/drm/card*-DSI-*/enabled)
+((${#connectors[@]} > 0)) || exit 1
+for connector in "${connectors[@]}"; do
+  [[ -f "$connector" && ! -L "$connector" && -r "$connector" ]] || exit 1
+  IFS= read -r state < "$connector" || exit 1
+  case "$state" in enabled) exit 1 ;; disabled) ;; *) exit 1 ;; esac
+done
+exit 0
+HELPER
+}
+
+safe_regular() {
+  local path="$1" mode="$2"
+  [[ -f "$path" && ! -L "$path" ]] &&
+    [[ "$(stat -c '%u:%g:%a' -- "$path" 2>/dev/null)" == "$expected_owner:$mode" ]]
+}
+
+safe_dir() {
+  local path="$1" metadata mode
+  [[ -d "$path" && ! -L "$path" ]] || return 1
+  metadata="$(stat -c '%u:%g:%a' -- "$path" 2>/dev/null)" || return 1
+  [[ "${metadata%:*}" == "$expected_owner" ]] || return 1
+  mode="${metadata##*:}"
+  (( (8#$mode & 022) == 0 ))
+}
+
+safe_parents() {
+  safe_dir "${root:-/}" && safe_dir "$root/etc" && safe_dir "$root/etc/pam.d" && safe_dir "$root/usr" && safe_dir "$root/usr/local" &&
+    { [[ ! -e "$helper_dir" && ! -L "$helper_dir" ]] || safe_dir "$helper_dir"; }
+}
+
+helper_exact() { safe_regular "$helper" 755 && cmp -s -- "$helper" <(helper_payload); }
+
+pam_state() {
+  safe_regular "$pam" 644 || { printf 'conflicting'; return; }
+  if cmp -s -- "$pam" <(stock_pam); then printf 'stock'
+  elif cmp -s -- "$pam" <(managed_pam); then printf 'managed'
+  else printf 'conflicting'
+  fi
+}
+
+state="$(pam_state)"
+helper_state=absent
+if [[ -e "$helper" || -L "$helper" ]]; then
+  if helper_exact; then helper_state=exact; else helper_state=conflicting; fi
+fi
+
+case "$command" in
+  status)
+    safe_parents || { printf 'configuration: conflicting\naction: inspect\n'; exit 2; }
+    if [[ "$state:$helper_state" == managed:exact ]]; then
+      printf 'configuration: exact\naction: none\n'; exit 0
+    elif [[ "$state:$helper_state" == stock:absent ]]; then
+      printf 'configuration: absent\naction: apply\n'; exit 1
+    elif [[ "$state:$helper_state" == stock:exact ]]; then
+      printf 'configuration: orphan-helper\naction: remove\n'; exit 1
+    fi
+    printf 'configuration: conflicting\naction: inspect\n'; exit 2
+    ;;
+  apply)
+    safe_parents || die 'unsafe PAM or installation parent directory'
+    [[ "$state" == stock ]] || {
+      [[ "$state:$helper_state" == managed:exact ]] && { printf 'Fingerprint policy is already configured.\n'; exit 0; }
+      die 'refusing unrecognized PAM configuration'
+    }
+    [[ "$helper_state" != conflicting ]] || die 'refusing existing runtime helper'
+    if [[ ! -e "$helper_dir" ]]; then mkdir -m 0755 -- "$helper_dir"; fi
+    safe_dir "$helper_dir" || die 'unsafe /usr/local/libexec'
+    tmp_pam="$(mktemp "$root/etc/pam.d/.polkit-1.XXXXXX")"
+    trap 'rm -f -- "${tmp_helper:-}" "${tmp_pam:-}"' EXIT
+    managed_pam > "$tmp_pam"; chmod 0644 "$tmp_pam"
+    if [[ "$helper_state" == absent ]]; then
+      tmp_helper="$(mktemp "$helper_dir/.dotfiles-polkit-fingerprint.XXXXXX")"
+      helper_payload > "$tmp_helper"; chmod 0755 "$tmp_helper"; mv -- "$tmp_helper" "$helper"
+    fi
+    mv -- "$tmp_pam" "$pam"
+    helper_exact && [[ "$(pam_state)" == managed ]] || die 'installed configuration failed verification'
+    printf 'Configured fingerprint skipping for a closed lid or disabled internal display.\n'
+    ;;
+  remove)
+    safe_parents || die 'unsafe PAM or installation parent directory'
+    [[ "$helper_state" != conflicting ]] || die 'refusing unrecognized runtime helper'
+    if [[ "$state" == managed ]]; then
+      tmp_pam="$(mktemp "$root/etc/pam.d/.polkit-1.XXXXXX")"
+      trap 'rm -f -- "${tmp_pam:-}"' EXIT
+      stock_pam > "$tmp_pam"; chmod 0644 "$tmp_pam"; mv -- "$tmp_pam" "$pam"
+    elif [[ "$state" != stock ]]; then
+      die 'refusing unrecognized PAM configuration'
+    fi
+    # PAM is restored before deleting the helper, including interrupted-apply orphans.
+    [[ "$helper_state" == absent ]] || rm -- "$helper"
+    [[ "$(pam_state)" == stock && ! -e "$helper" && ! -L "$helper" ]] || die 'removal failed verification'
+    printf 'Restored the stock polkit fingerprint policy.\n'
+    ;;
+esac
+ADMIN
+}
+
+if [[ "$1" == status ]]; then
+  admin_payload | /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /usr/bin/bash -s -- "$1" "$SYSTEM_ROOT"
+else
+  admin_payload | sudo /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /usr/bin/bash -s -- "$1" "$SYSTEM_ROOT"
+fi

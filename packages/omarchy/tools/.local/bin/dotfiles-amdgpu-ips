@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-readonly COMMAND_NAME='dotfiles-omarchy-amdgpu-ips'
+readonly COMMAND_NAME='dotfiles-amdgpu-ips'
 readonly MANAGED_PATH='/etc/limine-entry-tool.d/90-dotfiles-amdgpu-ips.conf'
 readonly EXPECTED_LINE='KERNEL_CMDLINE[default]+=" amdgpu.dcdebugmask=0x800"'
 readonly KERNEL_ARGUMENT='amdgpu.dcdebugmask=0x800'

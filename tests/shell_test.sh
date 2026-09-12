@@ -114,8 +114,9 @@ done
 [[ "$(grep -cF '# >>> dotfiles managed bash >>>' "$home/.bashrc")" == 1 ]] || fail 'managed Bash source block is not singular'
 : > "$home/trace"; : > "$home/init-trace"
 HOME="$home" PATH="$PATH" TERM=xterm INIT_TRACE="$home/init-trace" DOTFILES_BASH_TRACE="$home/trace" \
-  MISE_OFFLINE=1 bash --noprofile --norc -i -c 'source "$HOME/.bashrc"; source "$HOME/.bashrc"; declare -F tdl host_local_function >/dev/null' \
-  >/dev/null 2> "$home/stderr"
+  MISE_OFFLINE=1 bash --noprofile --norc -i -c 'source "$HOME/.bashrc"; source "$HOME/.bashrc"; declare -F tdl host_local_function >/dev/null && alias dot' \
+  > "$home/stdout" 2> "$home/stderr"
+assert_contains "$(< "$home/stdout")" "alias dot='dotfiles'"
 expected_trace=$'ubuntu\nenvironment\nupstream-shell\nupstream-aliases\nupstream-tmux\nmise\nstarship\nzoxide\nfzf\ninputrc\nworktrunk\npersonal\nhost-local'
 [[ "$(< "$home/trace")" == "$expected_trace" ]] || {
   TEST_OUTPUT="$(< "$home/trace")"
@@ -304,8 +305,9 @@ printf 'alias c=native-c\nprintf native >> "$HOME/native-trace"\n' > "$home/.bas
 run_bash_area "$home" omarchy apply
 [[ -L "$home/.config/dotfiles/bash/rc.bash" && ! -e "$home/.config/starship.toml" &&
   ! -e "$home/.config/dotfiles/bash/ubuntu.bash" ]] || fail 'native Bash deployed a portable baseline'
-HOME="$home" PATH=/usr/bin:/bin bash --noprofile --norc -i -c 'source "$HOME/.bashrc"; alias c' > "$home/native.out" 2>/dev/null
+HOME="$home" PATH=/usr/bin:/bin bash --noprofile --norc -i -c 'source "$HOME/.bashrc"; alias c dot' > "$home/native.out" 2>/dev/null
 assert_contains "$(< "$home/native.out")" "alias c='native-c'"
+assert_contains "$(< "$home/native.out")" "alias dot='dotfiles'"
 printf 'printf refreshed >> "$HOME/native-trace"' > "$home/.bashrc"
 chmod 0600 "$home/.bashrc"
 run_bash_area "$home" omarchy apply

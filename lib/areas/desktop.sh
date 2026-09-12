@@ -8,11 +8,13 @@ readonly DESKTOP_BINDINGS='.config/hypr/bindings.lua'
 readonly DESKTOP_BINDINGS_FRAGMENT='.config/dotfiles/omarchy/hypr/bindings.lua'
 readonly DESKTOP_CAPTURE_FRAGMENT='.config/dotfiles/omarchy/hypr/capture-bypass.lua'
 readonly DESKTOP_SHELL='.config/omarchy/shell.json'
+# Retired clone: retained only to release exact prior deployment ownership.
 readonly DESKTOP_MENU_PLUGIN='.config/omarchy/plugins/matt.menu'
 readonly DESKTOP_MENU_WIDGET_POINTER='/bar/layout/left/0/id'
-DESKTOP_MENU_STATE_EXPANDED=false
 readonly DESKTOP_MENU_EXTENSION='.config/omarchy/extensions/omarchy-menu.jsonc'
 readonly DESKTOP_MENU_SHORTCUTS='.config/dotfiles/omarchy/menu-shortcuts.jsonc'
+readonly DESKTOP_MENU_DOTFILES='.config/dotfiles/omarchy/menu-dotfiles.jsonc'
+readonly DESKTOP_MENU_HELPER='.local/libexec/dotfiles-menu'
 readonly DESKTOP_THEME_SWITCHER='.local/bin/dotfiles-omarchy-theme-switcher'
 readonly DESKTOP_THEME_MENU_ADAPTER='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
 readonly DESKTOP_COMPOSE_SHORTCUT='.local/bin/dotfiles-omarchy-compose-shortcut'
@@ -73,16 +75,14 @@ desktop_menu_block() {
   printf '%s\n' '  "remove.windows": {"when":"false"},'
   printf '%s\n' '  "style.theme": {"icon":"󰸌","label":"Theme","aliases":["theme","themes"],"action":"theme=$(\"$HOME/.local/bin/dotfiles-omarchy-theme-switcher\"); [[ -n $theme ]] && omarchy-theme-set \"$theme\""},'
   cat "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_SHORTCUTS"
+  cat "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_DOTFILES"
   printf '%s\n' "$DESKTOP_MENU_END"
 }
 
-desktop_shell_state_is_pre_plugin() {
+desktop_shell_state_has_menu_plugin() {
   [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] || return 1
-  jq -e --arg path "$DESKTOP_SHELL" '
-    (.version == 2 or .version == 3) and .area == "desktop" and .profile == "omarchy" and
-    (.resources | keys) == [$path] and
-    .resources[$path].id == "desktop-shell-idle-v1" and
-    (.resources[$path].fields | keys) == ["/idle/lock", "/idle/screensaver"]
+  jq -e --arg path "$DESKTOP_SHELL" --arg pointer "$DESKTOP_MENU_WIDGET_POINTER" '
+    .resources[$path].fields | has($pointer)
   ' "$LEAN_STATE" >/dev/null 2>&1
 }
 
@@ -105,13 +105,13 @@ register_desktop_area() {
     lean_add_guarded_attachment desktop-bindings-v1 "$DESKTOP_BINDINGS" \
       "$DESKTOP_BINDINGS_BEGIN" "$DESKTOP_BINDINGS_END" "$DESKTOP_BINDINGS_TOKEN" \
       "$DESKTOP_BINDINGS_BLOCK" append 0644 true
-    if [[ "$MODE" == apply && "$DESKTOP_MENU_STATE_EXPANDED" != true ]] && desktop_shell_state_is_pre_plugin; then
-      lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_shell_json \
-        /idle/screensaver integer 600 /idle/lock integer 900
-    else
-      lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_shell_json \
+    if desktop_shell_state_has_menu_plugin; then
+      lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_legacy_shell_json \
         /idle/screensaver integer 600 /idle/lock integer 900 \
         "$DESKTOP_MENU_WIDGET_POINTER" string '"matt.menu"'
+    else
+      lean_add_json_scalar_fields desktop-shell-idle-v1 "$DESKTOP_SHELL" validate_desktop_shell_json \
+        /idle/screensaver integer 600 /idle/lock integer 900
     fi
   fi
 }
@@ -140,6 +140,26 @@ validate_desktop_shortcuts() {
   if [[ "${DOTFILES_SHORTCUTS_MIGRATE_STATE:-}" != 1 ]] || ! desktop_hashless_state_migration_allowed; then
     "$DOTFILES_DIR/scripts/generate-desktop-shortcuts" || die 'desktop shortcut generated files are stale'
   fi
+}
+
+validate_desktop_dotfiles_menu() {
+  local package="$DOTFILES_DIR/packages/omarchy/desktop" fragment helper
+  fragment="$package/$DESKTOP_MENU_DOTFILES"
+  helper="$package/$DESKTOP_MENU_HELPER"
+  [[ -f "$fragment" && ! -L "$fragment" && "$(stat -c %a -- "$fragment")" == 644 ]] ||
+    die 'desktop Dotfiles menu fragment is not an accepted payload'
+  jq -eRsc '
+    ("{" + . + "}") |
+    gsub("(?m)^\\s*//[^\\n]*(\\n|$)"; "") |
+    gsub(",(?<close>\\s*[}\\]])"; "\(.close)") |
+    fromjson |
+    type == "object" and length > 0 and
+    all(keys[]; . == "dotfiles" or startswith("dotfiles.")) and
+    all(to_entries[]; .value | type == "object")
+  ' "$fragment" >/dev/null 2>&1 || die 'desktop Dotfiles menu fragment has invalid syntax or routes'
+  [[ -f "$helper" && ! -L "$helper" && -x "$helper" && "$(stat -c %a -- "$helper")" == 755 ]] ||
+    die 'desktop Dotfiles menu helper is not an accepted executable payload'
+  bash -n "$helper" || die 'desktop Dotfiles menu helper has invalid Bash syntax'
 }
 
 desktop_hashless_state_migration_allowed() {
@@ -176,37 +196,51 @@ validate_desktop_shell_json() {
     type == "object" and .version == 1 and
     (.idle | type == "object") and
     (.idle.screensaver | type == "number" and floor == .) and
-    (.idle.lock | type == "number" and floor == .) and
+    (.idle.lock | type == "number" and floor == .)
+  ' "$1" >/dev/null
+}
+
+validate_desktop_legacy_shell_json() {
+  validate_desktop_shell_json "$1" && jq -e '
     (.bar.layout.left | type == "array" and length > 0) and
     (.bar.layout.left[0].id == "omarchy.menu" or .bar.layout.left[0].id == "matt.menu") and
     ([.bar.layout | .left[], .center[], .right[] | select(.id == "omarchy.menu" or .id == "matt.menu")] | length) == 1
   ' "$1" >/dev/null
 }
 
-desktop_require_menu_plugin_adoptable() {
-  local live path="$HOME/$DESKTOP_SHELL"
-  validate_desktop_shell_json "$path" || die "JSON resource has an unsupported application shape: $path"
-  live="$(lean_json_pointer_value "$path" "$DESKTOP_MENU_WIDGET_POINTER")" ||
-    die 'Omarchy menu widget is missing from the supported left bar position'
-  if [[ ! -e "$LEAN_STATE" && ! -L "$LEAN_STATE" && "$live" != '"omarchy.menu"' ]]; then
-    die 'Omarchy menu widget already uses an unmanaged clone'
+desktop_preflight_retired_menu() {
+  local name path expected owned=false
+  desktop_shell_state_has_menu_plugin && owned=true
+  if [[ "$owned" == true ]]; then
+    jq -e --arg path "$DESKTOP_SHELL" --arg pointer "$DESKTOP_MENU_WIDGET_POINTER" '
+      .resources[$path].fields[$pointer] == {
+        type:"string", original:"omarchy.menu", managed:"matt.menu"
+      }
+    ' "$LEAN_STATE" >/dev/null || die 'retired menu widget ownership differs'
+  fi
+  for name in BarWidget.qml Menu.qml MenuModel.js manifest.json; do
+    path="$HOME/$DESKTOP_MENU_PLUGIN/$name"
+    validate_home_parent_chain "$path"
+    [[ -e "$path" || -L "$path" ]] || continue
+    expected="$(realpath -m -s --relative-to="$(dirname -- "$path")" \
+      "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_PLUGIN/$name")"
+    [[ "$owned" == true && -L "$path" && "$(stat -c %u -- "$path")" == "$EUID" &&
+      "$(readlink -- "$path")" == "$expected" ]] ||
+      die "unrelated retired menu destination conflict: $path"
+  done
+  if [[ "$owned" == true && "$MODE" == check ]]; then
+    die 'retired menu clone requires migration; run: dotfiles.sh apply desktop'
   fi
 }
 
-# Apply alone expands the exact prior desktop resource record. Check/remove
-# keep refusing incomplete state, matching guarded attachment migrations.
-desktop_expand_menu_plugin_state() {
-  local shell_path="$HOME/$DESKTOP_SHELL" temporary mode live source_hash source_identity temporary_hash temporary_identity
-  [[ -f "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] || return 0
-  lean_validate_state_file "$LEAN_STATE"
-  desktop_shell_state_is_pre_plugin || return 0
-  live="$(lean_json_pointer_value "$shell_path" "$DESKTOP_MENU_WIDGET_POINTER")"
-  DESKTOP_MENU_STATE_EXPANDED=true
-  if [[ "$live" == '"omarchy.menu"' ]]; then
-    register_desktop_area
-    LEAN_JSON_STATUSES=(original)
-    lean_replace_json_resource 0 managed
-  fi
+# Restore the complete old JSON resource before dropping its widget field.
+# Both all-managed and all-original values are accepted by the lean engine,
+# making a stopped migration retryable. Ordinary apply then reapplies idle only.
+desktop_retire_menu_plugin() {
+  local temporary mode name path source_hash source_identity temporary_hash temporary_identity
+  desktop_shell_state_has_menu_plugin || return 0
+  lean_preflight_area "$MODE"
+  desktop_preflight_retired_menu
   source_hash="$(sha256_file "$LEAN_STATE")"
   capture_path_object_identity "$LEAN_STATE" || die "could not inspect lean state identity: $LEAN_STATE"
   source_identity="$PATH_OBJECT_IDENTITY"
@@ -214,16 +248,23 @@ desktop_expand_menu_plugin_state() {
   temporary="$(mktemp "$(dirname -- "$LEAN_STATE")/.desktop-state.tmp.XXXXXX")"
   track_temp_path "$temporary"
   temporary_identity="$PATH_OBJECT_IDENTITY"
-  jq --arg path "$DESKTOP_SHELL" --arg pointer "$DESKTOP_MENU_WIDGET_POINTER" '
-    .resources[$path].fields[$pointer] = {
-      type: "string", original: "omarchy.menu", managed: "matt.menu"
-    }
-  ' "$LEAN_STATE" > "$temporary"
+  jq --arg path "$DESKTOP_SHELL" --arg pointer "$DESKTOP_MENU_WIDGET_POINTER" \
+    'del(.resources[$path].fields[$pointer])' "$LEAN_STATE" > "$temporary"
   chmod "$mode" "$temporary"
   temporary_hash="$(sha256_file "$temporary")"
+  [[ "${LEAN_JSON_STATUSES[0]}" == absent ]] || lean_replace_json_resource 0 original
+  test_hold desktop-after-menu-restore
+  desktop_preflight_retired_menu
+  for name in BarWidget.qml Menu.qml MenuModel.js manifest.json; do
+    path="$HOME/$DESKTOP_MENU_PLUGIN/$name"
+    [[ ! -L "$path" ]] || rm -- "$path"
+  done
   lean_publish_temp 'lean state' lean-before-state-rename "$temporary" "$temporary_identity" "$temporary_hash" \
     "$LEAN_STATE" "$source_identity" "$source_hash"
   lean_validate_state_file "$LEAN_STATE"
+  # Preserve any unrelated files in the former plugin directory.
+  rmdir -- "$HOME/$DESKTOP_MENU_PLUGIN" 2>/dev/null || true
+  log 'retired the managed menu clone; native Omarchy menu extensions remain supported'
 }
 
 validate_desktop_stock_input() {
@@ -283,6 +324,13 @@ validate_desktop_menu() {
   lean_inspect_attachment "$(lean_attachment_index desktop-menu-theme-v1)"
   status="$LEAN_ATTACHMENT_STATUS"
   [[ "$status" != malformed ]] || die "guarded attachment is partial, malformed, duplicate, or modified: $path"
+  desktop_menu_json <(awk -v begin="$DESKTOP_MENU_BEGIN" -v end="$DESKTOP_MENU_END" '
+    $0 == begin { managed=1; next }
+    $0 == end { managed=0; next }
+    !managed
+  ' "$path") | jq -e '
+    all(keys[]; . != "dotfiles" and (startswith("dotfiles.") | not))
+  ' >/dev/null 2>&1 || die "Omarchy menu extension already has an unmanaged Dotfiles route: $path"
   if [[ "$status" == legacy ]]; then
     [[ "$MODE" == apply || "$MODE" == remove ]] || die "guarded attachment differs from the current managed version: $path"
   elif [[ "$status" == deployed || "$status" == pending || "$status" == transitioned ]]; then
@@ -374,6 +422,7 @@ validate_desktop_closure() {
       die 'native desktop closure must contain only omarchy/desktop'
     validate_desktop_fragment
     validate_desktop_shortcuts
+    validate_desktop_dotfiles_menu
     validate_desktop_theme_filter
     local wrapper="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_WINDOWS_VM"
     local entry="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_WINDOWS_ENTRY"
@@ -389,8 +438,6 @@ Icon=windows
 Terminal=false
 Type=Application
 Categories=System;Emulator;' ]] || die 'desktop Windows VM entry is not exact'
-    [[ -f "$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_MENU_PLUGIN/manifest.json" ]] ||
-      die 'desktop menu plugin clone is missing'
     if [[ "$MODE" != remove ]]; then validate_desktop_stock_menu; fi
   else
     [[ "$PROFILE_ENTRY_KIND" == validation-only && ${#PACKAGES[@]} -eq 0 ]] ||
@@ -400,6 +447,9 @@ Categories=System;Emulator;' ]] || die 'desktop Windows VM entry is not exact'
 
 desktop_managed_links_and_markers_absent() {
   local index path
+  for path in BarWidget.qml Menu.qml MenuModel.js manifest.json; do
+    [[ ! -e "$HOME/$DESKTOP_MENU_PLUGIN/$path" && ! -L "$HOME/$DESKTOP_MENU_PLUGIN/$path" ]] || return 1
+  done
   lean_scan_packages
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     path="$HOME/${LEAN_TARGET_PATHS[index]}"
@@ -419,12 +469,12 @@ preflight_desktop() {
     return 0
   fi
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    desktop_preflight_retired_menu
     if [[ "$MODE" != remove ]]; then
       desktop_require_adoptable_input
       desktop_require_xcompose
       desktop_require_native_shortcuts
       desktop_require_bindings
-      desktop_require_menu_plugin_adoptable
     fi
     validate_desktop_menu
   fi
@@ -437,7 +487,7 @@ preflight_desktop() {
 apply_desktop() {
   preflight_desktop
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    desktop_expand_menu_plugin_state
+    desktop_retire_menu_plugin
     register_desktop_area
   fi
   lean_apply_area
@@ -456,7 +506,12 @@ remove_desktop() {
     log 'desktop ownership is already absent; no changes made'
     return 0
   fi
-  if [[ "$SELECTED_PROFILE" == omarchy ]]; then validate_desktop_menu; fi
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    desktop_preflight_retired_menu
+    validate_desktop_menu
+    desktop_retire_menu_plugin
+    register_desktop_area
+  fi
   lean_remove_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     log 'restored desktop shell idle values and removed exact desktop links and loaders'

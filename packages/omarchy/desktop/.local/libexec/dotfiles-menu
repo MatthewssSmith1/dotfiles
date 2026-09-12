@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly COMMAND_NAME='dotfiles-menu'
+
+die() {
+  printf '%s: %s\n' "$COMMAND_NAME" "$*" >&2
+  exit 2
+}
+
+report_launcher_error() {
+  local message=$1
+  printf '%s: %s\n' "$COMMAND_NAME" "$message" >&2
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send 'Dotfiles menu' "$message" || true
+  fi
+}
+
+resolve_checkout() {
+  local source_path directory
+  local -a roots=()
+
+  source_path="$(readlink -f -- "${BASH_SOURCE[0]}")" || die 'cannot resolve helper path'
+  directory="$(dirname -- "$source_path")"
+  while :; do
+    if [[ -x "$directory/dotfiles.sh" && -f "$directory/manifests/areas.tsv" &&
+      -f "$directory/profiles/omarchy.conf" && -f "$directory/profiles/ubuntu.conf" ]]; then
+      roots+=("$directory")
+    fi
+    [[ "$directory" != / ]] || break
+    directory="$(dirname -- "$directory")"
+  done
+  ((${#roots[@]} == 1)) || die "expected exactly one checkout root, found ${#roots[@]}"
+  CHECKOUT=${roots[0]}
+  SOURCE_PATH=$source_path
+}
+
+area_exists() {
+  local wanted=$1 kind area status extra
+  while IFS='|' read -r kind area status extra; do
+    [[ "$kind" == area && "$area" == "$wanted" && -z "$extra" ]] || continue
+    [[ "$status" == ready || "$status" == optional ]] || return 1
+    return 0
+  done < "$CHECKOUT/manifests/areas.tsv"
+  return 1
+}
+
+run_and_wait() {
+  local id=$1 area=${2:-} status
+  local -a command=()
+
+  case "$id" in
+    check-all) command=(dotfiles check) ;;
+    apply-all) command=(dotfiles apply) ;;
+    list) command=(dotfiles list) ;;
+    help) command=(dotfiles help) ;;
+    check-area|apply-area|remove-area)
+      [[ "$area" =~ ^[a-z0-9-]+$ ]] && area_exists "$area" || die "invalid configuration area '${area:-}'"
+      command=(dotfiles "${id%-area}" "$area")
+      ;;
+    amdgpu-status) command=(dotfiles-amdgpu-ips status) ;;
+    amdgpu-apply) command=(dotfiles-amdgpu-ips apply) ;;
+    amdgpu-remove) command=(dotfiles-amdgpu-ips remove) ;;
+    fingerprint-status) command=(dotfiles-polkit-fingerprint status) ;;
+    fingerprint-apply) command=(dotfiles-polkit-fingerprint apply) ;;
+    fingerprint-remove) command=(dotfiles-polkit-fingerprint remove) ;;
+    prune) command=(dotfiles-omarchy-prune) ;;
+    *) die "unknown operation '$id'" ;;
+  esac
+
+  printf '$'
+  printf ' %q' "${command[@]}"
+  printf '\n\n'
+  set +e
+  if ! command -v -- "${command[0]}" >/dev/null 2>&1; then
+    printf '%s: command not found: %s\n' "$COMMAND_NAME" "${command[0]}" >&2
+    status=127
+  else
+    "${command[@]}"
+    status=$?
+  fi
+  set -e
+  printf '\nExit code: %d\nPress Enter to close.' "$status"
+  IFS= read -r _ || true
+  return "$status"
+}
+
+menu_select() {
+  local prompt=$1 selection status detail_file detail
+  shift
+  detail_file="$(mktemp)" || die 'cannot create selector error file'
+  set +e
+  selection="$(omarchy menu select "$prompt" "$@" 2>"$detail_file")"
+  status=$?
+  set -e
+  detail="$(<"$detail_file")"
+  rm -f -- "$detail_file"
+  if ((status == 1)) && [[ -z "$selection" && -z "$detail" ]]; then
+    return 1
+  fi
+  if ((status != 0)); then
+    report_launcher_error "menu selector failed ($status)${detail:+: $detail}"
+    ((status != 1)) || status=2
+    return "$status"
+  fi
+  if [[ -z "$selection" ]]; then
+    report_launcher_error 'menu selector returned no selection'
+    return 2
+  fi
+  printf '%s' "$selection"
+}
+
+select_area() {
+  local kind area status extra name option selection action select_status
+  local -a options=()
+  declare -A areas=()
+
+  if ! command -v omarchy >/dev/null 2>&1; then
+    report_launcher_error 'required graphical launcher not found: omarchy'
+    return 127
+  fi
+  while IFS='|' read -r kind area status extra; do
+    [[ "$kind" == area ]] || continue
+    [[ -z "$extra" && "$area" =~ ^[a-z0-9-]+$ && ("$status" == ready || "$status" == optional) ]] ||
+      die 'invalid manifests/areas.tsv area record'
+    case "$area" in
+      git) name='Git' ;;
+      tools) name='Tools' ;;
+      bash) name='Bash' ;;
+      tmux) name='tmux' ;;
+      nvim) name='Neovim' ;;
+      agents) name='Agents' ;;
+      herdr) name='Herdr' ;;
+      desktop) name='Desktop' ;;
+      opencode) name='OpenCode' ;;
+      *) name=${area^} ;;
+    esac
+    [[ "$status" != optional ]] || name+=' (optional)'
+    option="󰉋"$'\t'"$name"
+    options+=("$option")
+    areas["$name"]=$area
+  done < "$CHECKOUT/manifests/areas.tsv"
+  ((${#options[@]} > 0)) || die 'no selectable areas in manifests/areas.tsv'
+
+  selection="$(menu_select 'Configuration area' "${options[@]}")" && select_status=0 || select_status=$?
+  ((select_status == 0)) || { ((select_status == 1)) && return 0; return "$select_status"; }
+  area=${areas[$selection]:-}
+  [[ -n "$area" ]] || die 'selector returned an unknown area'
+  action="$(menu_select "$selection" "󰄬"$'\t''Check' "󰑐"$'\t''Apply' "󰆴"$'\t''Remove')" && select_status=0 || select_status=$?
+  ((select_status == 0)) || { ((select_status == 1)) && return 0; return "$select_status"; }
+  case "$action" in
+    Check|Apply|Remove) ;;
+    *) report_launcher_error 'selector returned an unknown action'; return 2 ;;
+  esac
+  exec omarchy launch terminal "$SOURCE_PATH" --run "${action,,}-area" "$area"
+}
+
+resolve_checkout
+
+if [[ ${1:-} == --run ]]; then
+  (($# == 2 || $# == 3)) || die 'usage: dotfiles-menu --run OPERATION [AREA]'
+  case "$2" in
+    check-area|apply-area|remove-area) (($# == 3)) || die "$2 requires an area" ;;
+    *) (($# == 2)) || die "$2 takes no area" ;;
+  esac
+  run_and_wait "$2" "${3:-}"
+  exit $?
+fi
+
+(($# == 1)) || die 'usage: dotfiles-menu OPERATION'
+if ! command -v omarchy >/dev/null 2>&1; then
+  report_launcher_error 'required graphical launcher not found: omarchy'
+  exit 127
+fi
+case "$1" in
+  areas) select_area ;;
+  check-all|apply-all|list|help|amdgpu-status|amdgpu-apply|amdgpu-remove|fingerprint-status|fingerprint-apply|fingerprint-remove|prune)
+    exec omarchy launch terminal "$SOURCE_PATH" --run "$1"
+    ;;
+  *) die "unknown operation '$1'" ;;
+esac

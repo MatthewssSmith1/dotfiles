@@ -10,12 +10,14 @@ readonly TMUX_BASELINE="$REPO_DIR/packages/upstream/tmux/.config/dotfiles/upstre
 readonly TMUX_DISPATCHER="$REPO_DIR/packages/ubuntu/tmux/.config/tmux/tmux.conf"
 readonly TMUX_ADAPTER="$REPO_DIR/packages/ubuntu/tmux/.config/dotfiles/tmux/ubuntu.conf"
 readonly OMARCHY_PRUNE="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-prune"
-readonly OMARCHY_AMDGPU_IPS="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-omarchy-amdgpu-ips"
+readonly AMDGPU_IPS="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-amdgpu-ips"
+readonly POLKIT_FINGERPRINT="$REPO_DIR/packages/omarchy/tools/.local/bin/dotfiles-polkit-fingerprint"
 readonly OMARCHY_THEME_SWITCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-theme-switcher"
 readonly OMARCHY_THEME_MENU_ADAPTER="$REPO_DIR/packages/omarchy/desktop/.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images"
 readonly OMARCHY_WINDOWS_VM="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-omarchy-windows-vm"
 readonly OMARCHY_WINDOWS_VM_DESKTOP="$REPO_DIR/packages/omarchy/desktop/.local/share/applications/windows-vm.desktop"
 readonly SHORTCUTS_LAUNCHER="$REPO_DIR/packages/omarchy/desktop/.local/bin/dotfiles-shortcuts"
+readonly DOTFILES_MENU="$REPO_DIR/packages/omarchy/desktop/.local/libexec/dotfiles-menu"
 readonly OMARCHY_MENU_PLUGIN="$REPO_DIR/packages/omarchy/desktop/.config/omarchy/plugins/matt.menu"
 
 # Every dotfiles source exists, parses, and keeps strict mode.
@@ -40,16 +42,18 @@ done
 bash -n "${DOTFILES_SOURCES[@]}" \
   "$REPO_DIR/scripts/upstream" "$REPO_DIR/lib/upstream/verify.sh" \
   "$REPO_DIR/scripts/agent-skills" "$SHORTCUTS_LAUNCHER" \
-  "$OMARCHY_PRUNE" "$OMARCHY_AMDGPU_IPS" "$OMARCHY_THEME_SWITCHER" "$OMARCHY_THEME_MENU_ADAPTER" \
-  "$OMARCHY_WINDOWS_VM" ||
+  "$OMARCHY_PRUNE" "$AMDGPU_IPS" "$POLKIT_FINGERPRINT" "$OMARCHY_THEME_SWITCHER" "$OMARCHY_THEME_MENU_ADAPTER" \
+  "$OMARCHY_WINDOWS_VM" "$DOTFILES_MENU" ||
   fail 'a dotfiles Bash file has invalid syntax'
 grep -Fq 'set -Eeuo pipefail' "$DOTFILES" || fail 'dotfiles strict mode is missing'
 [[ -x "$DOTFILES" && ! -e "$REPO_DIR/bootstrap.sh" ]] || fail 'root command rename is incomplete'
 [[ -x "$REPO_DIR/packages/common/tools/.local/bin/dotfiles" ]] || fail 'dotfiles launcher is not executable'
 [[ -f "$OMARCHY_PRUNE" && ! -L "$OMARCHY_PRUNE" && -x "$OMARCHY_PRUNE" ]] ||
   fail 'Omarchy prune command is not a regular executable payload'
-[[ -f "$OMARCHY_AMDGPU_IPS" && ! -L "$OMARCHY_AMDGPU_IPS" && -x "$OMARCHY_AMDGPU_IPS" ]] ||
+[[ -f "$AMDGPU_IPS" && ! -L "$AMDGPU_IPS" && -x "$AMDGPU_IPS" ]] ||
   fail 'Omarchy AMDGPU IPS command is not a regular executable payload'
+[[ -f "$POLKIT_FINGERPRINT" && ! -L "$POLKIT_FINGERPRINT" && -x "$POLKIT_FINGERPRINT" ]] ||
+  fail 'Omarchy polkit fingerprint command is not a regular executable payload'
 [[ -f "$OMARCHY_WINDOWS_VM" && ! -L "$OMARCHY_WINDOWS_VM" && -x "$OMARCHY_WINDOWS_VM" ]] ||
   fail 'Omarchy Windows VM wrapper is not a regular executable payload'
 [[ -f "$OMARCHY_WINDOWS_VM_DESKTOP" && ! -L "$OMARCHY_WINDOWS_VM_DESKTOP" ]] ||
@@ -120,7 +124,7 @@ expected_desktop_aliases=$'<Multi_key> <space> <a> : "AGENTS.md"\n<Multi_key> <p
 grep -qxF 'desktop omarchy/desktop' "$REPO_DIR/profiles/omarchy.conf" || fail 'native desktop closure is not final'
 grep -qxF 'desktop validation-only' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu desktop is not validation-only'
 [[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f -printf '%P\n' | LC_ALL=C sort)" == \
-  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/bindings.lua\n.config/dotfiles/omarchy/hypr/capture-bypass.lua\n.config/dotfiles/omarchy/hypr/input.lua\n.config/dotfiles/omarchy/menu-shortcuts.jsonc\n.config/omarchy/plugins/matt.menu/BarWidget.qml\n.config/omarchy/plugins/matt.menu/Menu.qml\n.config/omarchy/plugins/matt.menu/MenuModel.js\n.config/omarchy/plugins/matt.menu/manifest.json\n.local/bin/dotfiles-omarchy-compose-shortcut\n.local/bin/dotfiles-omarchy-theme-switcher\n.local/bin/dotfiles-omarchy-windows-vm\n.local/bin/dotfiles-shortcuts\n.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images\n.local/share/applications/windows-vm.desktop' && -f "$desktop_fragment" ]] ||
+  $'.config/dotfiles/omarchy/XCompose\n.config/dotfiles/omarchy/hypr/bindings.lua\n.config/dotfiles/omarchy/hypr/capture-bypass.lua\n.config/dotfiles/omarchy/hypr/input.lua\n.config/dotfiles/omarchy/menu-dotfiles.jsonc\n.config/dotfiles/omarchy/menu-shortcuts.jsonc\n.local/bin/dotfiles-omarchy-compose-shortcut\n.local/bin/dotfiles-omarchy-theme-switcher\n.local/bin/dotfiles-omarchy-windows-vm\n.local/bin/dotfiles-shortcuts\n.local/libexec/dotfiles-menu\n.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images\n.local/share/applications/windows-vm.desktop' && -f "$desktop_fragment" ]] ||
   fail 'desktop package payload inventory is not exact'
 [[ "$(stat -c %a "$OMARCHY_WINDOWS_VM")" == 755 && "$(stat -c %a "$OMARCHY_WINDOWS_VM_DESKTOP")" == 644 ]] ||
   fail 'Windows VM launcher payload modes are not exact'
@@ -133,22 +137,12 @@ grep -qxF 'Exec=uwsm app -- dotfiles-omarchy-windows-vm' "$OMARCHY_WINDOWS_VM_DE
   "$(stat -c %a "$OMARCHY_THEME_SWITCHER")" == 755 ]] || fail 'desktop theme selector is not an exact executable payload'
 [[ -f "$OMARCHY_THEME_MENU_ADAPTER" && ! -L "$OMARCHY_THEME_MENU_ADAPTER" && -x "$OMARCHY_THEME_MENU_ADAPTER" &&
   "$(stat -c %a "$OMARCHY_THEME_MENU_ADAPTER")" == 755 ]] || fail 'desktop theme image adapter is not an exact executable payload'
+[[ -f "$DOTFILES_MENU" && ! -L "$DOTFILES_MENU" && -x "$DOTFILES_MENU" && "$(stat -c %a "$DOTFILES_MENU")" == 755 ]] ||
+  fail 'Dotfiles menu helper is not an exact executable payload'
 [[ ! -e "$REPO_DIR/packages/omarchy/desktop/.config/omarchy/extensions/omarchy-menu.jsonc" ]] ||
   fail 'desktop package still replaces the regular live menu extension'
-jq -e '.id == "matt.menu" and .name == "Matt'"'"'s menu" and
-  .kinds == ["menu", "bar-widget"] and .entryPoints == {menu:"Menu.qml",barWidget:"BarWidget.qml"} and
-  .omarchy == {clonedFrom:"omarchy.menu"}' "$OMARCHY_MENU_PLUGIN/manifest.json" >/dev/null ||
-  fail 'desktop menu clone manifest is not exact'
-grep -Fq 'Style.space(520) : Style.space(420)' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
-  fail 'desktop normal menu width is not exactly 420'
-grep -Fq 'root.dmenuActive ? Style.space(root.dmenuWidth)' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
-  fail 'desktop menu clone does not preserve requested dmenu width'
-grep -Fq 'return Math.min(available, Math.round(panel.height * 0.7))' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
-  fail 'desktop menu clone lost the 70 percent height cap'
-! grep -Fq 'maxRowsHeight' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
-  fail 'desktop menu clone retains the starting-menu height ceiling'
-grep -Fq 'cardTop = effectiveCardTop' "$OMARCHY_MENU_PLUGIN/Menu.qml" ||
-  fail 'desktop menu clone no longer freezes its top edge'
+[[ ! -e "$OMARCHY_MENU_PLUGIN/manifest.json" && ! -e "$OMARCHY_MENU_PLUGIN/Menu.qml" ]] ||
+  fail 'desktop package still replaces the native menu with a clone'
 grep -qxF 'readonly -a HIDDEN_THEMES=(' "$OMARCHY_THEME_SWITCHER" || fail 'theme denylist is not readonly'
 expected_hidden="$(< "$REPO_DIR/manifests/hidden-themes.txt")"
 grep -qxE '[a-z0-9-]+' "$REPO_DIR/manifests/hidden-themes.txt" || fail 'hidden-theme manifest is empty or malformed'
@@ -222,7 +216,7 @@ grep -qxF 'git upstream/git,ubuntu/git,common/git' "$REPO_DIR/profiles/ubuntu.co
 grep -qxF 'tools common/tools,omarchy/tools' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tools closure is not final'
 grep -qxF 'tools common/tools,ubuntu/tools' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu tools closure is not final'
 [[ "$(find "$REPO_DIR/packages/omarchy/tools" -type f -printf '%P\n' | LC_ALL=C sort)" == \
-  $'.local/bin/dotfiles-omarchy-amdgpu-ips\n.local/bin/dotfiles-omarchy-prune' ]] ||
+  $'.local/bin/dotfiles-amdgpu-ips\n.local/bin/dotfiles-omarchy-prune\n.local/bin/dotfiles-polkit-fingerprint' ]] ||
   fail 'native tools package payload inventory is not exact'
 grep -qxF 'readonly -a PACKAGES=(' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not declared'
 grep -qxF 'omarchy pkg drop "${PACKAGES[@]}"' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not used safely'
@@ -234,23 +228,29 @@ grep -qxF '  OMARCHY_REMOVE_NOTIFY=false omarchy webapp remove "$webapp"' "$OMAR
   fail 'Omarchy prune directly performs privileged, destructive, or interactive work'
 ! grep -Eq 'omarchy[[:space:]]+(hook|refresh|restart|update)' "$OMARCHY_PRUNE" ||
   fail 'Omarchy prune installs automation or invokes refresh/restart/update'
-grep -qxF "readonly MANAGED_PATH='/etc/limine-entry-tool.d/90-dotfiles-amdgpu-ips.conf'" "$OMARCHY_AMDGPU_IPS" ||
+grep -qxF "readonly MANAGED_PATH='/etc/limine-entry-tool.d/90-dotfiles-amdgpu-ips.conf'" "$AMDGPU_IPS" ||
   fail 'AMDGPU IPS managed path is not exact'
-grep -qxF "readonly KERNEL_ARGUMENT='amdgpu.dcdebugmask=0x800'" "$OMARCHY_AMDGPU_IPS" ||
+grep -qxF "readonly KERNEL_ARGUMENT='amdgpu.dcdebugmask=0x800'" "$AMDGPU_IPS" ||
   fail 'AMDGPU IPS kernel argument is not exact'
 for value in Framework 'Laptop 13 (AMD Ryzen AI 300 Series)' FRANMGCP09 1002:150e; do
-  grep -Fq "$value" "$OMARCHY_AMDGPU_IPS" || fail "AMDGPU IPS hardware gate is missing: $value"
+  grep -Fq "$value" "$AMDGPU_IPS" || fail "AMDGPU IPS hardware gate is missing: $value"
 done
-! grep -Eq '(product_serial|product_uuid|board_serial|machine-id)' "$OMARCHY_AMDGPU_IPS" ||
+! grep -Eq '(product_serial|product_uuid|board_serial|machine-id)' "$AMDGPU_IPS" ||
   fail 'AMDGPU IPS helper uses a unique machine identifier'
-grep -Fq 'sudo install -D -o root -g root -m 0644 --' "$OMARCHY_AMDGPU_IPS" ||
+grep -Fq 'sudo install -D -o root -g root -m 0644 --' "$AMDGPU_IPS" ||
   fail 'AMDGPU IPS helper does not use the narrow install boundary'
-grep -Fq 'sudo rm -- "$target"' "$OMARCHY_AMDGPU_IPS" ||
+grep -Fq 'sudo rm -- "$target"' "$AMDGPU_IPS" ||
   fail 'AMDGPU IPS helper does not use the narrow removal boundary'
-! grep -Eq 'sudo[[:space:]]+(sh|bash|limine-mkinitcpio)' "$OMARCHY_AMDGPU_IPS" ||
+! grep -Eq 'sudo[[:space:]]+(sh|bash|limine-mkinitcpio)' "$AMDGPU_IPS" ||
   fail 'AMDGPU IPS helper uses an unsafe privileged shell or wraps Limine in sudo'
-! grep -Eq '^[[:space:]]*(reboot|shutdown|pacman|curl|wget)([;&|[:space:]]|$)' "$OMARCHY_AMDGPU_IPS" ||
+! grep -Eq '^[[:space:]]*(reboot|shutdown|pacman|curl|wget)([;&|[:space:]]|$)' "$AMDGPU_IPS" ||
   fail 'AMDGPU IPS helper invokes reboot, package, or network commands'
+grep -Fq "pam=\"\$root/etc/pam.d/polkit-1\"" "$POLKIT_FINGERPRINT" ||
+  fail 'polkit fingerprint managed PAM path is not exact'
+grep -Fq "helper=\"\$helper_dir/dotfiles-polkit-fingerprint\"" "$POLKIT_FINGERPRINT" ||
+  fail 'polkit fingerprint runtime helper path is not exact'
+grep -Fq 'DRM "enabled" is logical routing, not DPMS' "$POLKIT_FINGERPRINT" ||
+  fail 'polkit fingerprint helper does not state its non-DPMS policy'
 [[ ! -e "$REPO_DIR/packages/generic/git/.empty-package" && ! -e "$REPO_DIR/packages/generic/git/.stow-local-ignore" ]] ||
   fail 'retired generic Git adapter remains'
 [[ ! -e "$REPO_DIR/.gitconfig" ]] || fail 'retired root Git migration source remains'

@@ -18,4 +18,4 @@ The optional OpenCode area owns a shared base, parallel named overlays, and laun
 
 `dotfiles.sh` is user-scoped, never changes the login shell, and keeps apply/check/remove offline. Networked installation and Neovim restoration are explicit commands outside dotfiles. Windows Terminal remains a separate Windows-host concern.
 
-Privileged hardware workarounds follow the same boundary: dotfiles may deploy an inert, manually invoked helper, but lifecycle commands never execute it. Each helper owns one narrowly defined system file and refuses unsupported hardware or conflicting state. A general hardware-policy layer is deferred until more than one concrete workaround justifies it.
+Privileged system customization follows the same boundary: the tools area may deploy inert, manually invoked helpers, but lifecycle commands never execute them. The two current helpers are the hardware-gated AMDGPU IPS boot workaround and the Omarchy v4 polkit fingerprint policy; each has narrow system ownership and refuses conflicting state. They do not create a separate deployment area or a general hardware-policy layer.
