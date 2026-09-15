@@ -14,7 +14,7 @@ The sole prefix is `Ctrl+Space`. `h`, `v`, `x`, and `c` provide pane/tab actions
 
 The Ubuntu area is package-only and creates no state. Removal accepts only exact Stow links and preserves logs, sessions, sockets, and other runtime siblings.
 
-The policy records onboarding as complete and disables version checks because the runtime is repository- and mise-pinned. Agent-detection manifest checks are intentionally enabled and may use the network during ordinary Herdr runtime. The reviewed UI suffix sets `agent_panel_sort = "priority"` in the snapshot's final `[ui]` table. Changing settings through Herdr writes through the Stow link into this checkout; incorporate permanent preferences into the repository config, derivation validator, and contract tests.
+The policy records onboarding as complete and disables version checks because the runtime is repository- and mise-pinned. Agent-detection manifest checks are intentionally enabled and may use the network during ordinary Herdr runtime. The reviewed UI suffix sets `agent_panel_sort = "priority"` and `host_cursor = "native"` in the snapshot's final `[ui]` table. The native cursor preserves Neovim's mode-dependent cursor shapes on WSL, at the possible cost of ConPTY cursor flicker. Changing settings through Herdr writes through the Stow link into this checkout; incorporate permanent preferences into the repository config, derivation validator, and contract tests.
 
 ## Installation
 

@@ -60,7 +60,7 @@ helper="$REPO_DIR/packages/ubuntu/herdr/.config/dotfiles/bash/fns/herdr"
 selector="$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml"
 path_dropin="$REPO_DIR/packages/ubuntu/herdr/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf"
 herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
-herdr_preferences=$'agent_panel_sort = "priority"\n'
+herdr_preferences=$'agent_panel_sort = "priority"\nhost_cursor = "native"\n'
 path_dropin_content=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 expected_config="$TEST_ROOT/herdr-ubuntu-expected.toml"
 expected_path_dropin="$TEST_ROOT/moshi-herdr-path-expected.conf"

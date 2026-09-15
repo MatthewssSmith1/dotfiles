@@ -8,7 +8,7 @@ readonly HERDR_REFERENCE='packages/upstream/reference/omarchy/config/herdr/confi
 readonly HERDR_UBUNTU_CONFIG='packages/ubuntu/herdr/.config/herdr/config.toml'
 readonly HERDR_UBUNTU_PREAMBLE=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
 # The accepted snapshot ends in [ui]; append reviewed personal UI preferences.
-readonly HERDR_UBUNTU_PREFERENCES=$'agent_panel_sort = "priority"\n'
+readonly HERDR_UBUNTU_PREFERENCES=$'agent_panel_sort = "priority"\nhost_cursor = "native"\n'
 readonly HERDR_MOSHI_PATH='.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf'
 readonly HERDR_MOSHI_PATH_CONTENT=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 
