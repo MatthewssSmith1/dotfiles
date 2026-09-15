@@ -100,7 +100,7 @@ chmod 0640 "$home/.bashrc"
 cp -a "$home/.bashrc" "$TEST_ROOT/ubuntu.original"
 printf '. "$HOME/.bashrc"\n' > "$home/.profile"
 cp -a "$home/.profile" "$TEST_ROOT/ubuntu.profile.original"
-printf 'host_local_function() { :; }\n' > "$home/.config/dotfiles/local/bash.sh"
+printf 'host_local_function() { :; }\nopencode-work() { printf "host-work"; printf "<%%s>" "$@"; }\n' > "$home/.config/dotfiles/local/bash.sh"
 run_bash_area "$home" ubuntu apply
 state="$home/.local/state/dotfiles/v2/bash.json"
 jq -e '.profile == "ubuntu" and .area == "bash" and (.attachments | keys) == [".bashrc"]' "$state" >/dev/null ||
@@ -125,27 +125,78 @@ expected_trace=$'ubuntu\nenvironment\nupstream-shell\nupstream-aliases\nupstream
   fail 'guarded initializer order changed'
 pass
 
-# Interactive OpenCode defaults to personal when its optional launcher exists
-# and otherwise falls back to the native PATH executable.
+# Interactive OpenCode profile selection persists, updates the current shell,
+# preserves explicit dispatch, and otherwise falls back to native OpenCode.
 mkdir -p "$home/native-bin"
 printf '#!/usr/bin/env bash\nprintf "native"\nprintf "<%%s>" "$@"\n' > "$home/native-bin/opencode"
-printf '#!/usr/bin/env bash\nprintf "work"\nprintf "<%%s>" "$@"\n' > "$home/native-bin/opencode-work"
-chmod 0755 "$home/native-bin/opencode" "$home/native-bin/opencode-work"
+printf '#!/usr/bin/env bash\nprintf "personal"\nprintf "<%%s>" "$@"\n' > "$home/native-bin/opencode-personal"
+chmod 0755 "$home/native-bin/opencode" "$home/native-bin/opencode-personal"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode "two words"' 2>/dev/null)"
-[[ "$output" == 'native<two words>' ]] || fail 'OpenCode Bash fallback changed native arguments'
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; eval ocp; opencode "two words"' 2>/dev/null)"
+[[ "$output" == $'personal\nnative<two words>' ]] || fail 'missing profile did not default to native personal dispatch'
 mkdir -p "$home/.local/share/dotfiles/bin"
 printf '#!/usr/bin/env bash\nprintf "helper"\nprintf "<%%s>" "$@"\n' > "$home/.local/share/dotfiles/bin/opencode-launch"
 chmod 0755 "$home/.local/share/dotfiles/bin/opencode-launch"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode literal' 2>/dev/null)"
-[[ "$output" == 'helper<personal><literal>' ]] || fail 'plain OpenCode did not select personal'
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; eval '\''ocp work'\''; opencode literal; alias c="opencode --auto"; eval '\''c "two words"'\''; eval '\''c-personal explicit'\''; eval '\''c-work secret'\''; opencode-profile personal; eval '\''c final'\''' 2>/dev/null)"
+[[ "$output" == $'work\nhost-work<literal>host-work<--auto><two words>personal<explicit>host-work<secret>personal\nhelper<personal><--auto><final>' ]] ||
+  fail 'OpenCode selection or explicit alias routing changed'
+profile_path="$home/.config/dotfiles/local/opencode-profile"
+[[ "$(< "$profile_path")" == personal && "$(stat -c %a -- "$profile_path")" == 600 ]] ||
+  fail 'OpenCode profile was not persisted with exact mode'
+printf 'work\n' > "$profile_path"
+chmod 0600 "$profile_path"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; alias c="opencode --auto"; eval '\''c "two words"'\''' 2>/dev/null)"
-[[ "$output" == 'helper<personal><--auto><two words>' ]] || fail 'native c alias did not route through personal OpenCode'
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile; opencode startup; bash -c '\''[[ -z ${OPENCODE_DEFAULT_PROFILE+x} ]]'\''' 2>/dev/null)"
+[[ "$output" == $'work\nhost-work<startup>' ]] || fail 'persisted work profile or non-export contract changed'
+
+for invalid in invalid $'work\nextra'; do
+  printf '%s\n' "$invalid" > "$profile_path"
+  output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+    'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
+  [[ "$output" == personal ]] || fail 'invalid persisted OpenCode profile was trusted'
+done
+printf 'work\n' > "$profile_path"
+chmod 0777 "$home/.config/dotfiles/local"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-work literal' 2>/dev/null)"
-[[ "$output" == 'work<literal>' ]] || fail 'OpenCode Bash function intercepted the named work launcher'
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
+[[ "$output" == personal ]] || fail 'OpenCode profile beneath unsafe directory was trusted'
+chmod 0755 "$home/.config/dotfiles/local"
+rm -f "$profile_path"
+ln -s "$home/profile-target" "$profile_path"
+printf 'work\n' > "$home/profile-target"
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
+[[ "$output" == personal ]] || fail 'symlinked OpenCode profile was trusted'
+rm "$profile_path"
+mkdir "$profile_path"
+set +e
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; OPENCODE_DEFAULT_PROFILE=personal; opencode-profile work; status=$?; printf "status=%s profile=%s\n" "$status" "$OPENCODE_DEFAULT_PROFILE"' 2>/dev/null)"
+status=$?
+set -e
+[[ "$status" == 0 && "$output" == 'status=1 profile=personal' ]] || fail 'failed profile write changed current state'
+rm -rf "$profile_path"
+printf 'personal\n' > "$profile_path"
+chmod 0600 "$profile_path"
+set +e
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile invalid; printf "status=%s profile=%s disk=%s\n" "$?" "$OPENCODE_DEFAULT_PROFILE" "$(< "$HOME/.config/dotfiles/local/opencode-profile")"' 2>&1)"
+set -e
+assert_contains "$output" 'usage: opencode-profile [personal|work]'
+assert_contains "$output" 'status=2 profile=personal disk=personal'
+set +e
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile work extra; printf "status=%s profile=%s disk=%s\n" "$?" "$OPENCODE_DEFAULT_PROFILE" "$(< "$HOME/.config/dotfiles/local/opencode-profile")"' 2>&1)"
+set -e
+assert_contains "$output" 'status=2 profile=personal disk=personal'
+if ((EUID == 0)); then
+  chown 1 "$profile_path"
+  output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+    'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
+  [[ "$output" == personal ]] || fail 'foreign-owned OpenCode profile was trusted'
+  chown 0 "$profile_path"
+fi
 set +e
 HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
   'source "$HOME/.config/dotfiles/bash/rc.bash"; bash --noprofile --norc -c "declare -F opencode >/dev/null"' \
@@ -153,6 +204,13 @@ HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i 
 status=$?
 set -e
 ((status != 0)) || fail 'OpenCode Bash function was exported to child shells'
+set +e
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; OPENCODE_DEFAULT_PROFILE=broken; opencode' 2>&1)"
+status=$?
+set -e
+((status == 2)) || fail 'invalid in-memory OpenCode profile did not return 2'
+assert_contains "$output" 'invalid OpenCode profile: broken'
 rm "$home/.local/share/dotfiles/bin/opencode-launch"
 mkdir -p "$home/.config/dotfiles/opencode" "$home/production-bin"
 ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/personal.jsonc" \

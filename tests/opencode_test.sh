@@ -56,15 +56,22 @@ jq -e '
     }
   }
 ' "$personal_profile" >/dev/null || fail 'personal OpenCode native Codex OAuth profile drifted'
-jq -e '
-  (has("plugin") | not) and
-  (.provider | keys) == ["truefoundry-gateway", "truefoundry-gateway-openai"] and
-  .enabled_providers == ["truefoundry-gateway", "truefoundry-gateway-openai"] and
-  .agent.compaction == {
-    "model":"truefoundry-gateway-openai/codex-group/gpt-5.6-terra",
-    "variant":"low"
-  }
-' "$work_profile" >/dev/null || fail 'work OpenCode profile boundary drifted'
+jq -e -s '
+  .[0] as $personal | .[1] as $work |
+  ($work | has("plugin") | not) and
+  ($work | has("model") | not) and
+  $work.permission == $personal.permission and
+  $work.agent == $personal.agent and
+  ($work.provider | keys) == ["truefoundry-gateway"] and
+  $work.enabled_providers == ["openai", "truefoundry-gateway"] and
+  ($work.provider["truefoundry-gateway"].models | keys) == [
+    "claude-group/claude-fable-5",
+    "claude-group/claude-opus-5",
+    "claude-group/claude-sonnet-5",
+    "glm-5p3"
+  ] and
+  ($work.provider | tojson | test("gpt"; "i") | not)
+' "$personal_profile" "$work_profile" >/dev/null || fail 'work OpenCode personal-plus-TrueFoundry profile drifted'
 for profile in "$personal_profile" "$work_profile"; do
   jq -e '
     .permission == {"bash": {

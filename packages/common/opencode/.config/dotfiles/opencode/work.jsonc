@@ -9,8 +9,8 @@
     }
   },
   "enabled_providers": [
-    "truefoundry-gateway",
-    "truefoundry-gateway-openai"
+    "openai",
+    "truefoundry-gateway"
   ],
   "provider": {
     "truefoundry-gateway": {
@@ -54,125 +54,23 @@
             "high": { "reasoningEffort": "high" }
           }
         },
-        "claude-group/claude-haiku-5": {
-          "name": "Claude Haiku 5",
-          "reasoning": true,
-          "options": { "reasoningEffort": "medium" },
-          "variants": {
-            "none": { "reasoningEffort": "none" },
-            "low": { "reasoningEffort": "low" },
-            "medium": { "reasoningEffort": "medium" },
-            "high": { "reasoningEffort": "high" }
-          }
-        }
-      }
-    },
-    "truefoundry-gateway-openai": {
-      "npm": "@ai-sdk/openai",
-      "name": "TrueFoundry (OpenAI)",
-      "options": {
-        "baseURL": "https://tfy.promptlens.trilogy.com",
-        "apiKey": "{env:TFY_API_KEY}"
-      },
-      "models": {
-        "openai-group/gpt-5.6-sol": {
-          "name": "GPT 5.6 Sol",
-          "reasoning": true,
-          "options": {
-            "reasoningEffort": "medium",
-            "reasoningSummary": "auto",
-            "include": ["reasoning.encrypted_content"]
-          },
-          "variants": {
-            "low": { "reasoningEffort": "low" },
-            "medium": { "reasoningEffort": "medium" },
-            "high": { "reasoningEffort": "high" }
-          }
-        },
-        "openai-group/gpt-5.6-terra": {
-          "name": "GPT 5.6 Terra",
-          "reasoning": true,
-          "options": {
-            "reasoningEffort": "medium",
-            "reasoningSummary": "auto",
-            "include": ["reasoning.encrypted_content"]
-          },
-          "variants": {
-            "low": { "reasoningEffort": "low" },
-            "medium": { "reasoningEffort": "medium" },
-            "high": { "reasoningEffort": "high" }
-          }
-        },
-        "openai-group/gpt-5.6-luna": {
-          "name": "GPT 5.6 Luna",
-          "reasoning": true,
-          "options": {
-            "reasoningEffort": "medium",
-            "reasoningSummary": "auto",
-            "include": ["reasoning.encrypted_content"]
-          },
-          "variants": {
-            "low": { "reasoningEffort": "low" },
-            "medium": { "reasoningEffort": "medium" },
-            "high": { "reasoningEffort": "high" }
-          }
-        },
-        "codex-group/gpt-5.6-sol": {
-          "name": "GPT 5.6 Sol",
-          "reasoning": true,
-          "options": {
-            "reasoningEffort": "medium",
-            "reasoningSummary": "auto",
-            "include": ["reasoning.encrypted_content"]
-          },
-          "variants": {
-            "low": { "reasoningEffort": "low" },
-            "medium": { "reasoningEffort": "medium" },
-            "high": { "reasoningEffort": "high" }
-          }
-        },
-        "codex-group/gpt-5.6-terra": {
-          "name": "GPT 5.6 Terra",
-          "reasoning": true,
-          "options": {
-            "reasoningEffort": "medium",
-            "reasoningSummary": "auto",
-            "include": ["reasoning.encrypted_content"]
-          },
-          "variants": {
-            "low": { "reasoningEffort": "low" },
-            "medium": { "reasoningEffort": "medium" },
-            "high": { "reasoningEffort": "high" }
-          }
-        },
-        "codex-group/gpt-5.6-luna": {
-          "name": "GPT 5.6 Luna",
-          "reasoning": true,
-          "options": {
-            "reasoningEffort": "medium",
-            "reasoningSummary": "auto",
-            "include": ["reasoning.encrypted_content"]
-          },
-          "variants": {
-            "low": { "reasoningEffort": "low" },
-            "medium": { "reasoningEffort": "medium" },
-            "high": { "reasoningEffort": "high" }
-          }
+        "glm-5p3": {
+          "name": "GLM 5.3"
         }
       }
     }
   },
   "agent": {
     "explore": {
-      "model": "truefoundry-gateway-openai/openai-group/gpt-5.6-sol",
-      "variant": "medium"
+      "model": "openai/gpt-5.6-sol",
+      "variant": "low"
     },
     "general": {
-      "model": "truefoundry-gateway-openai/openai-group/gpt-5.6-sol",
-      "variant": "medium"
+      "model": "openai/gpt-5.6-sol",
+      "variant": "low"
     },
     "compaction": {
-      "model": "truefoundry-gateway-openai/codex-group/gpt-5.6-terra",
+      "model": "openai/gpt-5.6-terra",
       "variant": "low"
     }
   }

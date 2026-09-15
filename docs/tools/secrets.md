@@ -40,7 +40,7 @@ There is no `export` prefix, quote removal, escaping, interpolation, command sub
 
 ## OpenCode Work Wrapper
 
-Managed interactive Bash already routes plain `opencode` through the personal profile. The host-owned `~/.config/dotfiles/local/bash.sh` may lazily inject the work credential by overriding only the named work launcher:
+Managed interactive Bash routes plain `opencode` through its persisted personal or work selection. The host-owned `~/.config/dotfiles/local/bash.sh` may lazily inject the work credential by overriding only the named work launcher:
 
 ```bash
 opencode-work() {
@@ -53,7 +53,7 @@ opencode-work() {
 }
 ```
 
-Sourcing the host-local file performs no bundle read or network operation. Calling `opencode-work` reads only `opencode.env`; plain `opencode`, `opencode-personal`, and the tracked `c='opencode --auto'` alias remain personal and do not receive the work credential. Do not define a host-local `opencode()` unless intentionally replacing managed personal-default routing.
+Sourcing the host-local file performs no bundle read or network operation. Calling `opencode-work`, `c-work`, or plain `opencode`/`c` while work is selected reads only `opencode.env`; explicit personal commands never receive the work credential. Existing shells keep their loaded selection until switched or reloaded, while new shells read it from `~/.config/dotfiles/local/opencode-profile`. Do not define a host-local `opencode()` unless intentionally replacing managed dispatch.
 
 ## Host Setup And Rotation
 

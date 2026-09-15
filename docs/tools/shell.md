@@ -18,7 +18,7 @@ The dispatcher is interactive-only and runs once per Bash process. Ubuntu loads 
 
 Every initializer is capability-guarded and receives `MISE_OFFLINE=1`; startup does not install, update, fetch, or emit missing-tool diagnostics. Starship is also skipped for `TERM=dumb`. The readable, user-owned regular `~/.config/dotfiles/local/bash.sh` is sourced last and remains untracked.
 
-The common personal layer defines interactive `opencode` to use the optional personal profile launcher. If that launcher is absent, it falls back to the native PATH executable. Named `opencode-personal` and `opencode-work` launchers remain available to noninteractive callers when the optional area is applied.
+The common personal layer defines interactive `opencode` using the host-owned `~/.config/dotfiles/local/opencode-profile` selection and provides `ocp` to inspect or change it. The untracked token file is data, not shell configuration, and remains untouched by apply, check, and removal. Named `opencode-personal` and `opencode-work` launchers remain available to noninteractive callers when the optional area is applied.
 
 ## Validation
 

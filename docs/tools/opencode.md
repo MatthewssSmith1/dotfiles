@@ -15,7 +15,7 @@
 
 Omarchy retains its regular `~/.local/bin/opencode` mise wrapper, `~/.config/opencode/opencode.json`, and `~/.config/opencode/tui.json`. Herdr retains `~/.config/opencode/tui.jsonc` and its integration scripts. The `agents` area separately owns only the `AGENTS.md` bridge. OpenCode owns its plugins, credentials, sessions, package metadata, caches, backups, and other generated state.
 
-The personal overlay declares no plugin and no provider block. It relies on OpenCode's native ChatGPT Plus/Pro OAuth (`/connect` → OpenAI → ChatGPT Plus/Pro, available since OpenCode 1.3.0), so models are auto-discovered from the subscription. The overlay sets GPT 5.6 Sol (low) for the `general` and `explore` subagents and GPT 5.6 Terra (low) for compaction. The work overlay declares only the reviewed TrueFoundry providers and reads its credential from `TFY_API_KEY`. OAuth credentials remain in OpenCode application state. Personal startup fetches nothing; dotfiles apply, check, and remove never fetch.
+The personal overlay declares no plugin and no provider block. It relies on OpenCode's native ChatGPT Plus/Pro OAuth (`/connect` → OpenAI → ChatGPT Plus/Pro, available since OpenCode 1.3.0), so models are auto-discovered from the subscription. The overlay sets GPT 5.6 Sol (low) for the `general` and `explore` subagents and GPT 5.6 Terra (low) for compaction. The work overlay uses the same native OpenAI models and agent defaults, then adds a reviewed non-GPT TrueFoundry catalog through `truefoundry-gateway`. It reads its TrueFoundry credential from `TFY_API_KEY`; OAuth credentials remain in OpenCode application state. Neither overlay sets a primary model, so it remains selectable in OpenCode. Personal startup fetches nothing; dotfiles apply, check, and remove never fetch.
 
 OpenCode loads all existing global config names before the explicit overlay:
 
@@ -26,19 +26,25 @@ OpenCode loads all existing global config names before the explicit overlay:
 $OPENCODE_CONFIG
 ```
 
-Apply and check accept missing global files but reject top-level `plugin` or `provider` declarations in any existing one. This prevents global personal configuration leaking into work. Project, `.opencode`, injected-content, and managed-service configuration may load later and remain outside this area. Global `.jsonc` validation accepts the repository's reviewed subset: full-line `//` comments and trailing commas.
+Apply and check accept missing global files but reject top-level `plugin` or `provider` declarations in any existing one. This prevents host provider and plugin settings from changing the reviewed profile boundaries. Project, `.opencode`, injected-content, and managed-service configuration may load later and remain outside this area. Global `.jsonc` validation accepts the repository's reviewed subset: full-line `//` comments and trailing commas.
 
 ## Launching
 
-Managed interactive Bash defines plain `opencode` as personal-by-default:
+Managed interactive Bash selects a persistent host default:
 
 ```text
-opencode          -> opencode-launch personal -> native opencode
+ocp                         -> print personal or work
+ocp personal|work           -> persist and select immediately
+opencode                    -> selected profile
+c                           -> opencode --auto using the selected profile
+c-personal / c-work         -> explicit named profile
 opencode-personal -> opencode-launch personal -> native opencode
 opencode-work     -> opencode-launch work     -> native opencode
 ```
 
-The Bash function falls back to `command opencode` when the optional launcher is absent. Noninteractive callers resolve native `opencode`; use a named launcher when a profile is required. The launcher finds the first executable `opencode` on `PATH`, injects `OPENCODE_CONFIG` and `OPENCODE_TUI_CONFIG`, and preserves arguments and exit status.
+The host-owned, untracked `~/.config/dotfiles/local/opencode-profile` contains exactly `personal` or `work` followed by LF. Missing, invalid, symlinked, or foreign-owned state defaults new shells to personal. `ocp` writes a mode-`0600` replacement atomically and changes the current shell only after persistence succeeds; dotfiles apply, check, and remove never manage this file. Existing shells retain their loaded selection until `ocp` switches it or their configuration is reloaded; new shells load the selection from disk. `OPENCODE_DEFAULT_PROFILE` is not exported.
+
+Personal dispatch falls back to `command opencode` when the optional launcher is absent. Work dispatch calls `opencode-work`, allowing the host-local function loaded later to inject credentials. Noninteractive callers resolve native `opencode`; use a named launcher when a profile is required. The launcher finds the first executable `opencode` on `PATH`, injects `OPENCODE_CONFIG` and `OPENCODE_TUI_CONFIG`, and preserves arguments and exit status.
 
 The TUI order begins with native `tui.json`, Herdr's `tui.jsonc`, then the explicit dotfiles overlay. Project TUI configuration may load later. The overlay maps `Ctrl+Enter`, `Shift+Enter`, `Alt+Enter`, and `Ctrl+J` to newline; `Ctrl+S` stashes a prompt; `Ctrl+Y` restores the latest stash; `Ctrl+X K` clears; and `Ctrl+X Q` quits.
 
