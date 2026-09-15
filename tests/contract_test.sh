@@ -190,7 +190,7 @@ grep -Fq 'for file in "$(lean_state_dir)"/*.json' "$DOTFILES" || fail 'default r
 pass
 
 # Herdr uses native validation-only ownership and one Ubuntu package-only
-# closure. Ubuntu adds one exact policy preamble to the accepted config.
+# closure. Ubuntu adds an exact policy preamble and reviewed UI preferences.
 grep -qxF 'area|herdr|ready' "$REPO_DIR/manifests/areas.tsv" ||
   fail 'Herdr is absent from lean dispatch'
 grep -qxF 'herdr validation-only' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Herdr is not validation-only'
@@ -199,7 +199,7 @@ herdr_reference="$REPO_DIR/packages/upstream/reference/omarchy/config/herdr/conf
 herdr_ubuntu="$REPO_DIR/packages/ubuntu/herdr/.config/herdr/config.toml"
 herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
 herdr_expected="$TEST_ROOT/herdr-ubuntu-expected.toml"
-{ printf '%s' "$herdr_preamble"; cat "$herdr_reference"; } > "$herdr_expected"
+{ printf '%s' "$herdr_preamble"; cat "$herdr_reference"; printf 'agent_panel_sort = "priority"\n'; } > "$herdr_expected"
 cmp -s "$herdr_ubuntu" "$herdr_expected" || fail 'Ubuntu Herdr config is not the exact policy derivation'
 ! grep -qE '^(\[update\]|(onboarding|version_check|manifest_check)[[:space:]]*=)' "$herdr_reference" ||
   fail 'immutable Herdr reference contains Ubuntu policy'

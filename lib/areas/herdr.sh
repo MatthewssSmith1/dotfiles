@@ -7,6 +7,8 @@ readonly HERDR_CONFIG='.config/herdr/config.toml'
 readonly HERDR_REFERENCE='packages/upstream/reference/omarchy/config/herdr/config.toml'
 readonly HERDR_UBUNTU_CONFIG='packages/ubuntu/herdr/.config/herdr/config.toml'
 readonly HERDR_UBUNTU_PREAMBLE=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
+# The accepted snapshot ends in [ui]; append reviewed personal UI preferences.
+readonly HERDR_UBUNTU_PREFERENCES=$'agent_panel_sort = "priority"\n'
 readonly HERDR_MOSHI_PATH='.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf'
 readonly HERDR_MOSHI_PATH_CONTENT=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 
@@ -73,8 +75,8 @@ validate_herdr_ubuntu_derivation() {
   local reference="$DOTFILES_DIR/$HERDR_REFERENCE"
   local ubuntu_config="$DOTFILES_DIR/$HERDR_UBUNTU_CONFIG"
   [[ -f "$ubuntu_config" && ! -L "$ubuntu_config" ]] || die 'Ubuntu Herdr config is missing or unsafe'
-  cmp -s -- "$ubuntu_config" <(printf '%s' "$HERDR_UBUNTU_PREAMBLE"; cat -- "$reference") ||
-    die 'Ubuntu Herdr config is not the exact policy preamble plus accepted v4 snapshot'
+  cmp -s -- "$ubuntu_config" <(printf '%s' "$HERDR_UBUNTU_PREAMBLE"; cat -- "$reference"; printf '%s' "$HERDR_UBUNTU_PREFERENCES") ||
+    die 'Ubuntu Herdr config is not the exact policy preamble plus accepted v4 snapshot and reviewed UI preferences'
 }
 
 validate_herdr_config_syntax() {

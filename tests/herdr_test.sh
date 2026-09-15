@@ -60,10 +60,11 @@ helper="$REPO_DIR/packages/ubuntu/herdr/.config/dotfiles/bash/fns/herdr"
 selector="$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml"
 path_dropin="$REPO_DIR/packages/ubuntu/herdr/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf"
 herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
+herdr_preferences=$'agent_panel_sort = "priority"\n'
 path_dropin_content=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 expected_config="$TEST_ROOT/herdr-ubuntu-expected.toml"
 expected_path_dropin="$TEST_ROOT/moshi-herdr-path-expected.conf"
-{ printf '%s' "$herdr_preamble"; cat "$reference"; } > "$expected_config"
+{ printf '%s' "$herdr_preamble"; cat "$reference"; printf '%s' "$herdr_preferences"; } > "$expected_config"
 printf '%s' "$path_dropin_content" > "$expected_path_dropin"
 cmp -s "$expected_config" "$ubuntu_config" || fail 'Ubuntu config is not the exact policy derivation'
 cmp -s "$expected_path_dropin" "$path_dropin" || fail 'Moshi PATH drop-in bytes are not exact'
@@ -77,7 +78,7 @@ grep -qxF 'herdr ubuntu/herdr' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu 
 pass
 
 # Every malformed policy derivation is rejected before mutation.
-for mutation in missing altered duplicated reordered extra; do
+for mutation in missing altered duplicated reordered extra missing-preferences altered-preferences; do
   fixture="$TEST_ROOT/repo-$mutation"
   make_herdr_repo_fixture "$fixture"
   malformed="$fixture/packages/ubuntu/herdr/.config/herdr/config.toml"
@@ -87,6 +88,12 @@ for mutation in missing altered duplicated reordered extra; do
     duplicated) { printf '%s%s' "$herdr_preamble" "$herdr_preamble"; cat "$reference"; } > "$malformed" ;;
     reordered) { printf 'onboarding = false\n\n[update]\nmanifest_check = true\nversion_check = false\n\n'; cat "$reference"; } > "$malformed" ;;
     extra) { printf '%s' "$herdr_preamble"; printf '# extra policy bytes\n'; cat "$reference"; } > "$malformed" ;;
+    missing-preferences) { printf '%s' "$herdr_preamble"; cat "$reference"; } > "$malformed" ;;
+    altered-preferences) { printf '%s' "$herdr_preamble"; cat "$reference"; printf 'agent_panel_sort = "name"\n'; } > "$malformed" ;;
+  esac
+  case "$mutation" in
+    missing-preferences|altered-preferences) ;;
+    *) printf '%s' "$herdr_preferences" >> "$malformed" ;;
   esac
   malformed_home="$(new_home "malformed-$mutation")"
   mkdir -p "$malformed_home/.config/herdr"
