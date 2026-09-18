@@ -37,7 +37,7 @@ Network behavior is defined by the canonical [operation matrix](../deployment.md
 
 Managed Bash startup is always offline. Dotfiles never changes the login shell.
 
-Claude Code, Codex, and OpenCode use vendor-native user installations on this profile. They may update through their own lifecycle, but dotfiles does not install, require, inspect, or update them. The optional OpenCode area supplies a wrapper and configuration without owning the underlying executable.
+Claude Code, Codex, and OpenCode use vendor-native user installations on this profile. They may update through their own lifecycle, but dotfiles does not install, require, inspect, or update them. The optional OpenCode area supplies a wrapper and configuration without owning the underlying executable. The Agents area supplies a minimal Claude settings overlay and `claude-dotfiles` launcher; managed interactive Bash routes `claude` through it. Claude's executable, user settings, and application state remain host-owned. See [Agents](../tools/agents.md).
 
 Codex installation is an explicit host-administration step. Review [OpenAI's current Codex CLI instructions](https://developers.openai.com/codex/cli/) before invoking the vendor installer:
 

@@ -56,7 +56,7 @@ agents_universal_skill_names() {
 }
 
 validate_agents_closure() {
-  local relative source index
+  local relative source index overlay launcher
   [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == common/agents ]] ||
     die 'Agents closure must contain only common/agents'
   if [[ "$MODE" != remove ]]; then
@@ -66,10 +66,23 @@ validate_agents_closure() {
   for index in "${!LEAN_TARGET_PATHS[@]}"; do
     relative="${LEAN_TARGET_PATHS[index]}"; source="${LEAN_TARGET_SOURCES[index]}"
     [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/* ||
-      "$relative" == .claude/skills/* || "$relative" == .codex/*.config.toml ]] ||
+      "$relative" == .claude/skills/* || "$relative" == .codex/*.config.toml ||
+      "$relative" == .config/dotfiles/claude/settings.json ||
+      "$relative" == .local/bin/claude-dotfiles ]] ||
       die "Agents package has an out-of-area target: $relative"
-    [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Agents payload mode: $relative"
+    if [[ "$relative" == .local/bin/claude-dotfiles ]]; then
+      [[ "$(stat -c %a -- "$source")" == 755 ]] || die "unexpected Agents payload mode: $relative"
+    else
+      [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Agents payload mode: $relative"
+    fi
   done
+  overlay="$DOTFILES_DIR/packages/common/agents/.config/dotfiles/claude/settings.json"
+  launcher="$DOTFILES_DIR/packages/common/agents/.local/bin/claude-dotfiles"
+  jq -e 'type == "object" and keys == ["$schema", "autoMemoryEnabled"] and
+    .["$schema"] == "https://json.schemastore.org/claude-code-settings.json" and
+    has("autoMemoryEnabled") and .autoMemoryEnabled == false' "$overlay" >/dev/null ||
+    die 'managed Claude settings overlay is not exact'
+  bash -n "$launcher" || die 'managed Claude launcher has invalid syntax'
 }
 
 preflight_agents_skill_boundaries() {

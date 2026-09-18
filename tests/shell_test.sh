@@ -231,6 +231,36 @@ output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile 
 [[ "$output" == 'native<literal>' ]] || fail 'OpenCode removal fallback did not restore native behavior'
 pass
 
+# Interactive Claude uses the managed overlay when available, preserves native
+# arguments and status, supports command bypass, and falls back after removal.
+printf '#!/usr/bin/env bash\nprintf "native"\nprintf "<%%s>" "$@"\nexit "${CLAUDE_STATUS:-0}"\n' > "$home/native-bin/claude"
+chmod 0755 "$home/native-bin/claude"
+mkdir -p "$home/.local/bin"
+printf '#!/usr/bin/env bash\nexec claude --settings "$HOME/.config/dotfiles/claude/settings.json" "$@"\n' > "$home/.local/bin/claude-dotfiles"
+chmod 0755 "$home/.local/bin/claude-dotfiles"
+set +e
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb CLAUDE_STATUS=37 bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; claude "two words" literal' 2>/dev/null)"
+status=$?
+set -e
+[[ "$status" == 37 && "$output" == "native<--settings><$home/.config/dotfiles/claude/settings.json><two words><literal>" ]] ||
+  fail 'interactive Claude did not dispatch through the managed overlay or preserve status'
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; command claude bypass' 2>/dev/null)"
+[[ "$output" == 'native<bypass>' ]] || fail 'command claude did not bypass the managed launcher'
+rm "$home/.local/bin/claude-dotfiles"
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; claude fallback' 2>/dev/null)"
+[[ "$output" == 'native<fallback>' ]] || fail 'Claude launcher removal did not restore native behavior'
+set +e
+HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; bash --noprofile --norc -c "declare -F claude >/dev/null"' \
+  >/dev/null 2>&1
+status=$?
+set -e
+((status != 0)) || fail 'Claude Bash function was exported to child shells'
+pass
+
 # Noninteractive and missing-tool startup remain silent and side-effect free.
 : > "$home/trace"
 HOME="$home" PATH=/usr/bin:/bin DOTFILES_BASH_TRACE="$home/trace" bash --noprofile --norc -c \

@@ -148,7 +148,7 @@ Development tools resolve to native Omarchy packages. Dotfiles fails if a protec
 
 Herdr resolves exactly to package-owned `/usr/bin/herdr`; dotfiles validates its accepted version and stock config without changing it. See the [Herdr contract](../tools/herdr.md).
 
-Claude Code, Codex, and the generic OpenCode executable retain their Omarchy or native host owners. The optional OpenCode area adds only profile/TUI overlays, named launchers, and a helper; interactive Bash routes plain `opencode` through the personal overlay without replacing the native executable. It adds no assistant mise selector, does not require an assistant executable, and leaves assistant application state untouched.
+Claude Code, Codex, and the generic OpenCode executable retain their Omarchy or native host owners. The optional OpenCode area adds only profile/TUI overlays, named launchers, and a helper; interactive Bash routes plain `opencode` through the personal overlay without replacing the native executable. The Agents area supplies a minimal Claude settings overlay and `claude-dotfiles` launcher; managed interactive Bash routes `claude` through it. Claude's user settings remain host-owned; see [Agents](../tools/agents.md). These areas add no assistant mise selector, do not require an assistant executable, and leave assistant application state untouched.
 
 Bash is ready; native attachment and refresh behavior is covered by isolated fixtures.
 

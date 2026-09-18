@@ -129,13 +129,19 @@ verify() {
     elif [[ -d "$entry" ]]; then
       [[ "$relative" == .agents || "$relative" == .agents/skills || "$relative" == .agents/skills/* ||
         "$relative" == .claude || "$relative" == .claude/skills || "$relative" == .claude/skills/* ||
-        "$relative" == .codex ]] ||
+        "$relative" == .codex || "$relative" == .config || "$relative" == .config/dotfiles ||
+        "$relative" == .config/dotfiles/claude || "$relative" == .local || "$relative" == .local/bin ]] ||
         die "package payload is outside managed skill roots: $relative"
     elif [[ -f "$entry" ]]; then
       [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/*/* ||
-        "$relative" == .claude/skills/*/* || "$relative" == .codex/*.config.toml ]] ||
+        "$relative" == .claude/skills/*/* || "$relative" == .codex/*.config.toml ||
+        "$relative" == .config/dotfiles/claude/settings.json || "$relative" == .local/bin/claude-dotfiles ]] ||
         die "package file is outside managed Agents payload: $relative"
-      [[ "$(stat -c '%a' -- "$entry")" == 644 ]] || die "unexpected package file mode: $relative"
+      if [[ "$relative" == .local/bin/claude-dotfiles ]]; then
+        [[ "$(stat -c '%a' -- "$entry")" == 755 ]] || die "unexpected package file mode: $relative"
+      else
+        [[ "$(stat -c '%a' -- "$entry")" == 644 ]] || die "unexpected package file mode: $relative"
+      fi
       [[ "$relative" != .codex/* ]] || ((codex_profile_count += 1))
       ((file_count += 1))
     else

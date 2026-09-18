@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+: "${HOME:?HOME is required}"
+readonly settings="$HOME/.config/dotfiles/claude/settings.json"
+[[ -f "$settings" && -r "$settings" ]] || {
+  printf 'claude-dotfiles: managed settings overlay is missing or unreadable: %s\n' "$settings" >&2
+  exit 1
+}
+
+before_operands=true
+for argument in "$@"; do
+  if [[ "$before_operands" == true ]]; then
+    case "$argument" in
+      --) before_operands=false ;;
+      --settings|--settings=*)
+        printf 'claude-dotfiles: --settings cannot override the managed overlay\n' >&2
+        exit 2
+        ;;
+    esac
+  fi
+done
+
+native="$(type -P claude || true)"
+[[ -n "$native" ]] || {
+  printf 'claude-dotfiles: no claude executable found on PATH\n' >&2
+  exit 127
+}
+[[ -f "$native" && -x "$native" ]] || {
+  printf 'claude-dotfiles: resolved claude is not an executable file: %s\n' "$native" >&2
+  exit 126
+}
+[[ ! "$native" -ef "$0" ]] || {
+  printf 'claude-dotfiles: resolved claude points to this launcher\n' >&2
+  exit 126
+}
+
+exec "$native" --settings "$settings" "$@"

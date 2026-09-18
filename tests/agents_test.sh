@@ -46,6 +46,8 @@ readonly CLAUDE_SKILL_FILES=(
 readonly CODEX_PROFILE_FILES=(
   subagent.config.toml
 )
+readonly CLAUDE_OVERLAY='.config/dotfiles/claude/settings.json'
+readonly CLAUDE_LAUNCHER='.local/bin/claude-dotfiles'
 
 run_agents_area() {
   local home="$1" operation="$2"
@@ -95,6 +97,14 @@ codex_root="$REPO_DIR/packages/common/agents/.codex"
 actual_codex_profiles="$(find "$codex_root" -type f -printf '%P\n' | LC_ALL=C sort)"
 expected_codex_profiles="$(printf '%s\n' "${CODEX_PROFILE_FILES[@]}" | LC_ALL=C sort)"
 [[ "$actual_codex_profiles" == "$expected_codex_profiles" ]] || fail 'Codex profile inventory is not exact'
+overlay="$REPO_DIR/packages/common/agents/$CLAUDE_OVERLAY"
+launcher="$REPO_DIR/packages/common/agents/$CLAUDE_LAUNCHER"
+[[ "$(stat -c %a "$overlay")" == 644 && "$(stat -c %a "$launcher")" == 755 ]] ||
+  fail 'Claude overlay or launcher mode is not exact'
+jq -e 'type == "object" and keys == ["$schema", "autoMemoryEnabled"] and
+  .["$schema"] == "https://json.schemastore.org/claude-code-settings.json" and
+  .autoMemoryEnabled == false' "$overlay" >/dev/null || fail 'Claude overlay is not exact'
+bash -n "$launcher" || fail 'Claude launcher syntax is invalid'
 fixture="$(copy_repo_fixture agents-invalid-package)"
 printf 'invalid direct entry\n' > "$fixture/packages/common/agents/.agents/skills/UNDECLARED"
 if TEST_OUTPUT="$("$fixture/scripts/agent-skills" verify 2>&1)"; then
@@ -131,6 +141,7 @@ ln -s "$native_root/diagnose-crash" "$home/.agents/skills/diagnose-crash"
 printf 'keep skill\n' > "$home/.agents/skills/unrelated/KEEP"
 printf 'keep opencode\n' > "$home/.config/opencode/settings.json"
 printf 'keep claude\n' > "$home/.claude/settings.json"
+cp "$home/.claude/settings.json" "$TEST_ROOT/claude-settings-reference"
 printf 'keep Claude skill\n' > "$home/.claude/skills/unrelated/KEEP"
 printf 'keep synced skill\n' > "$home/.claude/skills/synced/KEEP"
 
@@ -147,6 +158,11 @@ assert_native_skills() {
 
 run_agents_area "$home" apply
 assert_native_skills
+for path in "$CLAUDE_OVERLAY" "$CLAUDE_LAUNCHER"; do
+  [[ -L "$home/$path" && "$(realpath "$home/$path")" == "$REPO_DIR/packages/common/agents/$path" ]] ||
+    fail "missing exact Claude managed link: $path"
+done
+assert_same "$home/.claude/settings.json" "$TEST_ROOT/claude-settings-reference"
 [[ -L "$home/.agents/AGENTS.md" && "$(realpath "$home/.agents/AGENTS.md")" == \
   "$REPO_DIR/packages/common/agents/.agents/AGENTS.md" ]] || fail 'canonical instructions are not package-owned'
 for skill_file in "${MANAGED_SKILL_FILES[@]}"; do
@@ -178,10 +194,61 @@ done
   fail 'package-only Agents wrote deployment state'
 run_agents_area "$home" check
 assert_native_skills
+assert_same "$home/.claude/settings.json" "$TEST_ROOT/claude-settings-reference"
 run_agents_area "$home" apply
 assert_native_skills
+assert_same "$home/.claude/settings.json" "$TEST_ROOT/claude-settings-reference"
 run_agents_area "$home" check
 assert_native_skills
+assert_same "$home/.claude/settings.json" "$TEST_ROOT/claude-settings-reference"
+pass
+
+# Launcher injects the overlay, preserves operands/status, rejects competing
+# options before --, and ignores functions while guarding recursive aliases.
+launcher_home="$(new_home agents-launcher)"
+mkdir -p "$launcher_home/.config/dotfiles/claude" "$launcher_home/native-bin"
+cp "$overlay" "$launcher_home/.config/dotfiles/claude/settings.json"
+printf '#!/usr/bin/env bash\nprintf "<%%s>\\n" "$@"\nexit "${FAKE_CLAUDE_STATUS:-0}"\n' > "$launcher_home/native-bin/claude"
+chmod 0755 "$launcher_home/native-bin/claude"
+set +e
+output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" FAKE_CLAUDE_STATUS=39 \
+  "$launcher" 'two words' '' -- --settings operand 2>&1)"
+status=$?
+set -e
+((status == 39)) || fail "Claude launcher changed native status: $status"
+expected=$'<--settings>\n<'"$launcher_home"$'/.config/dotfiles/claude/settings.json>\n<two words>\n<>\n<-->\n<--settings>\n<operand>'
+[[ "$output" == "$expected" ]] || fail 'Claude launcher changed settings order or operands'
+for option in --settings '--settings=other.json'; do
+  set +e
+  output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" "$option" 2>&1)"
+  status=$?
+  set -e
+  ((status == 2)) || fail "Claude launcher accepted competing option: $option"
+  assert_contains "$output" 'cannot override the managed overlay'
+done
+set +e
+output="$(HOME="$launcher_home" PATH=/usr/bin:/bin "$launcher" 2>&1)"
+status=$?
+set -e
+((status == 127)) || fail 'missing native Claude did not return 127'
+assert_contains "$output" 'no claude executable found on PATH'
+rm "$launcher_home/.config/dotfiles/claude/settings.json"
+set +e
+output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" 2>&1)"
+status=$?
+set -e
+((status == 1)) || fail 'missing Claude overlay did not fail'
+assert_contains "$output" 'managed settings overlay is missing or unreadable'
+cp "$overlay" "$launcher_home/.config/dotfiles/claude/settings.json"
+ln -s "$launcher" "$launcher_home/native-bin/claude-recursive"
+mv "$launcher_home/native-bin/claude" "$launcher_home/native-bin/claude-real"
+ln -s "$launcher" "$launcher_home/native-bin/claude"
+set +e
+output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" 2>&1)"
+status=$?
+set -e
+((status == 126)) || fail 'recursive Claude alias was accepted'
+assert_contains "$output" 'points to this launcher'
 pass
 
 # Exact existing bridges are adopted derivably; any non-exact bridge refuses.
@@ -236,6 +303,10 @@ for skill in "${MANAGED_SKILLS[@]}"; do
   [[ ! -e "$home/.claude/skills/$skill" && ! -L "$home/.claude/skills/$skill" ]] ||
     fail "managed Claude alias survived removal: $skill"
 done
+for path in "$CLAUDE_OVERLAY" "$CLAUDE_LAUNCHER"; do
+  [[ ! -e "$home/$path" && ! -L "$home/$path" ]] || fail "Claude managed link survived removal: $path"
+done
+assert_same "$home/.claude/settings.json" "$TEST_ROOT/claude-settings-reference"
 for skill in "${CLAUDE_SKILLS[@]}"; do
   [[ ! -e "$home/.claude/skills/$skill" && ! -L "$home/.claude/skills/$skill" ]] ||
     fail "managed Claude skill survived removal: $skill"
@@ -252,6 +323,17 @@ done
   "$(< "$home/.claude/settings.json")" == 'keep claude' && \
   "$(< "$home/.claude/skills/unrelated/KEEP")" == 'keep Claude skill' && \
   "$(< "$home/.claude/skills/synced/KEEP")" == 'keep synced skill' ]] || fail 'removal changed unrelated content'
+pass
+
+# A conflict at either new destination refuses before creating any package link.
+for path in "$CLAUDE_OVERLAY" "$CLAUDE_LAUNCHER"; do
+  conflict_home="$(new_home "agents-${path//\//-}-conflict")"
+  mkdir -p "$(dirname "$conflict_home/$path")"
+  printf 'foreign\n' > "$conflict_home/$path"
+  expect_agents_failure 'conflict' "$conflict_home" apply
+  [[ "$(< "$conflict_home/$path")" == foreign && ! -e "$conflict_home/.agents/AGENTS.md" ]] ||
+    fail "Agents conflict mutated home: $path"
+done
 pass
 
 # Legacy state is refused with cleanup guidance and never adopted or rewritten.

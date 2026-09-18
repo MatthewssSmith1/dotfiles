@@ -10,7 +10,25 @@ The `agents` area deploys one shared personal package on every profile. It owns 
 ~/.claude/skills/<universal> -> ../../.agents/skills/<universal>
 ```
 
-OpenCode configuration is independently owned only when the optional `opencode` area is applied; see [OpenCode](opencode.md). OpenCode plugins, credentials, sessions, generated state, other Claude configuration, synced Claude skills, unrelated skills, and the rest of `~/.codex/` (including `config.toml`) remain host-owned. Managed skill names are whole-directory boundaries: an unmanaged same-name directory or an extra entry refuses before mutation. Universal skill names are also exact Claude aliases and cannot overlap Claude-only skill names. Other skill names coexist as external directories or symlinks and survive apply, check, reapply, and removal. In particular, the Omarchy-native `omarchy` and `diagnose-crash` skill symlinks remain native-owned.
+Agents also owns `~/.config/dotfiles/claude/settings.json` and `~/.local/bin/claude-dotfiles`, the Claude Code settings overlay and launcher described below.
+
+OpenCode configuration is independently owned only when the optional `opencode` area is applied; see [OpenCode](opencode.md). OpenCode plugins, credentials, sessions, generated state, other Claude configuration (including `~/.claude/settings.json`), synced Claude skills, unrelated skills, and the rest of `~/.codex/` (including `config.toml`) remain host-owned. Managed skill names are whole-directory boundaries: an unmanaged same-name directory or an extra entry refuses before mutation. Universal skill names are also exact Claude aliases and cannot overlap Claude-only skill names. Other skill names coexist as external directories or symlinks and survive apply, check, reapply, and removal. In particular, the Omarchy-native `omarchy` and `diagnose-crash` skill symlinks remain native-owned.
+
+## Claude Code Settings
+
+The minimal, repository-owned overlay sets `autoMemoryEnabled` to `false`. The launcher passes it through `--settings`, merging it above normal user/project settings; organization-managed settings retain higher precedence. Model choices, plugins, credentials, and writable user preferences stay host-owned.
+
+```text
+claude           -> managed interactive Bash dispatch -> claude-dotfiles -> native claude
+claude-dotfiles  -> explicit managed launch, including scripts/noninteractive shells
+command claude  -> native bypass from interactive Bash
+```
+
+The Bash function falls back to native Claude when the launcher is absent. It is not exported. The launcher preserves arguments and exit status, requires a native executable, and rejects caller `--settings` options before `--`; use the native bypass for an alternative settings file. Dotfiles does not install or require Claude during deployment.
+
+IDE/Desktop launches do not pass through this launcher. To disable automatic memory for clients reading user settings, set `"autoMemoryEnabled": false` in the host-owned `~/.claude/settings.json`, preserving its other keys. Existing memory files remain intact. Start a fresh shell after deploying Bash changes and restart Claude Code to load changed settings.
+
+Removing Agents deletes its exact overlay/launcher links along with its other managed payloads and bridges. It preserves the user settings file, so a manually configured user preference remains in effect.
 
 ## Personal Skills
 

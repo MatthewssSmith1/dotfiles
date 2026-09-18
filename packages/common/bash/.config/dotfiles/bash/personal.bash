@@ -90,6 +90,15 @@ opencode() {
   esac
 }
 
+claude() {
+  local launcher="$HOME/.local/bin/claude-dotfiles"
+  if [[ -x "$launcher" ]]; then
+    "$launcher" "$@"
+  else
+    command claude "$@"
+  fi
+}
+
 alias ocp='opencode-profile'
 alias c-personal='opencode-personal'
 alias c-work='opencode-work'

@@ -9,7 +9,7 @@ Dotfiles deploys explicit qualified Stow packages and never treats the repositor
 | Bash                | `common/bash`                                       | `upstream/bash`, `upstream/starship`, `ubuntu/bash`, `common/bash` |
 | tmux                | validation-only                                     | `upstream/tmux`, `ubuntu/tmux`                                     |
 | Neovim              | `common/nvim` plus loader                           | `upstream/nvim`, `ubuntu/nvim`, `common/nvim`                      |
-| Agents              | `common/agents`                                     | `common/agents`                                                    |
+| Agents              | `common/agents` (skills, bridges, Claude overlay/launcher) | `common/agents` (skills, bridges, Claude overlay/launcher)       |
 | Herdr               | validation-only                                     | `ubuntu/herdr`                                                     |
 | Desktop             | `omarchy/desktop` plus guarded/structured ownership | validation-only                                                    |
 | OpenCode (optional) | `common/opencode`                                   | `common/opencode`                                                  |
