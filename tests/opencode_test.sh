@@ -47,15 +47,26 @@ tui_profile="$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/tui.js
 jq -e '
   (has("plugin") | not) and
   (has("provider") | not) and
-  del(.permission) == {
+  del(.permission, .agent.posthog.prompt) == {
     "$schema":"https://opencode.ai/config.json",
+    "mcp":{
+      "posthog":{"type":"remote","url":"https://mcp.posthog.com/mcp","enabled":true}
+    },
     "agent":{
       "explore":{"model":"openai/gpt-6-sol-fast","variant":"low"},
       "general":{"model":"openai/gpt-6-sol-fast","variant":"low"},
       "compaction":{"model":"openai/gpt-6-luna-fast","variant":"low"},
-      "title":{"model":"openai/gpt-6-luna","variant":"low"}
+      "title":{"model":"openai/gpt-6-luna","variant":"low"},
+      "posthog":{
+        "description":"PostHog specialist. Use proactively for any task that touches PostHog.",
+        "mode":"subagent",
+        "model":"openai/gpt-6-sol-fast",
+        "variant":"low",
+        "permission":{"posthog_*":"allow","edit":"deny"}
+      }
     }
-  }
+  } and
+  (.agent.posthog.prompt | type == "string" and length > 0)
 ' "$personal_profile" >/dev/null || fail 'personal OpenCode native Codex OAuth profile drifted'
 jq -e -s '
   .[0] as $personal | .[1] as $work |
@@ -63,6 +74,7 @@ jq -e -s '
   ($work | has("model") | not) and
   $work.permission == $personal.permission and
   $work.agent == $personal.agent and
+  $work.mcp == $personal.mcp and
   ($work.provider | keys) == ["truefoundry-gateway"] and
   $work.enabled_providers == ["openai", "truefoundry-gateway"] and
   ($work.provider["truefoundry-gateway"].models | keys) == [
@@ -78,9 +90,10 @@ for profile in "$personal_profile" "$work_profile"; do
     .permission == {"bash": {
       "codex":"deny", "codex *":"deny",
       "*/codex":"deny", "*/codex *":"deny"
-    }} and
-    ([.agent[] | has("permission")] | any | not)
-  ' "$profile" >/dev/null || fail "OpenCode Codex CLI restrictions drifted: $profile"
+    }, "posthog_*":"deny"} and
+    ([.agent | to_entries[] | select(.value | has("permission")) | .key] == ["posthog"]) and
+    .agent.posthog.permission == {"posthog_*":"allow","edit":"deny"}
+  ' "$profile" >/dev/null || fail "OpenCode Codex CLI and PostHog restrictions drifted: $profile"
 done
 jq -e '.keybinds == {
   "app_exit":"<leader>q",

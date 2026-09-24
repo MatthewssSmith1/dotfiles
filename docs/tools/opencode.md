@@ -15,7 +15,7 @@
 
 Omarchy retains its regular `~/.local/bin/opencode` mise wrapper, `~/.config/opencode/opencode.json`, and `~/.config/opencode/tui.json`. Herdr retains `~/.config/opencode/tui.jsonc` and its integration scripts. The `agents` area separately owns only the `AGENTS.md` bridge. OpenCode owns its plugins, credentials, sessions, package metadata, caches, backups, and other generated state.
 
-The personal overlay declares no plugin and no provider block. It relies on OpenCode's native ChatGPT Plus/Pro OAuth (`/connect` → OpenAI → ChatGPT Plus/Pro, available since OpenCode 1.3.0), so models are auto-discovered from the subscription. The overlay sets GPT-6 Sol Fast (low) for the `general` and `explore` subagents and GPT-6 Luna Fast (low) for compaction and GPT-6 Luna (low) for the hidden `title` agent. The work overlay uses the same native OpenAI models and agent defaults, then adds a reviewed non-GPT TrueFoundry catalog through `truefoundry-gateway`. It reads its TrueFoundry credential from `TFY_API_KEY`; OAuth credentials remain in OpenCode application state. Neither overlay sets a primary model, so it remains selectable in OpenCode. Personal startup fetches nothing; dotfiles apply, check, and remove never fetch.
+The personal overlay declares no plugin and no provider block. It relies on OpenCode's native ChatGPT Plus/Pro OAuth (`/connect` → OpenAI → ChatGPT Plus/Pro, available since OpenCode 1.3.0), so models are auto-discovered from the subscription. The overlay sets GPT-6 Sol Fast (low) for the `general`, `explore`, and custom `posthog` subagents, GPT-6 Luna Fast (low) for compaction, and GPT-6 Luna (low) for the hidden `title` agent. The work overlay uses the same native OpenAI models and agent defaults, then adds a reviewed non-GPT TrueFoundry catalog through `truefoundry-gateway`. It reads its TrueFoundry credential from `TFY_API_KEY`; OAuth credentials remain in OpenCode application state. Neither overlay sets a primary model, so it remains selectable in OpenCode. Both profiles connect to the PostHog MCP at startup; dotfiles apply, check, and remove never fetch.
 
 OpenCode loads all existing global config names before the explicit overlay:
 
@@ -53,6 +53,14 @@ The TUI order begins with native `tui.json`, Herdr's `tui.jsonc`, then the expli
 The shared launcher sets `OPENCODE_DISABLE_CLAUDE_CODE=1` for both profiles, disabling OpenCode's automatic Claude Code prompt and skill discovery. Shared `.agents/skills` and OpenCode-native skills remain discoverable. This covers `opencode-personal`, `opencode-work`, and managed interactive Bash's plain `opencode` command.
 
 Both overlays deny Bash commands invoking `codex`, with or without arguments, including direct paths ending in `/codex`. Primary agents and subagents inherit these permissions. This blocks ordinary Codex CLI attempts, including `codex -p subagent exec`; it does not isolate subprocesses or prevent indirect execution through scripts. Later project or agent permission overrides can supersede these rules. Direct native/noninteractive OpenCode bypasses the managed launcher and overlays.
+
+### PostHog MCP
+
+- Both overlays enable the remote `mcp.posthog` server at `https://mcp.posthog.com/mcp`. Global config loads first, so the overlay's `enabled: true` deep-merges over the host-owned `~/.config/opencode/opencode.json` entry with `enabled: false`; that entry is redundant but left in place.
+- Both overlays deny `posthog_*` tools globally, so `build`, `plan`, `general`, and `explore` never see the PostHog tool schema, server instructions, or results.
+- The custom `posthog` subagent (GPT-6 Sol Fast, low) allows `posthog_*` and denies `edit`. Its prompt keeps it read-only unless a change is explicitly requested, returns a brief structured reply, and shares HogQL only on request.
+- Primary agents delegate through the `task` tool, keeping PostHog tool output out of their context.
+- Authenticate with `opencode mcp auth posthog`. OAuth tokens live in OpenCode state (`~/.local/share/opencode/mcp-auth.json`); dotfiles does not manage them.
 
 ## Lifecycle
 

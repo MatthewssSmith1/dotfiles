@@ -6,6 +6,14 @@
       "codex *": "deny",
       "*/codex": "deny",
       "*/codex *": "deny"
+    },
+    "posthog_*": "deny"
+  },
+  "mcp": {
+    "posthog": {
+      "type": "remote",
+      "url": "https://mcp.posthog.com/mcp",
+      "enabled": true
     }
   },
   "enabled_providers": [
@@ -76,6 +84,17 @@
     "title": {
       "model": "openai/gpt-6-luna",
       "variant": "low"
+    },
+    "posthog": {
+      "description": "PostHog specialist. Use proactively for any task that touches PostHog.",
+      "mode": "subagent",
+      "model": "openai/gpt-6-sol-fast",
+      "variant": "low",
+      "permission": {
+        "posthog_*": "allow",
+        "edit": "deny"
+      },
+      "prompt": "You run PostHog work delegated by a parent agent; your reply is its only view of what you found.\nStay read-only unless the task explicitly requests a change in PostHog.\nWhen the request is ambiguous, pick the most sensible reading and state it.\nReply with a brief:\n- Answer: result and key numbers.\n- Basis: one line with project, events/properties, filters, time window, exclusions.\n- Caveats: sampling, incomplete data, schema assumptions.\n- Links: existing insights or recordings worth opening.\nShare HogQL on request, or when a failed task leaves the query as the useful artifact."
     }
   }
 }
