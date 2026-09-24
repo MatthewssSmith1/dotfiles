@@ -62,15 +62,19 @@
   },
   "agent": {
     "explore": {
-      "model": "openai/gpt-5.6-sol",
+      "model": "openai/gpt-6-sol-fast",
       "variant": "low"
     },
     "general": {
-      "model": "openai/gpt-5.6-sol",
+      "model": "openai/gpt-6-sol-fast",
       "variant": "low"
     },
     "compaction": {
-      "model": "openai/gpt-5.6-terra",
+      "model": "openai/gpt-6-luna-fast",
+      "variant": "low"
+    },
+    "title": {
+      "model": "openai/gpt-6-luna",
       "variant": "low"
     }
   }

@@ -50,9 +50,10 @@ jq -e '
   del(.permission) == {
     "$schema":"https://opencode.ai/config.json",
     "agent":{
-      "explore":{"model":"openai/gpt-5.6-sol","variant":"low"},
-      "general":{"model":"openai/gpt-5.6-sol","variant":"low"},
-      "compaction":{"model":"openai/gpt-5.6-terra","variant":"low"}
+      "explore":{"model":"openai/gpt-6-sol-fast","variant":"low"},
+      "general":{"model":"openai/gpt-6-sol-fast","variant":"low"},
+      "compaction":{"model":"openai/gpt-6-luna-fast","variant":"low"},
+      "title":{"model":"openai/gpt-6-luna","variant":"low"}
     }
   }
 ' "$personal_profile" >/dev/null || fail 'personal OpenCode native Codex OAuth profile drifted'
