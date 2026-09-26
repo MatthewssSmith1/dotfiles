@@ -11,7 +11,7 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/lib/harness.sh"
 readonly TEMP_ROOT="$TEST_ROOT"
 
 readonly UPSTREAM="$REPO_DIR/scripts/upstream"
-readonly EXPECTED_COMMIT='0534987009061cbe2dacdde4ad564092ab698d12'
+readonly EXPECTED_COMMIT='c668141e9c42b13c80c9ca4ea108e11708c5e8a5'
 readonly EXPECTED_BLOB='0f8e979785bb2a451f42cd494517d12eabcd54bf'
 readonly NVIM_EVIDENCE_REL='docs/artifacts/omarchy-nvim-2026.8.13-1'
 readonly NVIM_EVIDENCE="$REPO_DIR/$NVIM_EVIDENCE_REL"
@@ -280,11 +280,11 @@ jq -e '
 ' "$REPO_DIR/manifests/sources.json" >/dev/null || fail 'accepted stable artifact provenance drifted'
 jq -e '
   [.pins[] | [.id, .commit, (.package_identity // "-")]] == [
-    ["omarchy", "0534987009061cbe2dacdde4ad564092ab698d12", "-"],
+    ["omarchy", "c668141e9c42b13c80c9ca4ea108e11708c5e8a5", "-"],
     ["lazyvim-starter", "803bc181d7c0d6d5eeba9274d9be49b287294d99", "omarchy-nvim 2026.8.13-1"],
     ["omarchy-pkgs", "f20649b0a41ccc700e41d8a1d402b337a0f75cd4", "omarchy-nvim 2026.8.13-1"]
   ]
-' "$REPO_DIR/manifests/proposals/2026-09-12-omarchy-v4.0.3-core.json" >/dev/null || \
+' "$REPO_DIR/manifests/proposals/2026-09-26-omarchy-v4.0.4-core.json" >/dev/null || \
   fail 'accepted stable pin proposal drifted'
 
 # Verification succeeds from a moved checkout with spaces and prints its pins.
@@ -294,7 +294,7 @@ success_output="$(HOME="$TEMP_ROOT/empty-home" "$moved_checkout/scripts/upstream
   fail 'verification failed from a moved checkout'
 [[ "$success_output" == *"$EXPECTED_COMMIT"* ]] || fail 'verification did not print the commit pin'
 [[ "$success_output" == *"$EXPECTED_BLOB"* ]] || fail 'verification did not print the blob pin'
-[[ "$success_output" == *'v4.0.3'* ]] || fail 'verification did not print the release pin'
+[[ "$success_output" == *'v4.0.4'* ]] || fail 'verification did not print the release pin'
 
 # The deployable Bash payload matches its pinned reference and manifest
 # mapping, and excluded sources are never materialized.

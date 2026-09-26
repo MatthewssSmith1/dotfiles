@@ -43,7 +43,7 @@ chmod 0755 "$host_bin/stow"
 CAPTURE_PATH_PREFIX="$host_bin"
 
 prepare_omarchy() {
-  local root="$1" home="$2" marker="${3-4.0.0.alpha}" owner="${4-omarchy 4.0.3-1}"
+  local root="$1" home="$2" marker="${3-4.0.0.alpha}" owner="${4-omarchy 4.0.4-1}"
   mkdir -p "$root/usr/share/omarchy" "$home/.config/git"
   printf '%s\n' "$marker" > "$root/usr/share/omarchy/version"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$root/usr/bin/omarchy"
@@ -91,7 +91,7 @@ expect_failure 'Omarchy requires a native Linux host' "$home" "$wsl_host" "$DOTF
 pass
 
 # A native v4 host requires regular system signals, ID=omarchy, and identical
-# fixture pacman identities. The alpha family marker may accompany 4.0.3-1.
+# fixture pacman identities. The alpha family marker may accompany 4.0.4-1.
 omarchy_host="$(make_host omarchy linux omarchy 4)"
 home="$(new_seeded_home omarchy)"
 prepare_omarchy "$omarchy_host" "$home"
@@ -100,7 +100,7 @@ assert_contains "$TEST_OUTPUT" "selected profile 'omarchy'"
 assert_not_contains "$TEST_OUTPUT" 'Omarchy core package drift'
 expect_success "$home" "$omarchy_host" "$DOTFILES" check --profile omarchy agents
 expect_failure 'not allowed' "$home" "$omarchy_host" "$DOTFILES" check --profile ubuntu agents
-[[ "$(fixture_pacman_owner "$omarchy_host" /usr/bin/omarchy)" == 'omarchy 4.0.3-1' ]] || \
+[[ "$(fixture_pacman_owner "$omarchy_host" /usr/bin/omarchy)" == 'omarchy 4.0.4-1' ]] || \
   fail 'fixture package authority changed'
 pass
 

@@ -6,8 +6,8 @@
     {
       "id": "omarchy-git-config",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "config/git/config",
         "blob": "0f8e979785bb2a451f42cd494517d12eabcd54bf",
@@ -24,8 +24,8 @@
     {
       "id": "omarchy-tmux-config",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "config/tmux/tmux.conf",
         "blob": "d73c42ea4efe4379ea1051a0eefbe5ef2cdb2e57",
@@ -42,8 +42,8 @@
     {
       "id": "omarchy-starship-config",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "config/starship.toml",
         "blob": "36f15d1326a40d2693710a3a98efe52e2751cf57",
@@ -60,8 +60,8 @@
     {
       "id": "omarchy-herdr-config",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "config/herdr/config.toml",
         "blob": "5c9f0525ce3915a427b015215f99c26db3902761",
@@ -76,8 +76,8 @@
     {
       "id": "omarchy-themed-neovim-template",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/themed/neovim.lua.tpl",
         "blob": "ad4353f73f85dfce3c367af03acd87552988a4ff",
@@ -92,8 +92,8 @@
     {
       "id": "omarchy-theme-tokyo-night-colors",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "themes/tokyo-night/colors.toml",
         "blob": "58e6785259b83a72a5921e2cfec4c66192860b7e",
@@ -108,8 +108,8 @@
     {
       "id": "omarchy-theme-tokyo-night-neovim",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "themes/tokyo-night/neovim.lua",
         "blob": "39327c9b4ce88ceff70f3f3e90c9525b78801940",
@@ -124,8 +124,8 @@
     {
       "id": "omarchy-bash-aliases",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/aliases",
         "blob": "315dd230c5d51fbc6dad51a7e516d46460cedcfd",
@@ -140,8 +140,8 @@
     {
       "id": "omarchy-bash-completions",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/completions",
         "blob": "0b6934235d8c202d96329770c0d7227aa9d53c3e",
@@ -156,8 +156,8 @@
     {
       "id": "omarchy-bash-env-bootstrap",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/env-bootstrap",
         "blob": "2bc6d1f3771f9c2e7def2f4f0adfe40238f0f12d",
@@ -172,8 +172,8 @@
     {
       "id": "omarchy-bash-envs",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/envs",
         "blob": "ac608cb7093bf46a89c8756acaff92ff39bfcb39",
@@ -188,8 +188,8 @@
     {
       "id": "omarchy-bash-fns-compression",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/compression",
         "blob": "4e8bb81431fa0a5b5c6fc92252fa9e8399250f9f",
@@ -204,8 +204,8 @@
     {
       "id": "omarchy-bash-fns-drives",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/drives",
         "blob": "412faaba00737340bdd7f38960a5c21db3a95c19",
@@ -220,8 +220,8 @@
     {
       "id": "omarchy-bash-fns-herdr",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/herdr",
         "blob": "3a18527bdb1c5b989bacafdac33b6113ff0dab9a",
@@ -236,8 +236,8 @@
     {
       "id": "omarchy-bash-fns-rsyncing",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/rsyncing",
         "blob": "76a061ada54cc96a29fb3598d049a6065f9148f6",
@@ -252,8 +252,8 @@
     {
       "id": "omarchy-bash-fns-ssh-port-forwarding",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/ssh-port-forwarding",
         "blob": "3d93718284c4ba351c8183585716a5916bfdea49",
@@ -268,8 +268,8 @@
     {
       "id": "omarchy-bash-fns-ssh-reconnect",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/ssh-reconnect",
         "blob": "5a342b63a179a8e6db5370af496d690559dfb93d",
@@ -284,8 +284,8 @@
     {
       "id": "omarchy-bash-fns-tmux",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/tmux",
         "blob": "de62c625cbe256cbdc4caa517af47f1e9848d9cf",
@@ -300,8 +300,8 @@
     {
       "id": "omarchy-bash-fns-worktrees",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/worktrees",
         "blob": "a175a6473f07174063e7e5cd14e2e4882e33a6ea",
@@ -316,8 +316,8 @@
     {
       "id": "omarchy-bash-functions",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/functions",
         "blob": "9f26f9b5124653d269ebb0bae1bba0f9092eef11",
@@ -332,8 +332,8 @@
     {
       "id": "omarchy-bash-init",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/init",
         "blob": "c3d8c97a18b5967bff3bf1243d43cddf1ddcc452",
@@ -348,8 +348,8 @@
     {
       "id": "omarchy-bash-inputrc",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/inputrc",
         "blob": "3b48e55447a6afbb1b86b30ecd46d533652c416e",
@@ -364,8 +364,8 @@
     {
       "id": "omarchy-bash-rc",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/rc",
         "blob": "63e6249794adaf04639a90e3b5d0e8b5073cc32f",
@@ -380,8 +380,8 @@
     {
       "id": "omarchy-bash-shell",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/shell",
         "blob": "7eb48672bf1d635026a44372a7a4dd6f4db6f7bb",
@@ -396,8 +396,8 @@
     {
       "id": "omarchy-bash-deployable-shell",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/shell",
         "blob": "7eb48672bf1d635026a44372a7a4dd6f4db6f7bb",
@@ -414,8 +414,8 @@
     {
       "id": "omarchy-bash-deployable-aliases",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/aliases",
         "blob": "315dd230c5d51fbc6dad51a7e516d46460cedcfd",
@@ -435,8 +435,8 @@
     {
       "id": "omarchy-bash-deployable-fns-tmux",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/fns/tmux",
         "blob": "de62c625cbe256cbdc4caa517af47f1e9848d9cf",
@@ -456,8 +456,8 @@
     {
       "id": "omarchy-bash-deployable-inputrc",
       "repository": "https://github.com/basecamp/omarchy",
-      "release": "v4.0.3",
-      "commit": "0534987009061cbe2dacdde4ad564092ab698d12",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
       "source": {
         "path": "default/bash/inputrc",
         "blob": "3b48e55447a6afbb1b86b30ecd46d533652c416e",
