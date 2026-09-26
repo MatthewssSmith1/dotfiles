@@ -5,12 +5,72 @@ TEMP_OBJECT_IDENTITIES=()
 TEMP_RECURSIVE=()
 RETAINED_TEMP_PATHS=()
 
-log() {
-  printf '[%s] %s\n' "$SCRIPT_NAME" "$*"
+# Test the destination at emission time: callers may redirect either stream.
+log_color_enabled() {
+  [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != dumb ]]
+}
+
+# Quoted area/profile identifiers are emphasized within the current foreground.
+log_styled_text() {
+  local text="$1" style="${2:-}" quoted="^([^']*)('[^']+')"
+  printf '%s' "$style"
+  while [[ "$text" =~ $quoted ]]; do
+    printf '%s\033[1m%s\033[0m%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "$style"
+    text="${text:${#BASH_REMATCH[0]}}"
+  done
+  printf '%s\033[0m' "$text"
+}
+
+log_message() {
+  local level="$1" message="$2" label="" style="" phrase rest=""
+  local reset=$'\033[0m' bold=$'\033[1m' dim=$'\033[2m'
+  case "$level" in
+    info) style=$'\033[36m' ;;
+    success) style=$'\033[32m' ;;
+    warning) style=$'\033[33m'; label='warning: ' ;;
+    error) style=$'\033[1;31m'; label='error: ' ;;
+    neutral) style="" ;;
+  esac
+  if ! log_color_enabled; then
+    printf '[%s] %s%s\n' "$SCRIPT_NAME" "$label" "$message"
+    return
+  fi
+  printf '%s[%s]%s ' "$dim" "$SCRIPT_NAME" "$reset"
+  if [[ -n "$label" ]]; then
+    printf '%s%s%s' "$style" "$label" "$reset"
+  else
+    # Color the status clause; explanations retain the default foreground.
+    phrase="${message%%;*}"
+    [[ "$message" != *';'* ]] || rest=";${message#*;}"
+    log_styled_text "$phrase" "$style"
+    message="$rest"
+  fi
+  # Installation guidance stays readable and copyable, with only the command bold.
+  if [[ "$message" == *'with: '* ]]; then
+    log_styled_text "${message%%with: *}with: "
+    printf '%s%s%s\n' "$bold" "${message#*with: }" "$reset"
+  else
+    log_styled_text "$message"
+    printf '\n'
+  fi
+}
+
+log() { log_message info "$*"; }
+log_success() { log_message success "$*"; }
+log_neutral() { log_message neutral "$*"; }
+log_warning() { log_message warning "$*" >&2; }
+log_error() { log_message error "$*" >&2; }
+
+log_command() {
+  if log_color_enabled; then
+    printf '\033[1m%s\033[0m\n' "$*"
+  else
+    printf '%s\n' "$*"
+  fi
 }
 
 die() {
-  printf '[%s] error: %s\n' "$SCRIPT_NAME" "$*" >&2
+  log_error "$*"
   exit 1
 }
 
@@ -72,19 +132,19 @@ track_temp_path() {
 discard_tracked_temp_path() {
   local path="$1" context="${2:-temporary cleanup}" index expected recursive
   if ! tracked_temp_path_index "$path"; then
-    printf '[%s] warning: refusing untracked %s path deletion: %s\n' "$SCRIPT_NAME" "$context" "$path" >&2
+    log_warning "refusing untracked $context path deletion: $path"
     return 1
   fi
   index="$TRACKED_TEMP_PATH_INDEX"
   expected="${TEMP_OBJECT_IDENTITIES[index]}"
   recursive="${TEMP_RECURSIVE[index]}"
   capture_path_object_identity "$path" || {
-    printf '[%s] warning: could not inspect %s path; leaving it in place: %s\n' "$SCRIPT_NAME" "$context" "$path" >&2
+    log_warning "could not inspect $context path; leaving it in place: $path"
     return 1
   }
   [[ "$PATH_OBJECT_IDENTITY" != absent ]] || return 0
   if [[ "$PATH_OBJECT_IDENTITY" != "$expected" ]]; then
-    printf '[%s] warning: %s path was replaced; leaving it in place: %s\n' "$SCRIPT_NAME" "$context" "$path" >&2
+    log_warning "$context path was replaced; leaving it in place: $path"
     return 1
   fi
   if [[ "$recursive" == true ]]; then

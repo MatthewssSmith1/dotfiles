@@ -145,7 +145,7 @@ command_capability_exists() {
 
 check_manifest_dependencies() {
   local mode="$1" profile="$2" guidance="$3"
-  local command manager package class entry install_word index selected
+  local command manager package class entry index selected
   local missing_commands=() missing_packages=() native_missing=() row_areas=()
   DEPENDENCY_CRITICAL_MISSING=false; AREA_DEPENDENCY_OK=()
   for entry in "${AREAS[@]}"; do AREA_DEPENDENCY_OK["$entry"]=true; done
@@ -167,14 +167,12 @@ check_manifest_dependencies() {
   done
   ((${#missing_commands[@]} == 0)) && return 0
   if ((${#native_missing[@]} > 0)); then
-    printf '[%s] error: missing required native owner commands:' "$SCRIPT_NAME" >&2; printf ' %s' "${native_missing[@]}" >&2; printf '\n' >&2
+    log_error "missing required native owner commands: ${native_missing[*]}"
   elif ((${#missing_packages[@]} > 0)); then
-    printf '[%s] error: missing required commands; install packages with:\n' "$SCRIPT_NAME" >&2
-    printf '%s' "${DEPENDENCY_APT_INSTALL[0]}" >&2
-    for install_word in "${DEPENDENCY_APT_INSTALL[@]:1}"; do printf ' %s' "$install_word" >&2; done
-    printf ' %s' "${missing_packages[@]}" >&2; printf '\n' >&2
+    log_error 'missing required commands; install packages with:'
+    log_command "${DEPENDENCY_APT_INSTALL[@]}" "${missing_packages[@]}" >&2
   else
-    printf '[%s] error: missing removal-required commands:' "$SCRIPT_NAME" >&2; printf ' %s' "${missing_commands[@]}" >&2; printf '\n' >&2
+    log_error "missing removal-required commands: ${missing_commands[*]}"
   fi
   return 1
 }

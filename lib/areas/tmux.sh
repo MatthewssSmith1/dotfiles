@@ -48,7 +48,7 @@ validate_tmux_runtime() {
       die "native /usr/bin/tmux must be owned by package '$TMUX_NATIVE_PACKAGE', found '${identity:-no package owner}'; run omarchy refresh tmux or reinstall tmux, then rerun validation"
   else
     [[ -n "$selected" ]] || {
-      log "error: tmux is absent; install it manually with: mise install $TMUX_SELECTOR"
+      log_error "tmux is absent; install it manually with: mise install $TMUX_SELECTOR"
       return 1
     }
   fi
@@ -194,9 +194,9 @@ apply_tmux() {
   preflight_tmux
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    log 'validated package-owned native tmux; no files or deployment state were written'
+    log_success 'validated package-owned native tmux; no files or deployment state were written'
   else
-    log "applied Ubuntu tmux baseline, portable help adapter, and selector; install the fallback manually if needed with: mise install $TMUX_SELECTOR"
+    log_success "applied Ubuntu tmux baseline, portable help adapter, and selector; install the fallback manually if needed with: mise install $TMUX_SELECTOR"
   fi
 }
 
@@ -210,5 +210,5 @@ remove_tmux() {
     validate_tmux_parse
   fi
   lean_remove_area
-  log 'removed only exact managed tmux package links; retained plugins, resurrect data, sockets, sessions, and runtime state'
+  log_success 'removed only exact managed tmux package links; retained plugins, resurrect data, sockets, sessions, and runtime state'
 }

@@ -110,7 +110,7 @@ apply_opencode() {
   remove_opencode_legacy_links
   validate_opencode_global_configs
   lean_apply_area
-  log "applied optional OpenCode area for profile '$SELECTED_PROFILE'"
+  log_success "applied optional OpenCode area for profile '$SELECTED_PROFILE'"
 }
 
 remove_opencode() {
@@ -121,5 +121,5 @@ remove_opencode() {
   ((${#LEAN_ATTACHMENT_PATHS[@]} == 0 && ${#LEAN_JSON_PATHS[@]} == 0)) ||
     die 'OpenCode remove bypasses guarded teardown but guarded resources are registered'
   lean_remove_stow
-  log 'removed exact managed OpenCode profile and launcher links'
+  log_success 'removed exact managed OpenCode profile and launcher links'
 }

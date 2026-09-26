@@ -70,7 +70,7 @@ validate_bash_local_layer() {
 
 bash_missing_guidance() {
   [[ "$SELECTED_PROFILE" != ubuntu ]] || command_capability_exists starship || {
-    log "error: Starship is absent; install it manually with: mise install $BASH_STARSHIP_SELECTOR"
+    log_error "Starship is absent; install it manually with: mise install $BASH_STARSHIP_SELECTOR"
     return 1
   }
 }
@@ -103,11 +103,11 @@ preflight_bash() {
 apply_bash() {
   preflight_bash
   lean_apply_area
-  log "applied Bash area for profile '$SELECTED_PROFILE'"
+  log_success "applied Bash area for profile '$SELECTED_PROFILE'"
 }
 
 remove_bash() {
   register_bash_area
   lean_remove_area
-  log 'removed exact managed Bash links and source block; retained host-local Bash data'
+  log_success 'removed exact managed Bash links and source block; retained host-local Bash data'
 }

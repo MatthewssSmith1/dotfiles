@@ -28,22 +28,22 @@ tools_missing_guidance() {
   local missing=false
   if ! command_capability_exists mise; then
     if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-      log 'error: mise is absent; install the native owner manually with: omarchy pkg add mise-bin'
+      log_error 'mise is absent; install the native owner manually with: omarchy pkg add mise-bin'
     else
-      log 'error: mise is absent; install mise manually, then rerun this check'
+      log_error 'mise is absent; install mise manually, then rerun this check'
     fi
     missing=true
   fi
   if [[ "$SELECTED_PROFILE" == ubuntu ]] && ! command_capability_exists node; then
-    log 'error: Node is absent; install the selected fallback manually with: mise install node@lts'
+    log_error 'Node is absent; install the selected fallback manually with: mise install node@lts'
     missing=true
   fi
   if ! command_capability_exists pnpm; then
-    log "error: pnpm is absent; install it manually with: mise install $TOOLS_PNPM_SELECTOR"
+    log_error "pnpm is absent; install it manually with: mise install $TOOLS_PNPM_SELECTOR"
     missing=true
   fi
   if ! command_capability_exists wt; then
-    log "error: Worktrunk is absent; install it manually with: mise install $TOOLS_WORKTRUNK_SELECTOR"
+    log_error "Worktrunk is absent; install it manually with: mise install $TOOLS_WORKTRUNK_SELECTOR"
     missing=true
   fi
   [[ "$missing" == false ]]
@@ -73,11 +73,11 @@ preflight_tools() {
 apply_tools() {
   preflight_tools
   lean_apply_area
-  log "applied tools area for profile '$SELECTED_PROFILE'; install selected tools manually with mise"
+  log_success "applied tools area for profile '$SELECTED_PROFILE'; install selected tools manually with mise"
 }
 
 remove_tools() {
   register_tools_area
   lean_remove_area
-  log 'removed exact managed mise configuration links'
+  log_success 'removed exact managed mise configuration links'
 }

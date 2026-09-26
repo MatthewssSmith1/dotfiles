@@ -37,7 +37,7 @@ validate_herdr_runtime() {
       die "native /usr/bin/herdr must be owned by package '$HERDR_NATIVE_PACKAGE', found '${identity:-no package owner}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
   else
     [[ -n "$resolved" ]] || {
-      log "error: Herdr is absent; install it manually with: mise install $HERDR_SELECTOR"
+      log_error "Herdr is absent; install it manually with: mise install $HERDR_SELECTOR"
       return 1
     }
     binary="$(realpath -e -- "$resolved" 2>/dev/null || true)"
@@ -153,9 +153,9 @@ apply_herdr() {
   preflight_herdr
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    log 'validated package-owned native Herdr; no files or deployment state were written'
+    log_success 'validated package-owned native Herdr; no files or deployment state were written'
   else
-    log "applied Ubuntu Herdr config, helpers, and selector; install the runtime manually with: mise install $HERDR_SELECTOR"
+    log_success "applied Ubuntu Herdr config, helpers, and selector; install the runtime manually with: mise install $HERDR_SELECTOR"
   fi
 }
 
@@ -168,5 +168,5 @@ remove_herdr() {
     validate_herdr_config_syntax
   fi
   lean_remove_area
-  log 'removed only exact managed Herdr package links; retained logs, sessions, sockets, and runtime data'
+  log_success 'removed only exact managed Herdr package links; retained logs, sessions, sockets, and runtime data'
 }

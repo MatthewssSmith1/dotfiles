@@ -264,7 +264,7 @@ desktop_retire_menu_plugin() {
   lean_validate_state_file "$LEAN_STATE"
   # Preserve any unrelated files in the former plugin directory.
   rmdir -- "$HOME/$DESKTOP_MENU_PLUGIN" 2>/dev/null || true
-  log 'retired the managed menu clone; native Omarchy menu extensions remain supported'
+  log_success 'retired the managed menu clone; native Omarchy menu extensions remain supported'
 }
 
 validate_desktop_stock_input() {
@@ -480,7 +480,7 @@ preflight_desktop() {
   fi
   lean_preflight_area "$MODE"
   if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
-    log 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
+    log_neutral 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
   fi
 }
 
@@ -492,9 +492,9 @@ apply_desktop() {
   fi
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    log 'applied desktop preferences and theme filter without restarting the Omarchy shell'
+    log_success 'applied desktop preferences and theme filter without restarting the Omarchy shell'
   else
-    log 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
+    log_neutral 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
   fi
 }
 
@@ -503,7 +503,7 @@ remove_desktop() {
   validate_desktop_closure
   if [[ "$SELECTED_PROFILE" == omarchy && ! -e "$LEAN_STATE" && ! -L "$LEAN_STATE" ]] &&
     desktop_managed_links_and_markers_absent; then
-    log 'desktop ownership is already absent; no changes made'
+    log_neutral 'desktop ownership is already absent; no changes made'
     return 0
   fi
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
@@ -514,8 +514,8 @@ remove_desktop() {
   fi
   lean_remove_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    log 'restored desktop shell idle values and removed exact desktop links and loaders'
+    log_success 'restored desktop shell idle values and removed exact desktop links and loaders'
   else
-    log 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
+    log_neutral 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
   fi
 }

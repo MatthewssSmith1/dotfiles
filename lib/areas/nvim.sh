@@ -39,7 +39,7 @@ validate_nvim_runtime() {
     [[ "$identity" == 'omarchy-nvim 2026.8.13-1' ]] ||
       die "native Neovim baseline has an unaccepted package identity: ${identity:-missing omarchy-nvim package}"
   elif [[ -z "$binary" ]]; then
-    log "error: Neovim is absent; install it manually with: mise install $NVIM_SELECTOR"
+    log_error "Neovim is absent; install it manually with: mise install $NVIM_SELECTOR"
     return 1
   fi
   [[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] ||
@@ -131,9 +131,9 @@ apply_nvim() {
   preflight_nvim
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    log 'retained the package-owned native Neovim baseline and applied only the personal layer/loader'
+    log_success 'retained the package-owned native Neovim baseline and applied only the personal layer/loader'
   else
-    log "applied the Ubuntu Neovim baseline, adapter, personal layer, restore helper, and selector; install the runtime manually with: mise install $NVIM_SELECTOR"
+    log_success "applied the Ubuntu Neovim baseline, adapter, personal layer, restore helper, and selector; install the runtime manually with: mise install $NVIM_SELECTOR"
   fi
 }
 
@@ -145,5 +145,5 @@ remove_nvim() {
     validate_native_nvim_baseline
   fi
   lean_remove_area
-  log 'removed only exact managed Neovim links and personal loader; retained all runtime data'
+  log_success 'removed only exact managed Neovim links and personal loader; retained all runtime data'
 }

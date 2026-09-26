@@ -45,6 +45,8 @@ dotfiles.sh --help
 
 An operation is mandatory and must come first; areas are positional. No areas means ready defaults for apply/check and owned defaults for removal; optional areas require an explicit apply/check. `list` and `help` need no supported host.
 
+Lifecycle logs use terminal-theme colors: cyan information, green success, yellow warnings, and red errors. Warnings and errors go to stderr. Color is enabled independently for each terminal stream; redirected output stays plain. Set `NO_COLOR=1` or `TERM=dumb` to disable styling.
+
 ## Safety
 
 The `dotfiles.sh` deployment lifecycle never runs as root, invokes `sudo` or a distro package manager, installs mise/distro packages, changes the login shell, or uses the network during apply/check/remove. Missing dependencies print exact manual install commands. Separate Omarchy administration helpers are explicit; pruning delegates package removal to Omarchy, while the hardware-gated AMDGPU helper narrowly manages its documented Limine drop-in.

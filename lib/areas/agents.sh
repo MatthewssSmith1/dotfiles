@@ -221,7 +221,7 @@ apply_agents() {
   apply_agents_bridges
   apply_agents_skill_aliases
   "$DOTFILES_DIR/scripts/agent-skills" verify >/dev/null || die 'managed agent skills changed during apply'
-  log "applied Agents area for profile '$SELECTED_PROFILE'"
+  log_success "applied Agents area for profile '$SELECTED_PROFILE'"
 }
 
 remove_agents() {
@@ -243,5 +243,5 @@ remove_agents() {
     die 'Agents remove bypasses guarded teardown but guarded resources are registered'
   lean_remove_stow
   remove_empty_agents_skill_directories
-  log 'removed exact managed Agents links and bridges'
+  log_success 'removed exact managed Agents links and bridges'
 }

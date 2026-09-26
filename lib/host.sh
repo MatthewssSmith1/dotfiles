@@ -168,15 +168,15 @@ check_omarchy_core_drift() {
   [[ "$SELECTED_PROFILE" == omarchy ]] || return 0
   installed="$(omarchy_package_identity /usr/share/omarchy/version 2>/dev/null || true)"
   [[ "$installed" =~ ^omarchy[[:space:]]4\.[0-9A-Za-z.+-]+$ ]] || {
-    log 'error: Omarchy core has no accepted package identity'
+    log_error 'Omarchy core has no accepted package identity'
     return 1
   }
   accepted="$(jq -er '[.sources[] | select(.repository == "https://github.com/basecamp/omarchy") | .release] | unique | if length == 1 then .[0] else error("ambiguous Omarchy release") end' "$DOTFILES_DIR/manifests/sources.json")" || {
-    log 'error: active source manifest has no unique Omarchy release'
+    log_error 'active source manifest has no unique Omarchy release'
     return 1
   }
   accepted="omarchy ${accepted#v}"
   installed_version="${installed#omarchy }"
   installed_version="${installed_version%-*}"
-  [[ "omarchy $installed_version" == "$accepted" ]] || log "warning: Omarchy core package drift: installed=$installed recorded=$accepted"
+  [[ "omarchy $installed_version" == "$accepted" ]] || log_warning "Omarchy core package drift: installed=$installed recorded=$accepted"
 }

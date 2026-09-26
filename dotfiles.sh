@@ -209,7 +209,7 @@ run_area() {
   fi
   area_entrypoint preflight "$area"
   if [[ "$MODE" == check ]]; then
-    log "area '$area' preflight passed for profile '$SELECTED_PROFILE'; no changes made"
+    log_success "area '$area' preflight passed for profile '$SELECTED_PROFILE'; no changes made"
     return 0
   fi
   area_entrypoint apply "$area"
@@ -292,7 +292,7 @@ main() {
     select_profile
     select_lean_remove_areas "$explicit_area_count"
     if ((${#AREAS[@]} == 0)); then
-      log 'no deployed areas are recorded; no changes made'
+      log_neutral 'no deployed areas are recorded; no changes made'
       return
     fi
     validate_selected_areas

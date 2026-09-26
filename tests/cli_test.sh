@@ -123,4 +123,96 @@ ln -s "$inner/packages/common/tools/.local/bin/dotfiles" "$TEST_ROOT/launcher-bi
 if "$TEST_ROOT/launcher-bin/ambiguous" help > /dev/null 2>&1; then fail 'launcher accepted ambiguous roots'; fi
 pass
 
+# Exercise actual TTY detection, including independently redirected streams.
+python3 - "$REPO_DIR" <<'PYTHON'
+import errno
+import os
+import pty
+import re
+import subprocess
+import sys
+
+repo = sys.argv[1]
+script = '''set -Eeuo pipefail
+SCRIPT_NAME=dotfiles.sh
+source "$1/lib/common.sh"
+log "detected host class 'omarchy'; selected profile 'omarchy'"
+log_success "area 'git' preflight passed; no changes made"
+log_neutral 'desktop ownership is already absent; no changes made'
+log_warning 'package drift'
+log_error 'Node is absent; install manually with: mise install node@lts'
+log_command sudo apt install stow >&2
+die 'stopped'
+'''
+plain_out = (
+    "[dotfiles.sh] detected host class 'omarchy'; selected profile 'omarchy'\n"
+    "[dotfiles.sh] area 'git' preflight passed; no changes made\n"
+    "[dotfiles.sh] desktop ownership is already absent; no changes made\n"
+).encode()
+plain_err = (
+    '[dotfiles.sh] warning: package drift\n'
+    '[dotfiles.sh] error: Node is absent; install manually with: mise install node@lts\n'
+    'sudo apt install stow\n'
+    '[dotfiles.sh] error: stopped\n'
+).encode()
+ansi = re.compile(rb'\x1b\[[0-9;]*m')
+
+def run(stdout_tty, stderr_tty, term, no_color):
+    env = dict(os.environ, TERM=term)
+    env.pop('NO_COLOR', None)
+    if no_color is not None:
+        env['NO_COLOR'] = no_color
+    terminals = [pty.openpty() if tty else None for tty in (stdout_tty, stderr_tty)]
+    try:
+        process = subprocess.Popen(
+            ['bash', '-c', script, 'logging-test', repo], env=env,
+            stdout=terminals[0][1] if stdout_tty else subprocess.PIPE,
+            stderr=terminals[1][1] if stderr_tty else subprocess.PIPE,
+        )
+        for terminal in terminals:
+            if terminal:
+                os.close(terminal[1])
+        streams = list(process.communicate(timeout=10))
+        assert process.returncode == 1, process.returncode
+        for index, terminal in enumerate(terminals):
+            if not terminal:
+                continue
+            data = b''
+            while True:
+                try:
+                    chunk = os.read(terminal[0], 4096)
+                except OSError as error:
+                    if error.errno != errno.EIO:
+                        raise
+                    break
+                if not chunk:
+                    break
+                data += chunk
+            streams[index] = data.replace(b'\r\n', b'\n')
+        for index, (actual, expected, tty) in enumerate(zip(
+            streams, (plain_out, plain_err), (stdout_tty, stderr_tty)
+        )):
+            colored = tty and term != 'dumb' and not no_color
+            assert bool(ansi.search(actual)) == colored, (index, actual)
+            assert ansi.sub(b'', actual) == expected, (index, actual)
+            if colored:
+                assert b'\x1b[2m[dotfiles.sh]\x1b[0m' in actual
+                for marker in ((b'\x1b[36m', b'\x1b[32m', b"\x1b[1m'git'")
+                               if index == 0 else
+                               (b'\x1b[33mwarning:', b'\x1b[1;31merror:',
+                                b'\x1b[1mmise install node@lts\x1b[0m',
+                                b'\x1b[1msudo apt install stow\x1b[0m')):
+                    assert marker in actual, (marker, actual)
+    finally:
+        for terminal in terminals:
+            if terminal:
+                os.close(terminal[0])
+
+for out_tty, err_tty in ((False, False), (True, False), (False, True), (True, True)):
+    for term, no_color in (('xterm-256color', None), ('xterm-256color', ''),
+                           ('xterm-256color', '1'), ('xterm-256color', '0'), ('dumb', None)):
+        run(out_tty, err_tty, term, no_color)
+PYTHON
+pass
+
 printf 'PASS: %s CLI test groups\n' "$TEST_COUNT"

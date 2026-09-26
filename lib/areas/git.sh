@@ -340,12 +340,12 @@ apply_git() {
   apply_git_identity
   lean_apply_area
   validate_effective_git
-  log "applied Git area for profile '$SELECTED_PROFILE'"
+  log_success "applied Git area for profile '$SELECTED_PROFILE'"
 }
 
 remove_git() {
   register_git_area
   refuse_active_github_git_removal
   lean_remove_area
-  log 'removed exact managed Git links and include block; retained host-local identity'
+  log_success 'removed exact managed Git links and include block; retained host-local identity'
 }
