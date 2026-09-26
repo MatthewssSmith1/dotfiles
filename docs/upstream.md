@@ -12,7 +12,7 @@ Use one active tracked baseline. Git history provides rollback; do not retain a 
 
 ## Active Pins
 
-Three sources are pinned: Omarchy core, the LazyVim starter, and the Omarchy Neovim overlay in `omarchy-pkgs`. Exact repositories, immutable commits, release identities, blob IDs, transforms, and artifact hashes live in [`manifests/sources.json`](../manifests/sources.json); the accepted proposal is [`manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json`](../manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json). Core is pinned to annotated tag `v4.0.1`'s peeled commit. The independently selected stable package is `omarchy-nvim 2026.8.13-1`; its package identity is recorded on the two Neovim inputs and is not a claim that it matches the core release.
+Three sources are pinned: Omarchy core, the LazyVim starter, and the Omarchy Neovim overlay in `omarchy-pkgs`. Exact repositories, immutable commits, release identities, blob IDs, transforms, and artifact hashes live in [`manifests/sources.json`](../manifests/sources.json); the accepted proposal is [`manifests/proposals/2026-09-12-omarchy-v4.0.3-core.json`](../manifests/proposals/2026-09-12-omarchy-v4.0.3-core.json). Core is pinned to lightweight tag `v4.0.3`'s commit `0534987009061cbe2dacdde4ad564092ab698d12`. The independently selected stable package is `omarchy-nvim 2026.8.13-1`; its package identity is recorded on the two Neovim inputs and is not a claim that it matches the core release.
 
 There is no standalone Omarchy Neovim repository. The released configuration is assembled from three inputs:
 
@@ -21,6 +21,8 @@ There is no standalone Omarchy Neovim repository. The released configuration is 
 3. Overlay `lua/config/options.lua`, which replaces the starter file. The manifest records the replaced starter blob as overwrite provenance.
 
 The pinned package commit predates the recorded package build by 19 minutes. Its PKGBUILD's starter archive checksum resolves to the recorded immutable starter commit. The build-generated `lazy-lock.json` is committed at [`packages/upstream/nvim/.config/nvim/lazy-lock.json`](../packages/upstream/nvim/.config/nvim/lazy-lock.json). On 2026-08-26 the stable database, package, and detached signature were retrieved and the signature, repository checksum, PKGBUILD identity, starter archive, package metadata, and complete packaged configuration were verified.
+
+For the `v4.0.1` to `v4.0.3` core refresh, all 24 distinct tracked core source paths were identical in bytes and modes, so the Ubuntu transforms remain unchanged. Native menu and shortcut changes plus fingerprint and AMDGPU compatibility were reviewed; no adjustments were required.
 
 ## Manifest
 
@@ -58,7 +60,7 @@ The implemented interface has separate verification and update modes:
 
 ```text
 scripts/upstream verify
-scripts/upstream sync --proposal manifests/proposals/2026-08-26-omarchy-v4.0.1-nvim-stable.json
+scripts/upstream sync --proposal manifests/proposals/2026-09-12-omarchy-v4.0.3-core.json
 ```
 
 The proposal records every requested human-readable version, immutable commit, repository, and package identity. Sync refuses version-only inputs and writes a candidate active manifest from the reviewed proposal plus verified source blob data.
@@ -98,13 +100,13 @@ Selected upstream files are committed directly so ordinary Git diffs show baseli
 ## References
 
 - [Omarchy repository](https://github.com/basecamp/omarchy)
-- [Omarchy v4.0.1](https://github.com/basecamp/omarchy/tree/v4.0.1)
-- [Omarchy tmux configuration](https://github.com/basecamp/omarchy/blob/v4.0.1/config/tmux/tmux.conf)
-- [Omarchy Git configuration](https://github.com/basecamp/omarchy/blob/v4.0.1/config/git/config)
-- [Omarchy Bash defaults](https://github.com/basecamp/omarchy/tree/v4.0.1/default/bash)
-- [Omarchy Herdr configuration](https://github.com/basecamp/omarchy/blob/v4.0.1/config/herdr/config.toml)
-- [Tokyo Night palette](https://github.com/basecamp/omarchy/blob/v4.0.1/themes/tokyo-night/colors.toml)
-- [Omarchy v4 Neovim theme template](https://github.com/basecamp/omarchy/blob/v4.0.1/default/themed/neovim.lua.tpl)
+- [Omarchy v4.0.3](https://github.com/basecamp/omarchy/tree/v4.0.3)
+- [Omarchy tmux configuration](https://github.com/basecamp/omarchy/blob/v4.0.3/config/tmux/tmux.conf)
+- [Omarchy Git configuration](https://github.com/basecamp/omarchy/blob/v4.0.3/config/git/config)
+- [Omarchy Bash defaults](https://github.com/basecamp/omarchy/tree/v4.0.3/default/bash)
+- [Omarchy Herdr configuration](https://github.com/basecamp/omarchy/blob/v4.0.3/config/herdr/config.toml)
+- [Tokyo Night palette](https://github.com/basecamp/omarchy/blob/v4.0.3/themes/tokyo-night/colors.toml)
+- [Omarchy v4 Neovim theme template](https://github.com/basecamp/omarchy/blob/v4.0.3/default/themed/neovim.lua.tpl)
 - [LazyVim starter](https://github.com/LazyVim/starter)
 - [Omarchy Neovim PKGBUILD and overlay](https://github.com/omacom-io/omarchy-pkgs/tree/master/pkgbuilds/omarchy-nvim)
 - [LazyVim configuration](https://www.lazyvim.org/configuration)
