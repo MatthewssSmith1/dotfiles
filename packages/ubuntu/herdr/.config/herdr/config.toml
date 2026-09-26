@@ -101,3 +101,4 @@ tab_bar_right = [{ type = "zoom" }, { type = "hostname" }]
 window_title = "{hostname}: {workspace}"
 agent_panel_sort = "priority"
 host_cursor = "native"
+status_indicators = "symbols"

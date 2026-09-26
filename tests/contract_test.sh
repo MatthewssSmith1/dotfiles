@@ -193,7 +193,7 @@ herdr_reference="$REPO_DIR/packages/upstream/reference/omarchy/config/herdr/conf
 herdr_ubuntu="$REPO_DIR/packages/ubuntu/herdr/.config/herdr/config.toml"
 herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
 herdr_expected="$TEST_ROOT/herdr-ubuntu-expected.toml"
-{ printf '%s' "$herdr_preamble"; cat "$herdr_reference"; printf 'agent_panel_sort = "priority"\nhost_cursor = "native"\n'; } > "$herdr_expected"
+{ printf '%s' "$herdr_preamble"; cat "$herdr_reference"; printf 'agent_panel_sort = "priority"\nhost_cursor = "native"\nstatus_indicators = "symbols"\n'; } > "$herdr_expected"
 cmp -s "$herdr_ubuntu" "$herdr_expected" || fail 'Ubuntu Herdr config is not the exact policy derivation'
 ! grep -qE '^(\[update\]|(onboarding|version_check|manifest_check)[[:space:]]*=)' "$herdr_reference" ||
   fail 'immutable Herdr reference contains Ubuntu policy'

@@ -8,7 +8,7 @@ readonly HERDR_REFERENCE='packages/upstream/reference/omarchy/config/herdr/confi
 readonly HERDR_UBUNTU_CONFIG='packages/ubuntu/herdr/.config/herdr/config.toml'
 readonly HERDR_UBUNTU_PREAMBLE=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
 # The accepted snapshot ends in [ui]; append reviewed personal UI preferences.
-readonly HERDR_UBUNTU_PREFERENCES=$'agent_panel_sort = "priority"\nhost_cursor = "native"\n'
+readonly HERDR_UBUNTU_PREFERENCES=$'agent_panel_sort = "priority"\nhost_cursor = "native"\nstatus_indicators = "symbols"\n'
 readonly HERDR_MOSHI_PATH='.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf'
 readonly HERDR_MOSHI_PATH_CONTENT=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 
@@ -24,7 +24,7 @@ herdr_resolved_binary() {
 }
 
 validate_herdr_runtime() {
-  local binary resolved version identity expected
+  local binary resolved version identity expected package_version
   resolved="$(herdr_resolved_binary)"
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     binary="${HOST_ROOT:-}/usr/bin/herdr"
@@ -33,8 +33,11 @@ validate_herdr_runtime() {
     [[ "$resolved" == "$expected" ]] ||
       die "native Herdr must resolve to package-owned /usr/bin/herdr, not '${resolved:-missing}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
     identity="$(omarchy_package_identity /usr/bin/herdr herdr 2>/dev/null || true)"
+    [[ "$identity" =~ ^herdr[[:space:]](([0-9]+:)?([0-9][0-9A-Za-z._+~]*)-[0-9]+(\.[0-9]+)*)$ ]] ||
+      die "native /usr/bin/herdr must have valid package ownership and version metadata, found '${identity:-no package owner}'; reinstall Herdr, then rerun validation"
+    package_version="${BASH_REMATCH[3]}"
     [[ "$identity" == "$HERDR_NATIVE_PACKAGE" ]] ||
-      die "native /usr/bin/herdr must be owned by package '$HERDR_NATIVE_PACKAGE', found '${identity:-no package owner}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
+      log_warning "native Herdr package version is unreviewed: installed=$identity recorded=$HERDR_NATIVE_PACKAGE"
   else
     [[ -n "$resolved" ]] || {
       log_error "Herdr is absent; install it manually with: mise install $HERDR_SELECTOR"
@@ -48,27 +51,49 @@ validate_herdr_runtime() {
   [[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] ||
     die "selected Herdr runtime is not a directly executable regular file: ${binary:-missing}"
   version="$("$binary" --version 2>/dev/null || true)"
-  [[ "$version" == "herdr $HERDR_VERSION" ]] || {
-    if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-      die "native Herdr must report 'herdr $HERDR_VERSION', found '${version:-missing}'; omarchy refresh herdr or reinstall Herdr, then rerun validation"
-    fi
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    [[ "$version" == "herdr $package_version" ]] ||
+      die "native Herdr runtime version does not match package metadata: runtime='${version:-missing}' package='$identity'; reinstall Herdr, then rerun validation"
+  elif [[ "$version" != "herdr $HERDR_VERSION" ]]; then
     die "Ubuntu Herdr must report 'herdr $HERDR_VERSION', found '${version:-missing}'; install it with: mise install $HERDR_SELECTOR"
-  }
+  fi
   HERDR_BINARY="$binary"
 }
 
 validate_herdr_config_file() {
-  local path="$1" description="$2" mode
+  local path="$1" description="$2" mode result
   [[ -f "$path" && ! -L "$path" ]] || die "$description is missing or is not a regular file: $path"
   path_owned_by_euid "$path" || die "$description has an unsafe owner: $path"
   mode="$(stat -c %a -- "$path")"
   [[ "$mode" == 600 || "$mode" == 640 || "$mode" == 644 ]] || die "$description has an unsafe mode: $path"
-  cmp -s -- "$path" "$DOTFILES_DIR/$HERDR_REFERENCE" || {
-    if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-      die "native Herdr config has drifted: $path; omarchy refresh herdr or reinstall Herdr, then rerun validation"
-    fi
-    die "Ubuntu Herdr config differs from the accepted v4 snapshot: $path"
-  }
+  if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    command -v python3 >/dev/null 2>&1 && python3 -c 'import tomllib' >/dev/null 2>&1 ||
+      die 'native Herdr config validation requires Python 3.11+ tomllib'
+    result="$(python3 - "$path" <<'PY'
+import sys, tomllib
+try:
+    with open(sys.argv[1], "rb") as config:
+        data = tomllib.load(config)
+except tomllib.TOMLDecodeError:
+    print("invalid-toml")
+    raise SystemExit
+ui = data.get("ui")
+if ui is not None and not isinstance(ui, dict):
+    print("invalid-ui")
+elif not isinstance(ui, dict) or ui.get("status_indicators") != "symbols":
+    print("preference")
+else:
+    print("valid")
+PY
+    )"
+    case "$result" in
+      valid) ;;
+      preference) die "native Herdr preference mismatch: set status_indicators = \"symbols\" under [ui] in $path" ;;
+      invalid-toml) die "native Herdr config is invalid TOML: $path" ;;
+      invalid-ui) die "native Herdr config is invalid: ui must be a TOML table in $path" ;;
+      *) die "native Herdr config could not be parsed safely: $path" ;;
+    esac
+  fi
 }
 
 validate_herdr_ubuntu_derivation() {
@@ -82,7 +107,7 @@ validate_herdr_ubuntu_derivation() {
 validate_herdr_config_syntax() {
   local source temporary status=0
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    source="$DOTFILES_DIR/$HERDR_REFERENCE"
+    source="$HOME/$HERDR_CONFIG"
   else
     source="$DOTFILES_DIR/$HERDR_UBUNTU_CONFIG"
   fi
@@ -91,6 +116,7 @@ validate_herdr_config_syntax() {
   cp -- "$source" "$temporary/.config/herdr/config.toml"
   HOME="$temporary" XDG_CONFIG_HOME="$temporary/.config" XDG_DATA_HOME="$temporary/.local/share" \
     XDG_STATE_HOME="$temporary/.local/state" XDG_CACHE_HOME="$temporary/.cache" MISE_OFFLINE=1 \
+    HERDR_CONFIG_PATH="$temporary/.config/herdr/config.toml" \
     "$HERDR_BINARY" config check >/dev/null 2>&1 || status=$?
   rm -rf -- "$temporary"
   ((status == 0)) || die 'selected Herdr config failed offline herdr config check'

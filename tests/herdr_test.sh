@@ -16,8 +16,9 @@ case "\${1:-}" in
   --version) printf 'herdr $version\\n' ;;
   config)
     [[ "\${2:-}" == check ]] || exit 2
-    config="\${XDG_CONFIG_HOME:-\$HOME/.config}/herdr/config.toml"
-    [[ -f "\$config" ]] && grep -qxF 'prefix = "ctrl+space"' "\$config" || exit 1
+    config="\${HERDR_CONFIG_PATH:-\${XDG_CONFIG_HOME:-\$HOME/.config}/herdr/config.toml}"
+    [[ -f "\$config" ]] || exit 1
+    [[ "\${HERDR_CONFIG_CHECK_FAIL:-}" != 1 ]] || exit 7
     [[ -z "\${HERDR_CONFIG_TRACE:-}" ]] || sha256sum "\$config" | cut -d ' ' -f1 >> "\$HERDR_CONFIG_TRACE"
     ;;
   *) exit 2 ;;
@@ -60,7 +61,7 @@ helper="$REPO_DIR/packages/ubuntu/herdr/.config/dotfiles/bash/fns/herdr"
 selector="$REPO_DIR/packages/ubuntu/herdr/.config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml"
 path_dropin="$REPO_DIR/packages/ubuntu/herdr/.config/systemd/user/moshi-hook.service.d/10-herdr-path.conf"
 herdr_preamble=$'onboarding = false\n\n[update]\nversion_check = false\nmanifest_check = true\n\n'
-herdr_preferences=$'agent_panel_sort = "priority"\nhost_cursor = "native"\n'
+herdr_preferences=$'agent_panel_sort = "priority"\nhost_cursor = "native"\nstatus_indicators = "symbols"\n'
 path_dropin_content=$'[Service]\nEnvironment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin\n'
 expected_config="$TEST_ROOT/herdr-ubuntu-expected.toml"
 expected_path_dropin="$TEST_ROOT/moshi-herdr-path-expected.conf"
@@ -124,18 +125,20 @@ assert_contains "$output" 'Moshi Herdr PATH drop-in bytes are not exact'
 assert_empty_home "$malformed_home"
 pass
 
-# Native apply, check, and remove validate exact package-owned stock behavior
+# Native apply, check, and remove validate package ownership, the actual config,
+# and the one manual preference without owning native config bytes.
 # without invoking Stow or creating either deployment-state generation.
 native_host="$(make_system_fixture native-herdr)"
 make_herdr_runtime "$native_host/usr/bin/herdr"
 record_pacman_ownership "$native_host" 'herdr 0.8.2-1' /usr/bin/herdr
 native_home="$(new_home native)"
 mkdir -p "$native_home/.config/herdr"
-cp "$reference" "$native_home/.config/herdr/config.toml"
+printf '[ui]\nstatus_indicators = "symbols"\nlocal_setting = "accepted"\n' > "$native_home/.config/herdr/config.toml"
 chmod 0644 "$native_home/.config/herdr/config.toml"
 printf 'session\n' > "$native_home/.config/herdr/session.json"
 cp -a "$native_home" "$TEST_ROOT/native-before"
 export HERDR_CONFIG_TRACE="$TEST_ROOT/native-config.trace"
+export HERDR_CONFIG_PATH="$TEST_ROOT/must-not-be-used.toml"
 : > "$HERDR_CONFIG_TRACE"
 for operation in apply check remove; do
   trace_before="$(sha256sum "$FAKE_STOW_TRACE")"
@@ -144,22 +147,58 @@ for operation in apply check remove; do
     fail "native Herdr $operation mutated HOME"
   [[ "$trace_before" == "$(sha256sum "$FAKE_STOW_TRACE")" ]] || fail "native Herdr $operation invoked Stow"
 done
-native_hash="$(sha256sum "$reference" | cut -d ' ' -f1)"
-[[ "$(sort -u "$HERDR_CONFIG_TRACE")" == "$native_hash" ]] || fail 'native syntax check did not use the immutable reference'
-unset HERDR_CONFIG_TRACE
+native_hash="$(sha256sum "$native_home/.config/herdr/config.toml" | cut -d ' ' -f1)"
+[[ "$(sort -u "$HERDR_CONFIG_TRACE")" == "$native_hash" ]] || fail 'native syntax check did not use an isolated copy of the actual config'
+unset HERDR_CONFIG_TRACE HERDR_CONFIG_PATH
 [[ ! -e "$native_home/.local/state/dotfiles/v1/herdr.json" &&
   ! -e "$native_home/.local/state/dotfiles/v2/herdr.json" ]] || fail 'native Herdr created deployment state'
 pass
 
-# Native drift, wrong package identity, and PATH shadows refuse with restoration guidance.
-printf '# drift\n' >> "$native_home/.config/herdr/config.toml"
+# A missing native preference gets targeted manual guidance; other settings remain valid.
+printf '[ui]\nlocal_setting = "accepted"\n' > "$native_home/.config/herdr/config.toml"
 set +e
 output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
 status=$?
 set -e
-((status != 0)) || fail 'native config drift was accepted'
-assert_contains "$output" 'omarchy refresh herdr or reinstall Herdr'
-cp "$reference" "$native_home/.config/herdr/config.toml"
+((status != 0)) || fail 'missing native symbols preference was accepted'
+assert_contains "$output" 'set status_indicators = "symbols" under [ui]'
+printf '[ui]\nstatus_indicators = "dots"\n' > "$native_home/.config/herdr/config.toml"
+set +e
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'native dots preference was accepted'
+assert_contains "$output" 'set status_indicators = "symbols" under [ui]'
+printf '[ui\nstatus_indicators = "symbols"\n' > "$native_home/.config/herdr/config.toml"
+set +e
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'malformed native TOML was accepted'
+assert_contains "$output" 'native Herdr config is invalid TOML'
+[[ "$output" != *Traceback* ]] || fail 'malformed native TOML leaked a traceback'
+printf 'ui = "symbols"\n' > "$native_home/.config/herdr/config.toml"
+set +e
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'non-table native ui was accepted'
+assert_contains "$output" 'ui must be a TOML table'
+printf 'status_indicators = "symbols"\n' >> "$native_home/.config/herdr/config.toml"
+
+# Runtime config-check failures remain distinct from TOML diagnostics.
+printf '[ui]\nstatus_indicators = "symbols"\n' > "$native_home/.config/herdr/config.toml"
+export HERDR_CONFIG_CHECK_FAIL=1
+set +e
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+status=$?
+set -e
+unset HERDR_CONFIG_CHECK_FAIL
+((status != 0)) || fail 'native runtime config-check failure was accepted'
+assert_contains "$output" 'failed offline herdr config check'
+[[ "$output" != *'invalid TOML'* && "$output" != *'preference mismatch'* ]] || fail 'runtime config-check failure used a TOML diagnostic'
+
+# PATH shadows, malformed ownership, and runtime/package version mismatches fail.
 shadow="$TEST_ROOT/shadow"
 make_herdr_runtime "$shadow/herdr"
 set +e
@@ -168,13 +207,54 @@ status=$?
 set -e
 ((status != 0)) || fail 'native PATH shadow was accepted'
 assert_contains "$output" 'package-owned /usr/bin/herdr'
-printf '/usr/bin/herdr\therdr 0.8.1\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
+printf '/usr/bin/herdr\tother 0.8.2-1\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
 set +e
 output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
 status=$?
 set -e
-((status != 0)) || fail 'wrong native package version was accepted'
-assert_contains "$output" "herdr 0.8.2-1"
+((status != 0)) || fail 'wrong native package owner was accepted'
+assert_contains "$output" 'valid package ownership and version metadata'
+printf '/usr/bin/herdr\therdr invalid\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
+set +e
+run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" >/dev/null 2>&1
+status=$?
+set -e
+((status != 0)) || fail 'invalid native package version metadata was accepted'
+printf '/usr/bin/herdr\therdr banana-1\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
+set +e
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'unreviewed non-semantic native metadata was accepted'
+assert_contains "$output" 'valid package ownership and version metadata'
+printf '/usr/bin/herdr\therdr 0.9.0-1\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
+set +e
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'runtime/package version mismatch was accepted'
+assert_contains "$output" 'runtime version does not match package metadata'
+make_herdr_runtime "$native_host/usr/bin/herdr" 0.9.0
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+assert_contains "$output" 'package version is unreviewed'
+printf '/usr/bin/herdr\therdr 2:0.9.0-3\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+assert_contains "$output" 'package version is unreviewed'
+printf '/usr/bin/herdr\therdr 2:0.9.0_rc1-3.1\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
+make_herdr_runtime "$native_host/usr/bin/herdr" 0.9.0_rc1
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+assert_contains "$output" 'package version is unreviewed'
+printf '/usr/bin/herdr\therdr 1.0-1\n' > "$native_host/var/lib/dotfiles-test/pacman-owners.tsv"
+make_herdr_runtime "$native_host/usr/bin/herdr" 1.0
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+assert_contains "$output" 'package version is unreviewed'
+make_herdr_runtime "$native_host/usr/bin/herdr" 1.0.1
+set +e
+output="$(run_herdr_area "$native_home" "$native_host" omarchy check "$native_host/usr/bin" 2>&1)"
+status=$?
+set -e
+((status != 0)) || fail 'plausible native package accepted a mismatched runtime version'
+assert_contains "$output" 'runtime version does not match package metadata'
 pass
 
 # Ubuntu deploys only exact Stow links, creates no state, validates syntax with

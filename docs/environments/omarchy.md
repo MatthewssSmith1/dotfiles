@@ -170,7 +170,7 @@ before normal launch; unavailable authorization or a missing marker is a blocker
 
 Development tools resolve to native Omarchy packages. Dotfiles fails if a protected command such as Neovim does not resolve to its accepted package-owned `/usr/bin` runtime.
 
-Herdr resolves exactly to package-owned `/usr/bin/herdr`; dotfiles validates its accepted version and stock config without changing it. See the [Herdr contract](../tools/herdr.md).
+Herdr resolves exactly to package-owned `/usr/bin/herdr`; dotfiles validates package/runtime version consistency and the actual host-owned config without changing it. The shared `ui.status_indicators = "symbols"` preference is required; unrelated valid customization is allowed. See the [Herdr contract](../tools/herdr.md).
 
 Claude Code, Codex, and the generic OpenCode executable retain their Omarchy or native host owners. The optional OpenCode area adds only profile/TUI overlays, named launchers, and a helper; interactive Bash routes plain `opencode` through the personal overlay without replacing the native executable. The Agents area supplies a minimal Claude settings overlay and `claude-dotfiles` launcher; managed interactive Bash routes `claude` through it. Claude's user settings remain host-owned; see [Agents](../tools/agents.md). These areas add no assistant mise selector, do not require an assistant executable, and leave assistant application state untouched.
 
@@ -178,7 +178,7 @@ Bash is ready; native attachment and refresh behavior is covered by isolated fix
 
 ## Version Drift
 
-Native Omarchy self-updates while other machines deploy the pinned snapshot recorded in [Upstream](../upstream.md). Dotfiles warns (non-blocking) when the native Omarchy core package's parseable version differs from its recorded pin. The `omarchy-nvim` package identity is stricter: an identity other than the recorded pin blocks Neovim validation outright, as do missing owners, malformed metadata, and forbidden shadows. Drift is expected, and advancing either pin is a separate explicit sync-and-review operation.
+Native Omarchy self-updates while other machines deploy the pinned snapshot recorded in [Upstream](../upstream.md). Dotfiles warns (non-blocking) when the native Omarchy core package's parseable version differs from its recorded pin. For Herdr, Neovim, and `omarchy-nvim`, valid package identities outside the reviewed set also warn rather than block. A warning records an unreviewed version, not a compatibility guarantee. Missing or wrong owners, malformed metadata, package/runtime version mismatches, and forbidden shadows still fail. Herdr validates the actual config and the shared symbols preference; Neovim validates its personal attachment. Ubuntu retains exact runtime pins and snapshot validation. Advancing those portable pins remains a separate explicit sync-and-review operation.
 
 ## Validation
 

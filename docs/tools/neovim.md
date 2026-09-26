@@ -4,9 +4,9 @@ The accepted baseline combines the pinned LazyVim starter, the independently acc
 
 ## Native Omarchy
 
-The installed `omarchy-nvim` package owns `~/.config/nvim`; dotfiles never rewrites that baseline or manages native plugins and runtime data. The area validates package-owned `/usr/bin/nvim`, accepted `neovim` package/runtime identities, and the exact accepted `omarchy-nvim` package.
+The installed `omarchy-nvim` package owns `~/.config/nvim`; dotfiles never rewrites that baseline or manages native plugins and runtime data. The area requires `/usr/bin/nvim` to be owned by `neovim`, requires the baseline package to be present as `omarchy-nvim`, validates numeric-leading Pacman package versions, and requires the complete runtime version to match the package's upstream version (excluding any Pacman epoch and release). Reviewed `neovim 0.12.4-1` and `neovim 0.12.5-1` identities are quiet. Any other valid identity warns rather than fails because native Omarchy is authoritative, regardless of whether its version is newer or older; shadows, missing or wrong owners, malformed metadata or runtime output, and package/runtime mismatches fail. Ubuntu remains exact `0.12.4` with `x.y.z` semantics.
 
-`common/nvim` deploys the personal source outside the refresh-owned tree. One regular guarded loader at `~/.config/nvim/plugin/dotfiles-personal.lua` sources it. Lean v2 state records only the loader pre-state needed for exact removal. After a native refresh removes the loader, rerun `dotfiles.sh apply nvim` to reattach it.
+`common/nvim` deploys the personal source outside the refresh-owned tree. One regular guarded loader at `~/.config/nvim/plugin/dotfiles-personal.lua` sources it. Lean v2 state records only the loader pre-state needed for exact removal. If check reports missing ownership state, loader, or personal source after a native refresh, run `./dotfiles.sh apply nvim` to reattach it.
 
 ## Ubuntu
 

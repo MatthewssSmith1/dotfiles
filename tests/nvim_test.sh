@@ -117,8 +117,19 @@ jq -e '.area == "nvim" and .profile == "omarchy" and
   .attachments[".config/nvim/plugin/dotfiles-personal.lua"].id == "nvim-native-loader"' "$state" >/dev/null ||
   fail 'native Neovim v2 state is not attachment-only'
 run_area "$native_home" "$native_host" omarchy check >/dev/null
+mv "$state" "$state.saved"
+if run_area "$native_home" "$native_host" omarchy check >/dev/null 2>"$TEST_ROOT/native-missing-state.err"; then
+  fail 'missing native ownership state passed check'
+fi
+grep -Fq './dotfiles.sh apply nvim' "$TEST_ROOT/native-missing-state.err" ||
+  fail 'missing native ownership state did not give area-specific repair guidance'
+mv "$state.saved" "$state"
 rm "$native_home/.config/nvim/plugin/dotfiles-personal.lua"
-if run_area "$native_home" "$native_host" omarchy check >/dev/null 2>&1; then fail 'missing refreshed loader passed check'; fi
+if run_area "$native_home" "$native_host" omarchy check >/dev/null 2>"$TEST_ROOT/native-missing-loader.err"; then
+  fail 'missing refreshed loader passed check'
+fi
+grep -Fq './dotfiles.sh apply nvim' "$TEST_ROOT/native-missing-loader.err" ||
+  fail 'missing native attachment did not give area-specific repair guidance'
 run_area "$native_home" "$native_host" omarchy apply >/dev/null
 run_area "$native_home" "$native_host" omarchy remove >/dev/null
 [[ ! -e "$native_home/.config/nvim/plugin/dotfiles-personal.lua" && ! -e "$state" ]] ||
@@ -126,16 +137,103 @@ run_area "$native_home" "$native_host" omarchy remove >/dev/null
 [[ "$(sha256sum "$native_home/.config/nvim/init.lua")" == "$baseline_before" ]] || fail 'native lifecycle changed baseline'
 pass
 
-bad_host="$(make_host nvim-native-bad linux omarchy 4.0.1)"
-make_nvim "$bad_host/usr/bin/nvim" 0.12.5
-record_pacman_ownership "$bad_host" 'neovim 0.12.6-1' /usr/bin/nvim
-record_pacman_ownership "$bad_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
-bad_home="$(new_home nvim-native-bad)"; mkdir -p "$bad_home/.config/nvim"
-printf 'return {}\n' > "$bad_home/.config/nvim/init.lua"
-if run_area "$bad_home" "$bad_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-bad.err"; then
-  fail 'unaccepted native Neovim package passed validation'
+new_host="$(make_host nvim-native-new linux omarchy 4.0.1)"
+make_nvim "$new_host/usr/bin/nvim" 0.13.0+git
+record_pacman_ownership "$new_host" 'neovim 1:0.13.0+git-2.1' /usr/bin/nvim
+record_pacman_ownership "$new_host" 'omarchy-nvim 2026.9-1' /usr/share/omarchy-nvim
+new_home="$(new_home nvim-native-new)"; mkdir -p "$new_home/.config/nvim"
+printf 'return {}\n' > "$new_home/.config/nvim/init.lua"
+run_area "$new_home" "$new_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-new.err"
+grep -Fq 'native Neovim package version is unreviewed' "$TEST_ROOT/native-new.err" ||
+  fail 'valid unreviewed native Neovim package did not warn'
+grep -Fq 'native omarchy-nvim package version is unreviewed' "$TEST_ROOT/native-new.err" ||
+  fail 'valid unreviewed native baseline package did not warn'
+pass
+
+reviewed_host="$(make_host nvim-native-reviewed linux omarchy 4.0.1)"
+make_nvim "$reviewed_host/usr/bin/nvim" 0.12.4
+record_pacman_ownership "$reviewed_host" 'neovim 0.12.4-1' /usr/bin/nvim
+record_pacman_ownership "$reviewed_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
+reviewed_home="$(new_home nvim-native-reviewed)"; mkdir -p "$reviewed_home/.config/nvim"
+printf 'return {}\n' > "$reviewed_home/.config/nvim/init.lua"
+run_area "$reviewed_home" "$reviewed_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-reviewed.err"
+[[ ! -s "$TEST_ROOT/native-reviewed.err" ]] || fail 'reviewed native Neovim 0.12.4 package warned'
+pass
+
+missing_owner_host="$(make_host nvim-native-missing-owner linux omarchy 4.0.1)"
+make_nvim "$missing_owner_host/usr/bin/nvim" 0.12.5
+record_pacman_ownership "$missing_owner_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
+missing_owner_home="$(new_home nvim-native-missing-owner)"; mkdir -p "$missing_owner_home/.config/nvim"
+printf 'return {}\n' > "$missing_owner_home/.config/nvim/init.lua"
+if run_area "$missing_owner_home" "$missing_owner_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-missing-owner.err"; then
+  fail 'missing native Neovim package owner passed validation'
 fi
-grep -Fq 'unaccepted package identity' "$TEST_ROOT/native-bad.err" || fail 'native package refusal was unclear'
+grep -Fq "found 'no package owner'" "$TEST_ROOT/native-missing-owner.err" ||
+  fail 'missing native package owner refusal was unclear'
+pass
+
+wrong_owner_host="$(make_host nvim-native-wrong-owner linux omarchy 4.0.1)"
+make_nvim "$wrong_owner_host/usr/bin/nvim" 0.12.5
+record_pacman_ownership "$wrong_owner_host" 'not-neovim 0.12.5-1' /usr/bin/nvim
+record_pacman_ownership "$wrong_owner_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
+wrong_owner_home="$(new_home nvim-native-wrong-owner)"; mkdir -p "$wrong_owner_home/.config/nvim"
+printf 'return {}\n' > "$wrong_owner_home/.config/nvim/init.lua"
+if run_area "$wrong_owner_home" "$wrong_owner_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-wrong-owner.err"; then
+  fail 'wrong native Neovim package owner passed validation'
+fi
+grep -Fq 'must be owned by neovim with valid version metadata' "$TEST_ROOT/native-wrong-owner.err" ||
+  fail 'native package owner refusal was unclear'
+pass
+
+bad_metadata_host="$(make_host nvim-native-bad-metadata linux omarchy 4.0.1)"
+make_nvim "$bad_metadata_host/usr/bin/nvim" 0.12.5
+record_pacman_ownership "$bad_metadata_host" 'neovim rolling-1' /usr/bin/nvim
+record_pacman_ownership "$bad_metadata_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
+bad_metadata_home="$(new_home nvim-native-bad-metadata)"; mkdir -p "$bad_metadata_home/.config/nvim"
+printf 'return {}\n' > "$bad_metadata_home/.config/nvim/init.lua"
+if run_area "$bad_metadata_home" "$bad_metadata_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-bad-metadata.err"; then
+  fail 'invalid native Neovim package metadata passed validation'
+fi
+grep -Fq 'valid version metadata' "$TEST_ROOT/native-bad-metadata.err" || fail 'invalid metadata refusal was unclear'
+pass
+
+mismatch_host="$(make_host nvim-native-mismatch linux omarchy 4.0.1)"
+make_nvim "$mismatch_host/usr/bin/nvim" 0.12.6
+record_pacman_ownership "$mismatch_host" 'neovim 0.12.5-1' /usr/bin/nvim
+record_pacman_ownership "$mismatch_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
+mismatch_home="$(new_home nvim-native-mismatch)"; mkdir -p "$mismatch_home/.config/nvim"
+printf 'return {}\n' > "$mismatch_home/.config/nvim/init.lua"
+if run_area "$mismatch_home" "$mismatch_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-mismatch.err"; then
+  fail 'native Neovim package/runtime mismatch passed validation'
+fi
+grep -Fq 'does not match package version' "$TEST_ROOT/native-mismatch.err" || fail 'runtime mismatch refusal was unclear'
+pass
+
+bad_runtime_host="$(make_host nvim-native-bad-runtime linux omarchy 4.0.1)"
+mkdir -p "$bad_runtime_host/usr/bin"
+printf '#!/usr/bin/env bash\nprintf "NVIM v0.12.5 \\n"\n' > "$bad_runtime_host/usr/bin/nvim"
+chmod 0755 "$bad_runtime_host/usr/bin/nvim"
+record_pacman_ownership "$bad_runtime_host" 'neovim 0.12.5-1' /usr/bin/nvim
+record_pacman_ownership "$bad_runtime_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
+bad_runtime_home="$(new_home nvim-native-bad-runtime)"; mkdir -p "$bad_runtime_home/.config/nvim"
+printf 'return {}\n' > "$bad_runtime_home/.config/nvim/init.lua"
+if run_area "$bad_runtime_home" "$bad_runtime_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-bad-runtime.err"; then
+  fail 'native Neovim runtime with trailing version garbage passed validation'
+fi
+grep -Fq 'returned an invalid version' "$TEST_ROOT/native-bad-runtime.err" || fail 'invalid runtime refusal was unclear'
+pass
+
+suffix_mismatch_host="$(make_host nvim-native-suffix-mismatch linux omarchy 4.0.1)"
+make_nvim "$suffix_mismatch_host/usr/bin/nvim" 0.12.5garbage
+record_pacman_ownership "$suffix_mismatch_host" 'neovim 0.12.5-1' /usr/bin/nvim
+record_pacman_ownership "$suffix_mismatch_host" 'omarchy-nvim 2026.8.13-1' /usr/share/omarchy-nvim
+suffix_mismatch_home="$(new_home nvim-native-suffix-mismatch)"; mkdir -p "$suffix_mismatch_home/.config/nvim"
+printf 'return {}\n' > "$suffix_mismatch_home/.config/nvim/init.lua"
+if run_area "$suffix_mismatch_home" "$suffix_mismatch_host" omarchy apply >/dev/null 2>"$TEST_ROOT/native-suffix-mismatch.err"; then
+  fail 'native Neovim runtime suffix mismatch passed validation'
+fi
+grep -Fq 'does not match package version' "$TEST_ROOT/native-suffix-mismatch.err" ||
+  fail 'runtime suffix mismatch refusal was unclear'
 pass
 
 unowned_baseline_host="$(make_host nvim-native-unowned-baseline linux omarchy 4.0.1)"
@@ -148,7 +246,7 @@ if run_area "$unowned_baseline_home" "$unowned_baseline_host" omarchy apply \
   >/dev/null 2>"$TEST_ROOT/native-unowned-baseline.err"; then
   fail 'unowned native Neovim baseline passed validation'
 fi
-grep -Fq 'missing omarchy-nvim package' "$TEST_ROOT/native-unowned-baseline.err" ||
+grep -Fq 'must be owned by omarchy-nvim with valid version metadata' "$TEST_ROOT/native-unowned-baseline.err" ||
   fail 'native baseline ownership refusal was unclear'
 pass
 

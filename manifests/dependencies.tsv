@@ -9,3 +9,4 @@ require|git|apply,check|ubuntu|git|apt-package|git|area
 require|git|apply,check|omarchy|git|omarchy-native|-|area
 require|git,tools,bash,nvim,agents,opencode|apply,check,remove|omarchy|stow|omarchy-native|-|area
 require|desktop|apply,check,remove|omarchy|stow|omarchy-native|-|area
+require|herdr|apply,check,remove|omarchy|python3|omarchy-native|-|area

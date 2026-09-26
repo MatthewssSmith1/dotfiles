@@ -2,6 +2,8 @@
 
 readonly NVIM_VERSION='0.12.4'
 readonly NVIM_SELECTOR="aqua:neovim/neovim@$NVIM_VERSION"
+readonly NVIM_NATIVE_PACKAGES='neovim 0.12.4-1|neovim 0.12.5-1'
+readonly NVIM_NATIVE_BASELINE_PACKAGE='omarchy-nvim 2026.8.13-1'
 readonly NVIM_NATIVE_CONFIG='.config/nvim/init.lua'
 readonly NVIM_NATIVE_LOADER='.config/nvim/plugin/dotfiles-personal.lua'
 readonly NVIM_NATIVE_BEGIN='-- >>> dotfiles nvim >>>'
@@ -26,18 +28,23 @@ register_nvim_area() {
 }
 
 validate_nvim_runtime() {
-  local binary output identity version expected
+  local binary output identity version version_line expected package_version baseline_identity
   binary="${DOTFILES_TEST_NVIM_BIN:-$(type -P nvim 2>/dev/null || true)}"
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     expected="${HOST_ROOT:-}/usr/bin/nvim"
     [[ "$binary" == "$expected" ]] ||
       die "native Neovim must resolve to package-owned /usr/bin/nvim, not '${binary:-missing}'; refresh or reinstall Neovim, then rerun validation"
     identity="$(omarchy_package_identity /usr/bin/nvim neovim 2>/dev/null || true)"
-    [[ "$identity" == 'neovim 0.12.4-1' || "$identity" == 'neovim 0.12.5-1' ]] ||
-      die "native /usr/bin/nvim has an unaccepted package identity: ${identity:-no package owner}"
-    identity="$(omarchy_package_identity /usr/share/omarchy-nvim omarchy-nvim 2>/dev/null || true)"
-    [[ "$identity" == 'omarchy-nvim 2026.8.13-1' ]] ||
-      die "native Neovim baseline has an unaccepted package identity: ${identity:-missing omarchy-nvim package}"
+    [[ "$identity" =~ ^neovim[[:space:]]([0-9]+:)?([0-9][0-9A-Za-z._+~]*)-([0-9]+(\.[0-9]+)*)$ ]] ||
+      die "native /usr/bin/nvim must be owned by neovim with valid version metadata, found '${identity:-no package owner}'; reinstall Neovim, then rerun validation"
+    package_version="${BASH_REMATCH[2]}"
+    [[ "|$NVIM_NATIVE_PACKAGES|" == *"|$identity|"* ]] ||
+      log_warning "native Neovim package version is unreviewed: installed=$identity recorded=$NVIM_NATIVE_PACKAGES"
+    baseline_identity="$(omarchy_package_identity /usr/share/omarchy-nvim omarchy-nvim 2>/dev/null || true)"
+    [[ "$baseline_identity" =~ ^omarchy-nvim[[:space:]]([0-9]+:)?([0-9][0-9A-Za-z._+~]*)-([0-9]+(\.[0-9]+)*)$ ]] ||
+      die "native Neovim baseline must be owned by omarchy-nvim with valid version metadata, found '${baseline_identity:-no package owner}'; reinstall omarchy-nvim, then rerun validation"
+    [[ "$baseline_identity" == "$NVIM_NATIVE_BASELINE_PACKAGE" ]] ||
+      log_warning "native omarchy-nvim package version is unreviewed: installed=$baseline_identity recorded=$NVIM_NATIVE_BASELINE_PACKAGE"
   elif [[ -z "$binary" ]]; then
     log_error "Neovim is absent; install it manually with: mise install $NVIM_SELECTOR"
     return 1
@@ -45,16 +52,29 @@ validate_nvim_runtime() {
   [[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] ||
     die "selected Neovim runtime is not a directly executable regular file: ${binary:-missing}"
   output="$($binary --version 2>/dev/null || true)"
-  [[ "$output" =~ ^NVIM[[:space:]]v([0-9]+\.[0-9]+\.[0-9]+) ]] ||
-    die "selected Neovim returned an invalid version: ${output:-missing}"
-  version="${BASH_REMATCH[1]}"
+  version_line="${output%%$'\n'*}"
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
-    [[ "$version" == 0.12.4 || "$version" == 0.12.5 ]] ||
-      die "native Neovim runtime version is not accepted: $version"
+    [[ "$version_line" =~ ^NVIM\ v([0-9][0-9A-Za-z._+~-]*)$ ]] ||
+      die "selected Neovim returned an invalid version: ${output:-missing}"
+    version="${BASH_REMATCH[1]}"
+    [[ "$version" == "$package_version" ]] ||
+      die "native Neovim runtime version $version does not match package version $package_version"
   else
+    [[ "$version_line" =~ ^NVIM\ v([0-9]+\.[0-9]+\.[0-9]+)$ ]] ||
+      die "selected Neovim returned an invalid version: ${output:-missing}"
+    version="${BASH_REMATCH[1]}"
     [[ "$version" == "$NVIM_VERSION" ]] ||
       die "Ubuntu Neovim must report NVIM v$NVIM_VERSION; install it with: mise install $NVIM_SELECTOR"
   fi
+}
+
+validate_native_nvim_attachment_presence() {
+  local state="$HOME/.local/state/dotfiles/v2/nvim.json"
+  [[ "$MODE" != check ]] || {
+    [[ -f "$state" && -e "$HOME/$NVIM_NATIVE_LOADER" &&
+      -e "$HOME/.config/dotfiles/nvim/personal.lua" ]] ||
+      die "native Neovim personal layer ownership, loader, or source is missing; repair it with: ./dotfiles.sh apply nvim"
+  }
 }
 
 validate_nvim_closure() {
@@ -124,6 +144,7 @@ preflight_nvim() {
   fi
   validate_nvim_runtime
   [[ "$SELECTED_PROFILE" != omarchy ]] || validate_native_nvim_baseline
+  [[ "$SELECTED_PROFILE" != omarchy ]] || validate_native_nvim_attachment_presence
   lean_preflight_area "$MODE"
 }
 
