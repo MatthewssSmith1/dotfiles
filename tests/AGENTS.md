@@ -15,7 +15,7 @@ Use the smallest suite that covers the change. `tests/run.sh` is the exhaustive 
 | Bash area and packages                              | `tests/contract_test.sh`, `tests/shell_test.sh`                             |
 | `dotfiles-secret` helper                            | `tests/contract_test.sh`, `tests/secrets_test.sh`                           |
 | Tmux area or packages                               | `tests/contract_test.sh`, `tests/tmux_test.sh`                              |
-| Neovim area, packages, restore, or runtime policy   | `tests/contract_test.sh`, `tests/nvim_test.sh`                              |
+| Neovim area, packages, or provisioning              | `tests/contract_test.sh`, `tests/nvim_test.sh`, `tests/nvim_provision_test.sh` |
 | Agent area, packages, or skill tooling              | `tests/contract_test.sh`, `tests/agents_test.sh`                            |
 | Herdr area or package                               | `tests/contract_test.sh`, `tests/herdr_test.sh`                             |
 | Desktop area or package                             | `tests/contract_test.sh`, `tests/desktop_test.sh`                           |

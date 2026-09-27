@@ -149,7 +149,7 @@ select_lean_remove_areas() {
     add_area tools
     add_area tmux
     add_area agents
-    [[ "$SELECTED_PROFILE" != ubuntu ]] || add_area nvim
+    add_area nvim
     add_area herdr
     add_area opencode
     shopt -s nullglob

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+editor=''
+if [[ -x /usr/bin/nvim ]] && [[ -f /etc/arch-release ]]; then
+  editor=/usr/bin/nvim
+fi
+
+# Resolve an explicit installed selector, never a project-local `nvim`
+# (which might resolve back to this wrapper). Works without shell activation.
+mise_bin=''
+for candidate in "$HOME/.local/bin/mise" "$HOME/.local/share/mise/bin/mise" /usr/bin/mise; do
+  if [[ -x "$candidate" ]]; then
+    mise_bin="$candidate"
+    break
+  fi
+done
+if [[ -z "$mise_bin" ]]; then
+  candidate="$(type -P mise || true)"
+  [[ -z "$candidate" || ! -x "$candidate" ]] || mise_bin="$candidate"
+fi
+if [[ -z "$editor" ]]; then
+  selector='aqua:neovim/neovim@0.12.4'
+  if [[ -z "$mise_bin" ]]; then
+    printf 'nvim: mise is missing; run apply nvim\n' >&2
+    exit 127
+  fi
+  if ! install_dir="$("$mise_bin" where -C "$HOME" "$selector" 2>/dev/null)" || [[ ! -x "$install_dir/bin/nvim" ]]; then
+    printf 'nvim: missing installed Neovim %s; run apply nvim\n' "$selector" >&2
+    exit 127
+  fi
+  editor="$install_dir/bin/nvim"
+fi
+
+# Mason, plugin builds and previews need Node even from a desktop launcher.
+# Prefer a functional inherited Node; fall back to an already-installed mise
+# runtime without asking mise to install or select project overrides.
+if ! { command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 &&
+  node -e 'process.exit(Number(process.versions.node.split(".")[0]) < 20 ? 1 : 0)' >/dev/null 2>&1 &&
+  npm --version >/dev/null 2>&1; }; then
+  if [[ -n "$mise_bin" ]] && node_dir="$("$mise_bin" where -C "$HOME" node@lts 2>/dev/null)" &&
+    [[ -x "$node_dir/bin/node" && -x "$node_dir/bin/npm" ]] &&
+    "$node_dir/bin/node" -e 'process.exit(Number(process.versions.node.split(".")[0]) < 20 ? 1 : 0)' >/dev/null 2>&1 &&
+    PATH="$node_dir/bin:$PATH" "$node_dir/bin/npm" --version >/dev/null 2>&1; then
+    export PATH="$node_dir/bin:$PATH"
+  fi
+fi
+
+export NVIM_APPNAME=nvim-matt
+# Match dotfiles' HOME-scoped deployment and readiness paths, including when
+# called from a process with custom XDG roots. Scope this to the editor only.
+export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state" XDG_CACHE_HOME="$HOME/.cache"
+exec "$editor" "$@"

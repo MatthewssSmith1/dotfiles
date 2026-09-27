@@ -7,8 +7,8 @@ Treat Omarchy as the reference Linux environment: preserve its reviewed behavior
 ## Invariants
 
 - Never run Stow against the repository root.
-- `dotfiles.sh` never runs as root, invokes `sudo`, installs distro packages, changes the login shell, or uses the network.
-- Apply, check, and remove are always offline.
+- `dotfiles.sh` runs as the user and never changes the login shell. `apply nvim` may provision native packages with scoped elevation and install user-owned tools/plugins as the user; other areas retain their existing boundaries.
+- `check` is read-only and local. `remove` is local and preserves installed tools and application data.
 
 ## Validation
 

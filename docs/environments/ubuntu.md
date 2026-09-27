@@ -23,7 +23,7 @@ and install the dependencies inside Ubuntu. Windows Terminal settings remain
 separate Windows-host configuration. The Ubuntu desktop area writes nothing;
 deployment does not change WSL settings, enable systemd, or restart services.
 
-Dotfiles checks and reports dependencies but never invokes `sudo`; review and run its exact manual package or mise guidance separately, then repeat check.
+For areas other than Neovim, review and run the printed manual package or mise guidance, then repeat check. `apply nvim` installs missing native prerequisites with scoped `sudo apt-get install` and user-owned runtimes/tools as needed; `check` is read-only and local.
 
 ```bash
 ./dotfiles.sh check
@@ -33,7 +33,7 @@ Ubuntu accepts package-owned `/usr/bin/tmux` at version 3.5 or newer. Otherwise 
 
 ## Network Expectations
 
-Network behavior is defined by the canonical [operation matrix](../deployment.md#network-boundaries). Dotfiles and shell, tmux, and ordinary Neovim startup are offline. Exact mise fallbacks are installed manually, Neovim plugin restoration is one explicit helper invocation, and Herdr may refresh its agent-detection manifest during application runtime while keeping version checks disabled.
+Network behavior is defined by the canonical [operation matrix](../deployment.md#network-boundaries). Shell and tmux startup remain offline. `apply nvim` provisions the shared personal editor, initially using mise Neovim 0.12.4; ordinary LazyVim startup may manage plugins and tools. Other mise fallbacks remain manual. Herdr may refresh its agent-detection manifest during application runtime while keeping version checks disabled.
 
 Managed Bash startup is always offline. Dotfiles never changes the login shell.
 
@@ -55,7 +55,7 @@ Optional child-only injection from persistent, host-owned environment bundles is
 
 Validated on 2026-09-08 with Ubuntu 26.04 LTS, x86_64, and the
 `6.18.33.2-microsoft-standard-WSL2` kernel, using a checkout under `~/dotfiles`.
-All eight default areas applied and passed offline checks. Acceptance also
+All eight default areas applied and passed the then-offline checks. Historical acceptance also
 covered Bash login startup, external Git identity with the existing `gh`
 credential helper preserved, isolated tmux configuration parsing, all 51
 Neovim plugins at their locked commits, and ordinary headless Neovim startup

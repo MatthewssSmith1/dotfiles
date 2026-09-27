@@ -1,1 +1,2 @@
 ^/\.empty-package$
+^/\.config/nvim-matt(/|$)

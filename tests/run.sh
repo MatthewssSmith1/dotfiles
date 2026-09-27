@@ -29,6 +29,8 @@ readonly TEST_FILES=(
   "$TEST_DIR/shell_test.sh"
   "$TEST_DIR/tmux_test.sh"
   "$TEST_DIR/nvim_test.sh"
+  "$TEST_DIR/nvim_provision_test.sh"
+  "$TEST_DIR/nvim_launcher_test.sh"
   "$TEST_DIR/agents_test.sh"
   "$TEST_DIR/herdr_test.sh"
   "$TEST_DIR/desktop_test.sh"

@@ -1,6 +1,6 @@
 # Dotfiles
 
-Personal dotfiles for Omarchy v4 and Ubuntu 24.04+ hosts, deployed through an offline, user-scoped CLI using explicit GNU Stow packages.
+Personal dotfiles for Omarchy v4 and Ubuntu 24.04+ hosts, deployed through a user-scoped CLI using explicit GNU Stow packages.
 
 Omarchy is the reference Linux environment; Ubuntu reproduces its pinned, reviewed defaults where practical, with shared personal preferences layered on top.
 
@@ -49,7 +49,7 @@ Lifecycle logs use terminal-theme colors: cyan information, green success, yello
 
 ## Safety
 
-The `dotfiles.sh` deployment lifecycle never runs as root, invokes `sudo` or a distro package manager, installs mise/distro packages, changes the login shell, or uses the network during apply/check/remove. Missing dependencies print exact manual install commands. Separate Omarchy administration helpers are explicit; pruning delegates package removal to Omarchy, while the hardware-gated AMDGPU helper narrowly manages its documented Limine drop-in.
+`dotfiles.sh` runs as the user and never changes the login shell. `apply nvim` can use the network, scoped elevation for native dependencies, and user-owned mise/plugin installers. `check` is read-only and local; `remove` preserves installed tools and application data. Other areas keep their existing operational boundaries. See [Neovim](docs/tools/neovim.md) and [Deployment](docs/deployment.md).
 
 ## Documentation
 

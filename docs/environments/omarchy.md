@@ -4,7 +4,7 @@ Notes for native Omarchy machines. On this profile, installed Omarchy defaults a
 
 ## Refresh-Managed Files
 
-Omarchy refresh or reinstall operations can replace Bash, desktop input, XCompose, and Neovim configuration. Those destinations remain regular Omarchy-owned files, never symlinks into this checkout. Shared behavior uses the guarded ownership contract in [Deployment](../deployment.md#lean-ownership); the Neovim refresh (`omarchy-nvim-setup`) can additionally clear Neovim data, state, and cache, and recovery recreates only the managed loader.
+Omarchy refresh or reinstall operations can replace Bash, desktop input, XCompose, and the native Neovim configuration. Those destinations remain regular Omarchy-owned files, never symlinks into this checkout. Shared Bash and desktop behavior uses the guarded ownership contract in [Deployment](../deployment.md#lean-ownership). The personal editor uses separate `nvim-matt` configuration and runtime roots; see [Neovim](../tools/neovim.md).
 
 For Bash specifically, dotfiles appends one additive source block after the native `.bashrc`; it does not replace the native Bash or Starship baseline and does not modify a login file.
 
@@ -168,7 +168,7 @@ before normal launch; unavailable authorization or a missing marker is a blocker
 
 ## Executable Ownership
 
-Development tools resolve to native Omarchy packages. Dotfiles fails if a protected command such as Neovim does not resolve to its accepted package-owned `/usr/bin` runtime.
+Native Omarchy development tools retain their package ownership. Personal Neovim launches the native `/usr/bin/nvim` through its scoped launcher; runtime validation checks the underlying executable separately. If native prerequisites are missing, `apply nvim` reports `sudo pacman -Syu <missing packages>` for a deliberate full upgrade instead of performing one.
 
 Herdr resolves exactly to package-owned `/usr/bin/herdr`; dotfiles validates package/runtime version consistency and the actual host-owned config without changing it. The shared `ui.status_indicators = "symbols"` preference is required; unrelated valid customization is allowed. See the [Herdr contract](../tools/herdr.md).
 
@@ -178,7 +178,7 @@ Bash is ready; native attachment and refresh behavior is covered by isolated fix
 
 ## Version Drift
 
-Native Omarchy self-updates while other machines deploy the pinned snapshot recorded in [Upstream](../upstream.md). Dotfiles warns (non-blocking) when the native Omarchy core package's parseable version differs from its recorded pin. For Herdr, Neovim, and `omarchy-nvim`, valid package identities outside the reviewed set also warn rather than block. A warning records an unreviewed version, not a compatibility guarantee. Missing or wrong owners, malformed metadata, package/runtime version mismatches, and forbidden shadows still fail. Herdr validates the actual config and the shared symbols preference; Neovim validates its personal attachment. Ubuntu retains exact runtime pins and snapshot validation. Advancing those portable pins remains a separate explicit sync-and-review operation.
+Native Omarchy self-updates while Ubuntu retains reviewed snapshots for applicable areas. Dotfiles warns (non-blocking) when the native Omarchy core package's parseable version differs from its recorded pin. Native Herdr and Neovim package validation may warn on unreviewed versions; a warning is not a compatibility guarantee. Herdr validates the actual config and shared symbols preference; Neovim's personal configuration has separate ownership from Omarchy's default. Ubuntu's initial personal Neovim runtime is mise-managed 0.12.4. Advancing upstream baselines remains an explicit sync-and-review operation; personal extras and plugin lockfile edits follow ordinary Git review.
 
 ## Validation
 

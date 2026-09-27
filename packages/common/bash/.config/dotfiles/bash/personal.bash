@@ -4,6 +4,20 @@ alias dot='dotfiles'
 alias ts='tailscale'
 alias mr='mise run'
 
+# Interactive mise shims can precede ~/.local/bin; always enter the personal editor.
+nvim() {
+  if [[ -x "$HOME/.local/bin/nvim" ]]; then
+    "$HOME/.local/bin/nvim" "$@"
+  else
+    command nvim "$@"
+  fi
+}
+
+if [[ -x "$HOME/.local/bin/nvim" ]]; then
+  case "${EDITOR:-}" in ''|nvim|/usr/bin/nvim) export EDITOR="$HOME/.local/bin/nvim" ;; esac
+  case "${VISUAL:-}" in ''|nvim|/usr/bin/nvim) export VISUAL="$HOME/.local/bin/nvim" ;; esac
+fi
+
 # pnpm (Backup package manager); v11 installs global binaries under $PNPM_HOME/bin.
 export PNPM_HOME="$HOME/.local/share/pnpm"
 for _dotfiles_bash_pnpm_dir in "$PNPM_HOME" "$PNPM_HOME/bin"; do

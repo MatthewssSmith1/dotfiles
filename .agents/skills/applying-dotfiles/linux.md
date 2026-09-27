@@ -2,8 +2,8 @@
 
 1. Preflight without mutation: `~/dotfiles/dotfiles.sh check <area>`.
 2. Apply: `~/dotfiles/dotfiles.sh apply <area>`.
-3. Dotfiles never fetches. Install missing distro or mise tools manually from the exact guidance printed by preflight.
-4. Done when `check` passes cleanly and the focused suites in `tests/AGENTS.md` pass. Run `tests/run.sh` for its cross-cutting triggers.
+3. For `nvim`, Ubuntu apply can install missing packages through scoped `sudo apt-get install` and provision user-owned tools. On Omarchy, if packages are missing, run the reported `sudo pacman -Syu <missing packages>` deliberately before retrying apply; apply does not upgrade the system. For other areas, follow manual dependency guidance.
+4. Done when `check` passes cleanly and the focused suites in `tests/AGENTS.md` pass. Run `tests/run.sh` for its cross-cutting triggers. `check` stays read-only and local.
 
 Contracts: `docs/deployment.md` and `docs/tools/`.
 

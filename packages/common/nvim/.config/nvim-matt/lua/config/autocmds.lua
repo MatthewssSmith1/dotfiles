@@ -1,0 +1,1 @@
+-- Personal autocmds go here; LazyVim provides the defaults.

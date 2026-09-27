@@ -1,6 +1,6 @@
 # Architecture
 
-Configuration separates pinned upstream baselines, Ubuntu portability adapters, shared personal settings, and untracked host-local data. Native Omarchy keeps its package-owned baselines; Ubuntu 24.04 and newer deploys reviewed snapshots.
+Configuration separates pinned upstream baselines, Ubuntu portability adapters, shared personal settings, and untracked host-local data. Native Omarchy keeps its package-owned baselines; Ubuntu 24.04 and newer deploys reviewed snapshots for applicable areas. Personal Neovim configuration is shared across both profiles, independently of the native Omarchy editor.
 
 ## Profiles
 
@@ -16,6 +16,6 @@ Tracked payloads deploy as explicit qualified packages beneath `packages/`. Host
 
 The optional OpenCode area owns a shared base, parallel named overlays, and launchers. Its selected variant is untracked host-local data, independent of the host profile.
 
-`dotfiles.sh` is user-scoped, never changes the login shell, and keeps apply/check/remove offline. Networked installation and Neovim restoration are explicit commands outside dotfiles. Windows Terminal remains a separate Windows-host concern.
+`dotfiles.sh` is user-scoped and never changes the login shell. `apply nvim` provisions the personal editor and its dependencies; `check` stays read-only and local, and removal preserves tools and runtime data. Windows Terminal remains a separate Windows-host concern.
 
 Privileged system customization follows the same boundary: the tools area may deploy inert, manually invoked helpers, but lifecycle commands never execute them. The two current helpers are the hardware-gated AMDGPU IPS boot workaround and the Omarchy v4 polkit fingerprint policy; each has narrow system ownership and refuses conflicting state. They do not create a separate deployment area or a general hardware-policy layer.

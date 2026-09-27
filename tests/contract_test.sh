@@ -31,6 +31,7 @@ readonly DOTFILES_SOURCES=(
   "$REPO_DIR/lib/areas/bash.sh"
   "$REPO_DIR/lib/areas/tmux.sh"
   "$REPO_DIR/lib/areas/nvim.sh"
+  "$REPO_DIR/lib/nvim-provision.sh"
   "$REPO_DIR/lib/areas/agents.sh"
   "$REPO_DIR/lib/areas/herdr.sh"
   "$REPO_DIR/lib/areas/desktop.sh"
@@ -440,9 +441,8 @@ done
 ! grep -Fq 'lib/engine.sh' "$DOTFILES" || fail 'dotfiles still sources the v1 engine'
 pass
 
-# Neovim is lean, Ubuntu-specific, and the last provisioning surface
-# has been removed completely.
-grep -qxF 'nvim upstream/nvim,ubuntu/nvim,common/nvim' "$REPO_DIR/profiles/ubuntu.conf" ||
+# Personal Neovim shares its configuration; Ubuntu supplies a runtime selector.
+grep -qxF 'nvim ubuntu/nvim,common/nvim' "$REPO_DIR/profiles/ubuntu.conf" ||
   fail 'Ubuntu Neovim closure is not final'
 grep -qxF 'nvim common/nvim' "$REPO_DIR/profiles/omarchy.conf" || fail 'native Neovim closure is not personal-only'
 grep -qxF 'area|nvim|ready' "$REPO_DIR/manifests/areas.tsv" || fail 'Neovim is absent from lean dispatch'

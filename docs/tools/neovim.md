@@ -1,24 +1,13 @@
 # Neovim
 
-The accepted baseline combines the pinned LazyVim starter, the independently accepted `omarchy-nvim 2026.8.13-1` overlay/artifact, the Tokyo Night adapter, and one personal option: `relativenumber=true`.
+The area owns one directory link from `~/.config/nvim-matt` to `packages/common/nvim/.config/nvim-matt`. Atomic extras/lockfile saves therefore update the checkout. New personal Lua files need no deployment manifest changes.
 
-## Native Omarchy
+The launcher scopes XDG roots to the standard paths under `$HOME`, matching deployment and readiness checks. A compatible host Node/npm pair is reused; otherwise apply reuses or installs mise `node@lts` on either platform.
 
-The installed `omarchy-nvim` package owns `~/.config/nvim`; dotfiles never rewrites that baseline or manages native plugins and runtime data. The area requires `/usr/bin/nvim` to be owned by `neovim`, requires the baseline package to be present as `omarchy-nvim`, validates numeric-leading Pacman package versions, and requires the complete runtime version to match the package's upstream version (excluding any Pacman epoch and release). Reviewed `neovim 0.12.4-1` and `neovim 0.12.5-1` identities are quiet. Any other valid identity warns rather than fails because native Omarchy is authoritative, regardless of whether its version is newer or older; shadows, missing or wrong owners, malformed metadata or runtime output, and package/runtime mismatches fail. Ubuntu remains exact `0.12.4` with `x.y.z` semantics.
+Interactive Bash routes `nvim` through the launcher even when mise precedes it on `PATH`; default `EDITOR`/`VISUAL` values use its absolute path. Explicit custom editors are retained. The desktop application is **Neovim (Matt)**; selecting it does not change MIME defaults.
 
-`common/nvim` deploys the personal source outside the refresh-owned tree. One regular guarded loader at `~/.config/nvim/plugin/dotfiles-personal.lua` sources it. Lean v2 state records only the loader pre-state needed for exact removal. If check reports missing ownership state, loader, or personal source after a native refresh, run `./dotfiles.sh apply nvim` to reattach it.
+Both Linux profiles use the same personal LazyVim configuration at `~/.config/nvim-matt`, launched through `~/.local/bin/nvim` with `NVIM_APPNAME=nvim-matt` scoped to that editor process. Its data, state, and cache are separate from the default `nvim` roots. On Omarchy, the native `~/.config/nvim` and its package-owned setup remain independent; invoke `/usr/bin/nvim` with `NVIM_APPNAME=nvim` to use that default instance. Ubuntu starts with mise-managed Neovim 0.12.4; Omarchy uses its native executable.
 
-## Ubuntu
+`./dotfiles.sh apply nvim` deploys and provisions the editor. On Ubuntu it installs missing native prerequisites with scoped `sudo apt-get install` and installs missing mise runtimes as the user. On Omarchy, missing native packages stop apply: run the reported `sudo pacman -Syu <missing packages>` deliberately, then retry; apply does not perform a system upgrade. Prerequisites include SQLite (`sqlite` on Arch, `sqlite3` on Ubuntu). Compatible Node/npm is reused where available. Plugins, Mason tools, and Treesitter parsers are provisioned as the user with network access; Mason owns SQLFluff and supported Markdown/Python editor tools and their environments. Plugin builds and parser installation follow upstream behavior. On failure, inspect the reported phase and rerun apply. `check nvim` validates the local runtime, configuration, and installed-artifact readiness without network access or mutation; `remove nvim` preserves installed tools, editor data, and native Omarchy configuration.
 
-Ubuntu deploys `upstream/nvim`, `ubuntu/nvim`, and `common/nvim`. The adapter contains the exact `aqua:neovim/neovim@0.12.4` selector and the explicit `nvim-restore` helper. The area is package-only and writes no deployment state.
-
-The Ubuntu theme adapter fetches `monokai-pro.nvim` from its original
-[`loctvl842` repository](https://github.com/loctvl842/monokai-pro.nvim/commit/5b06ae0736813b1c65d76a4be9edbe92be0b9c74),
-because the baseline's `gthelding` fork is unavailable. The existing locked
-commit and upstream snapshot remain unchanged.
-
-Ordinary startup requires an existing lazy.nvim checkout at the commit in the committed `lazy-lock.json`. Missing-plugin installation, the periodic checker, lock updates, Lua rocks, inherited automatic Mason/Treesitter work, and Blink binary downloads are disabled during ordinary startup.
-
-Run `~/.local/share/dotfiles/bin/nvim-restore` explicitly with connectivity to restore plugins. It validates `lazy-lock.json`, fetches and checks out `lazy.nvim` at that exact lock entry, sets `DOTFILES_NVIM_RESTORING=1`, and runs headless `Lazy! restore`. It verifies that the lock bytes remain unchanged. The helper does not write deployment state, invoke callbacks, preserve or rename checkouts, or migrate any runtime root.
-
-Apply, check, and remove never inspect or mutate Neovim data, state, or cache roots. Removal deletes only exact managed package links and, on native Omarchy, the exact personal loader.
+Personal Lua settings, `lazyvim.json` extras, and `lazy-lock.json` belong in Git as ordinary configuration. Add extras through LazyVim and update plugins with `:Lazy update`; review and commit the resulting changes normally. Apply restores declared plugin revisions and installs missing tools without intentionally advancing plugin versions. Mason package upgrades remain explicit Mason actions; its package versions are not tracked by `lazy-lock.json`. Keep database connections and credentials host-local, outside Git.
