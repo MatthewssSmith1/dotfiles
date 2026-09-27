@@ -2,7 +2,7 @@
 Type=Application
 Name=Neovim (Matt)
 Comment=Personal Neovim editor
-Exec=sh -c "exec \"$HOME/.local/bin/nvim\" \"$@\"" nvim-matt %F
+Exec=sh -c "exec \"\\$HOME/.local/bin/nvim\" \"\\$@\"" nvim-matt %F
 Terminal=true
 Icon=nvim
 Categories=Utility;TextEditor;Development;
