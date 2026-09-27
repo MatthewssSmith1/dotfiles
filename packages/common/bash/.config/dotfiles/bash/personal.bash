@@ -2,6 +2,7 @@ _dotfiles_bash_trace personal
 
 alias dot='dotfiles'
 alias ts='tailscale'
+alias m='mimir'
 alias mr='mise run'
 
 # Interactive mise shims can precede ~/.local/bin; always enter the personal editor.
