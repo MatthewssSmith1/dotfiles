@@ -1,6 +1,8 @@
 _dotfiles_bash_trace personal
 
 alias dot='dotfiles'
+alias ts='tailscale'
+alias mr='mise run'
 
 # pnpm (Backup package manager); v11 installs global binaries under $PNPM_HOME/bin.
 export PNPM_HOME="$HOME/.local/share/pnpm"
