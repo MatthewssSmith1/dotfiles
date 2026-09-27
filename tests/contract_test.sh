@@ -217,7 +217,7 @@ grep -qxF 'git upstream/git,ubuntu/git,common/git' "$REPO_DIR/profiles/ubuntu.co
 grep -qxF 'tools common/tools,omarchy/tools' "$REPO_DIR/profiles/omarchy.conf" || fail 'native tools closure is not final'
 grep -qxF 'tools common/tools,ubuntu/tools' "$REPO_DIR/profiles/ubuntu.conf" || fail 'Ubuntu tools closure is not final'
 [[ "$(find "$REPO_DIR/packages/omarchy/tools" -type f -printf '%P\n' | LC_ALL=C sort)" == \
-  $'.local/bin/dotfiles-amdgpu-ips\n.local/bin/dotfiles-omarchy-prune\n.local/bin/dotfiles-polkit-fingerprint' ]] ||
+  $'.local/bin/dotfiles-amdgpu-ips\n.local/bin/dotfiles-framework-display\n.local/bin/dotfiles-omarchy-prune\n.local/bin/dotfiles-polkit-fingerprint' ]] ||
   fail 'native tools package payload inventory is not exact'
 grep -qxF 'readonly -a PACKAGES=(' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not declared'
 grep -qxF 'omarchy pkg drop "${PACKAGES[@]}"' "$OMARCHY_PRUNE" || fail 'Omarchy prune package inventory is not used safely'

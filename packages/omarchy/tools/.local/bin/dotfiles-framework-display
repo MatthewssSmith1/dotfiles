@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""Opt-in display policy for the Framework Laptop 13 Ryzen AI 300."""
+
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+
+
+NAME = "dotfiles-framework-display"
+MARKER = "-- dotfiles-framework-display:"
+MANAGED = '''-- dotfiles-framework-display: begin
+-- Unknown/external monitors: 100%; built-in laptop panel: 200%.
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
+hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = 2 })
+-- dotfiles-framework-display: end
+'''
+# Adopt only the reviewed Omarchy scale block, never arbitrary Lua.
+STOCK = re.compile(
+    r'^local omarchy_gdk_scale = [0-9]+(?:\.[0-9]+)?\n'
+    r'local omarchy_monitor_scale = [0-9]+(?:\.[0-9]+)?\n\n'
+    r'hl\.env\("GDK_SCALE", tostring\(omarchy_gdk_scale\)\)\n'
+    r'hl\.monitor\(\{ output = "", mode = "preferred", position = "auto", '
+    r'scale = omarchy_monitor_scale \}\)\n',
+    re.MULTILINE,
+)
+
+
+def fail(message):
+    raise ValueError(message)
+
+
+def safe_path(path, required=False):
+    if not path.is_absolute() or ".." in path.parts:
+        fail(f"requires an absolute, normalized path: {path}")
+    for part in (path, *path.parents):
+        if part.is_symlink():
+            fail(f"refusing symlink: {part}")
+    if path.exists():
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+            fail(f"requires an owned, non-group/world-writable regular file: {path}")
+    elif required:
+        fail(f"missing file: {path}")
+
+
+def atomic_write(path, text, mode):
+    fd, temporary = tempfile.mkstemp(prefix=f".{NAME}-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            os.fchmod(stream.fileno(), mode)
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in ("status", "apply", "remove"):
+        fail(f"usage: {NAME} status|apply|remove")
+    action = sys.argv[1]
+    if os.geteuid() == 0:
+        fail("must run as the desktop user, not root")
+    root = os.environ.get("DOTFILES_TEST_SYSTEM_ROOT", "")
+    if root and (os.environ.get("DOTFILES_TESTING") != "1" or not Path(root).is_absolute()
+                 or ".." in Path(root).parts):
+        fail("test system root requires DOTFILES_TESTING=1 and an absolute normalized path")
+    version = subprocess.run(["omarchy", "version"], capture_output=True, text=True, check=True).stdout.strip()
+    if not re.match(r"^4([.-]|$)", version):
+        fail(f"requires native Omarchy v4, found {version}")
+    dmi = Path(root + "/sys/class/dmi/id")
+    for field, expected in (
+        ("sys_vendor", "Framework"),
+        ("product_name", "Laptop 13 (AMD Ryzen AI 300 Series)"),
+        ("board_name", "FRANMGCP09"),
+    ):
+        if (dmi / field).read_text() != expected + "\n":
+            fail(f"unsupported DMI {field}")
+
+    home = Path(os.environ["HOME"])
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "hypr/monitors.lua"
+    state = Path(os.environ.get("XDG_STATE_HOME") or home / ".local/state") / "dotfiles/framework-display.json"
+    safe_path(config, required=True)
+    safe_path(state)
+    text = config.read_text()
+    saved = None
+    if state.exists():
+        saved = json.loads(state.read_text())
+        if (not isinstance(saved, dict) or set(saved) != {"version", "original"}
+                or saved["version"] != 1 or not isinstance(saved["original"], str)
+                or not STOCK.fullmatch(saved["original"])):
+            fail(f"invalid restore state: {state}")
+
+    if MARKER in text:
+        if text.count(MARKER) != 2 or text.count(MANAGED) != 1 or saved is None:
+            fail("conflicting managed block or missing restore state; inspect monitors.lua")
+        before = MANAGED
+        status = "exact"
+    else:
+        matches = list(STOCK.finditer(text))
+        if len(matches) != 1:
+            fail("expected one reviewed Omarchy scale block; refusing unfamiliar monitor configuration")
+        before = matches[0].group()
+        status = "absent"
+
+    # Preserve unrelated comments/settings, but do not silently compete with
+    # another laptop rule or an application-level scaling override.
+    remainder = text.replace(before, "", 1)
+    for line in remainder.splitlines():
+        active = line.split("--", 1)[0]
+        if any(token in active for token in ("eDP-1", "GDK_SCALE", "omarchy_monitor_scale", "omarchy_gdk_scale")):
+            fail("conflicting laptop or GTK scale setting outside the managed block")
+        if re.search(r'''output\s*=\s*(["'])\1''', active):
+            fail("competing fallback monitor rule outside the managed block")
+
+    if action == "status":
+        print(f"hardware: supported\nconfiguration: {status}\naction: {'none' if status == 'exact' else 'apply'}")
+        return 0 if status == "exact" else 1
+    if action == "apply":
+        if status == "exact":
+            print("Display policy already configured.")
+            return 0
+        if saved is not None and saved["original"] != before:
+            fail("scale block differs from saved original; inspect restore state before reapplying")
+        if saved is None:
+            state.parent.mkdir(parents=True, exist_ok=True)
+            safe_path(state)
+            atomic_write(state, json.dumps({"version": 1, "original": before}) + "\n", 0o600)
+        after = MANAGED
+    else:
+        if status == "absent":
+            if saved is not None:
+                if before != saved["original"]:
+                    fail("scale block differs from saved original; refusing removal")
+                state.unlink()
+            print("No managed display policy is installed.")
+            return 0
+        after = saved["original"]
+
+    # The saved original precedes config mutation, so interrupted apply/remove
+    # can be retried without losing the original scale settings.
+    safe_path(config, required=True)
+    if config.read_text() != text:
+        fail("monitor configuration changed during operation; retry after inspection")
+    atomic_write(config, text.replace(before, after, 1), stat.S_IMODE(config.stat().st_mode))
+    if action == "remove":
+        state.unlink()
+    print("Display policy configured." if action == "apply" else "Original scale settings restored.")
+    print("Run hyprctl reload, then hyprctl configerrors. Log out/in to refresh GTK environment settings.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        print(f"{NAME}: {error}", file=sys.stderr)
+        sys.exit(2)

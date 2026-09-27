@@ -36,6 +36,43 @@ dotfiles-amdgpu-ips remove
 
 Hosts that previously deployed `dotfiles-omarchy-amdgpu-ips` must unlink that stale user-owned symlink explicitly after applying tools; package-only Stow deployment does not track renamed paths. The system path and workaround semantics are unchanged.
 
+## Framework Laptop Display Policy
+
+The tools area installs the inert `dotfiles-framework-display` helper. Explicit
+`apply` configures a 100% monitor fallback and a 200% `eDP-1` override, including
+when both displays are active. It requires native Omarchy v4 and Framework Laptop
+13 (AMD Ryzen AI 300 Series), board `FRANMGCP09`, like the AMDGPU IPS helper.
+Other hardware is refused; the gate identifies a model, not a unique machine.
+Normal dotfiles apply/check/remove only deploy or unlink the command.
+
+```bash
+~/dotfiles/dotfiles.sh apply tools
+dotfiles-framework-display status
+dotfiles-framework-display apply
+hyprctl reload
+hyprctl configerrors
+# To restore the original scale settings:
+dotfiles-framework-display remove
+```
+
+The helper replaces only the reviewed stock scale block in the regular
+`~/.config/hypr/monitors.lua`, preserving unrelated settings and file mode. It
+removes the forced `GDK_SCALE` assignment so native GTK per-display scaling can
+operate; log out/in after applying or removing to refresh inherited environment
+settings. Reload Hyprland and check errors after either operation. No compositor
+commands, privilege escalation, packages, or network operations run inside the
+helper. `status` checks saved configuration, not active outputs or app environments.
+
+Original scale-block bytes are saved in
+`~/.local/state/dotfiles/framework-display.json` before mutation. XDG config/state
+homes are respected. Repeat apply is a no-op; remove restores the original block
+while preserving unrelated later edits. Edited managed blocks, missing restore
+state, symlink paths, and competing laptop/GTK scale settings are refused.
+After an Omarchy refresh, reapply if the stock block matches the saved original;
+otherwise inspect the new settings and restore state before proceeding. Removing
+the tools area does not undo an explicitly applied display policy: run the helper's
+`remove` first if desired.
+
 ## Fingerprint Policy
 
 The tools area installs `dotfiles-polkit-fingerprint`, a second inert administration helper. Dotfiles lifecycle commands never run it or change PAM. Use `status`, `apply`, or `remove` explicitly; apply/remove cross one sudo boundary and manage the exact `/etc/pam.d/polkit-1` policy plus a root-owned `/usr/local/libexec/dotfiles-polkit-fingerprint` runtime predicate. No change is applied live by ordinary dotfiles deployment.

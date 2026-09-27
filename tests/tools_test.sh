@@ -28,6 +28,7 @@ expect_success "$home" "$ubuntu" "$DOTFILES" apply tools
   fail 'Ubuntu mise fragments were not deployed'
 [[ ! -e "$home/.local/bin/dotfiles-omarchy-prune" &&
   ! -e "$home/.local/bin/dotfiles-amdgpu-ips" &&
+  ! -e "$home/.local/bin/dotfiles-framework-display" &&
   ! -e "$home/.local/bin/dotfiles-polkit-fingerprint" ]] ||
   fail 'Ubuntu deployed an Omarchy administration command'
 [[ ! -e "$home/.local/state/dotfiles/v2" ]] || fail 'package-only tools wrote ownership state'
@@ -69,12 +70,14 @@ native_home="$(new_home native)"
 expect_success "$native_home" "$native" "$DOTFILES" apply tools
 [[ -L "$native_home/.local/bin/dotfiles" && -L "$native_home/.local/bin/dotfiles-omarchy-prune" &&
   -L "$native_home/.local/bin/dotfiles-amdgpu-ips" &&
+  -L "$native_home/.local/bin/dotfiles-framework-display" &&
   -L "$native_home/.local/bin/dotfiles-polkit-fingerprint" ]] ||
   fail 'native tools launchers were not deployed'
 expect_success "$native_home" "$native" "$DOTFILES" check tools
 expect_success "$native_home" "$native" "$DOTFILES" remove tools
 [[ ! -e "$native_home/.local/bin/dotfiles" && ! -e "$native_home/.local/bin/dotfiles-omarchy-prune" &&
   ! -e "$native_home/.local/bin/dotfiles-amdgpu-ips" &&
+  ! -e "$native_home/.local/bin/dotfiles-framework-display" &&
   ! -e "$native_home/.local/bin/dotfiles-polkit-fingerprint" ]] ||
   fail 'native tools removal retained launchers'
 expect_success "$native_home" "$native" "$DOTFILES" remove tools
@@ -478,6 +481,125 @@ home="$(new_home v1)"
 mkdir -p "$home/.local/state/dotfiles/v1"
 printf '{}\n' > "$home/.local/state/dotfiles/v1/tools.json"
 expect_failure "legacy v1 deployment state exists for lean area 'tools'" "$home" "$ubuntu" "$DOTFILES" apply tools
+pass
+
+# Display policy exercises the actual command with isolated home/hardware.
+python3 - "$REPO_DIR" "$TEST_ROOT" <<'PYTHON'
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+repo, test = map(Path, sys.argv[1:])
+base = test / 'framework-display'
+config_home = base / 'config'
+state_home = base / 'state'
+config = config_home / 'hypr/monitors.lua'
+state = state_home / 'dotfiles/framework-display.json'
+dmi = base / 'system/sys/class/dmi/id'
+bin_dir = base / 'bin'
+for directory in (config.parent, dmi, bin_dir):
+    directory.mkdir(parents=True)
+omarchy = bin_dir / 'omarchy'
+omarchy.write_text('#!/bin/sh\n[ "$*" = version ] || exit 99\nprintf "4.0.1-1\\n"\n')
+omarchy.chmod(0o755)
+hardware = {'sys_vendor': 'Framework', 'product_name': 'Laptop 13 (AMD Ryzen AI 300 Series)',
+            'board_name': 'FRANMGCP09'}
+for key, value in hardware.items():
+    (dmi / key).write_text(value + '\n')
+stock = '''local omarchy_gdk_scale = 2
+local omarchy_monitor_scale = 1.6
+
+hl.env("GDK_SCALE", tostring(omarchy_gdk_scale))
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })
+'''
+original = '-- keep my comments\n' + stock + '\n-- additional settings\n'
+config.write_text(original)
+config.chmod(0o640)
+env = dict(os.environ, HOME=str(base), XDG_CONFIG_HOME=str(config_home),
+           XDG_STATE_HOME=str(state_home), DOTFILES_TESTING='1',
+           DOTFILES_TEST_SYSTEM_ROOT=str(base / 'system'), PATH=str(bin_dir) + ':' + os.environ['PATH'])
+helper = repo / 'packages/omarchy/tools/.local/bin/dotfiles-framework-display'
+
+def run(*args, code=0):
+    result = subprocess.run([str(helper), *args], env=env, capture_output=True, text=True)
+    assert result.returncode == code, (args, result.returncode, result.stdout, result.stderr)
+    return result.stdout + result.stderr
+
+run(code=2)
+run('unexpected', code=2)
+assert 'configuration: absent' in run('status', code=1)
+assert not state_home.exists()
+for field, value in hardware.items():
+    (dmi / field).write_text('Desktop\n')
+    run('apply', code=2)
+    assert config.read_text() == original and not state.exists()
+    (dmi / field).write_text(value + '\n')
+env['DOTFILES_TESTING'] = '0'
+run('apply', code=2)
+env['DOTFILES_TESTING'] = '1'
+omarchy.write_text('#!/bin/sh\nprintf "5.0.0\\n"\n')
+run('apply', code=2)
+omarchy.write_text('#!/bin/sh\nprintf "4.0.1-1\\n"\n')
+run('apply')
+applied = config.read_text()
+assert 'GDK_SCALE' not in applied
+assert 'output = "", mode = "preferred", position = "auto", scale = 1' in applied
+assert 'output = "eDP-1", mode = "preferred", position = "auto", scale = 2' in applied
+assert config.stat().st_mode & 0o777 == 0o640
+assert state.stat().st_mode & 0o777 == 0o600
+stamp = config.stat().st_mtime_ns
+run('apply')
+assert config.stat().st_mtime_ns == stamp
+assert 'configuration: exact' in run('status')
+saved = state.read_text()
+state.unlink()
+run('remove', code=2)
+assert config.read_text() == applied
+state.write_text(saved)
+state.chmod(0o600)
+config.write_text(applied.replace('scale = 2', 'scale = 1.5'))
+run('apply', code=2)
+run('remove', code=2)
+config.write_text(applied + '-- later user edit\n')
+run('remove')
+assert config.read_text() == original + '-- later user edit\n'
+assert not state.exists()
+run('remove')
+run('apply')
+# A stock reset or interrupted removal is recoverable using retained state.
+config.write_text(original)
+run('apply')
+assert config.read_text() == applied
+config.write_text(original.replace('1.6', '1.25'))
+run('apply', code=2)
+run('remove', code=2)
+config.write_text(original)
+run('remove')
+assert not state.exists()
+config.write_text(original + 'hl.env("GDK_SCALE", "2")\n')
+run('apply', code=2)
+config.write_text(original + 'hl.monitor({ output = "eDP-1", scale = 1 })\n')
+run('apply', code=2)
+config.write_text(original + 'hl.monitor({ output = "", scale = 1.5 })\n')
+run('apply', code=2)
+config.write_text('-- unfamiliar custom monitor setup\n')
+run('apply', code=2)
+config.unlink()
+target = base / 'other.lua'
+target.write_text(original)
+config.symlink_to(target)
+run('apply', code=2)
+assert target.read_text() == original
+config.unlink()
+config.write_text(original)
+state.symlink_to(target)
+run('apply', code=2)
+assert target.read_text() == original and config.read_text() == original
+state.unlink()
+config.chmod(0o666)
+run('apply', code=2)
+PYTHON
 pass
 
 printf 'PASS: %s tools/mise test groups\n' "$TEST_COUNT"
