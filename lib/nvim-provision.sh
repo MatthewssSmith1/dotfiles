@@ -26,6 +26,20 @@ nvim_provision_mise() {
   mise where -C "$HOME" "$NVIM_SELECTOR" 2>/dev/null
 }
 
+nvim_provision_binary() {
+  local install_dir binary candidate
+  install_dir="$(nvim_provision_mise)" || return 1
+  [[ -d "$install_dir" && ! -L "$install_dir" ]] || return 1
+  binary=''
+  for candidate in "$install_dir/bin/nvim" "$install_dir"/*/bin/nvim; do
+    [[ -f "$candidate" && ! -L "$candidate" && -x "$candidate" ]] || continue
+    [[ -z "$binary" ]] || return 1
+    binary="$candidate"
+  done
+  [[ -n "$binary" ]] || return 1
+  printf '%s\n' "$binary"
+}
+
 nvim_provision_node_pair() {
   local directory="${1:-}"
   if [[ -n "$directory" ]]; then
@@ -45,7 +59,7 @@ nvim_provision_mise_node() {
 }
 
 nvim_provision_prerequisites() {
-  local install_dir node_dir
+  local binary node_dir
   [[ "$EUID" != 0 ]] || die 'Neovim provisioning must run as the regular user'
   case "$SELECTED_PROFILE" in ubuntu|omarchy) ;; *) die "unsupported Neovim profile: $SELECTED_PROFILE" ;; esac
   nvim_provision_missing_packages
@@ -60,10 +74,10 @@ nvim_provision_prerequisites() {
   fi
   if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
     nvim_provision_command mise || die 'mise is missing; install mise for the Ubuntu Neovim runtime'
-    if ! install_dir="$(nvim_provision_mise)" || [[ ! -x "$install_dir/bin/nvim" ]]; then
+    if ! binary="$(nvim_provision_binary)"; then
       mise install "$NVIM_SELECTOR" || die "Neovim runtime installation failed: $NVIM_SELECTOR"
     fi
-    install_dir="$(nvim_provision_mise)" && [[ -x "$install_dir/bin/nvim" ]] ||
+    binary="$(nvim_provision_binary)" ||
       die "mise did not provide an executable Neovim: $NVIM_SELECTOR"
   fi
   # Reuse a functional host pair or installed mise fallback on either host.
@@ -78,7 +92,7 @@ nvim_provision_prerequisites() {
 }
 
 validate_nvim_prerequisites() {
-  local missing=0 install_dir node_dir
+  local missing=0 binary node_dir
   case "$SELECTED_PROFILE" in ubuntu|omarchy) ;; *) log_error "unsupported Neovim profile: $SELECTED_PROFILE"; return 1 ;; esac
   nvim_provision_missing_packages
   if ((${#NVIM_MISSING_PACKAGES[@]})); then
@@ -86,7 +100,7 @@ validate_nvim_prerequisites() {
     missing=1
   fi
   if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
-    if ! nvim_provision_command mise || ! install_dir="$(nvim_provision_mise)" || [[ ! -x "$install_dir/bin/nvim" ]]; then
+    if ! nvim_provision_command mise || ! binary="$(nvim_provision_binary)"; then
       log_error "Neovim runtime missing; run apply nvim to install $NVIM_SELECTOR"
       missing=1
     fi

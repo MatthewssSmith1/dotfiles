@@ -171,7 +171,7 @@ nvim_legacy_state() {
 }
 
 validate_nvim_runtime() {
-  local binary identity output version package_version install_dir
+  local binary identity output version package_version
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
     binary="${HOST_ROOT:-}/usr/bin/nvim"
     identity="$(omarchy_package_identity /usr/bin/nvim neovim 2>/dev/null || true)"
@@ -180,7 +180,7 @@ validate_nvim_runtime() {
     }
     package_version="${BASH_REMATCH[2]}"
   else
-    command -v mise >/dev/null 2>&1 && install_dir="$(nvim_provision_mise)" && binary="$install_dir/bin/nvim" || {
+    command -v mise >/dev/null 2>&1 && binary="$(nvim_provision_binary)" || {
       log_error "Ubuntu Neovim missing; run apply nvim to install $NVIM_SELECTOR"; return 1;
     }
   fi

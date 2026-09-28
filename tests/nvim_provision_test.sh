@@ -56,8 +56,18 @@ validate_nvim_prerequisites || fail 'installed prerequisites failed check'
 [[ "$(sha256sum "$HOME/trace")" == "$before" ]] || fail 'check invoked installer'
 pass
 
+# Aqua archives may leave the executable one directory below the mise install root.
+mkdir -p "$HOME/mise-install/nvim-linux-x86_64/bin"
+mv "$HOME/mise-install/bin/nvim" "$HOME/mise-install/nvim-linux-x86_64/bin/nvim"
+[[ "$(nvim_provision_binary)" == "$HOME/mise-install/nvim-linux-x86_64/bin/nvim" ]] ||
+  fail 'nested mise Neovim executable was not resolved'
+nvim_provision_prerequisites
+validate_nvim_prerequisites || fail 'nested mise Neovim failed check'
+[[ "$(sha256sum "$HOME/trace")" == "$before" ]] || fail 'nested runtime was reinstalled'
+pass
+
 # Installed mise Node must be reused even when not exposed on the shell PATH.
-rm "$HOME/mise-install/bin/nvim"
+rm "$HOME/mise-install/nvim-linux-x86_64/bin/nvim"
 if validate_nvim_prerequisites >/dev/null 2>&1; then fail 'missing Neovim passed check'; fi
 [[ "$(sha256sum "$HOME/trace")" == "$before" ]] || fail 'check used mise exec/install'
 nvim_provision_prerequisites

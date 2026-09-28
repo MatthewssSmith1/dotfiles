@@ -43,6 +43,16 @@ mapfile -t output < "$home/editor-output"
 mapfile -t roots < "$home/editor-roots"
 [[ "${roots[*]}" == "$home/.config $home/.local/share $home/.local/state $home/.cache" ]] || fail 'launcher roots differ from deployment'
 
+mkdir -p "$home/editor/nvim-linux-x86_64/bin"
+mv "$home/editor/bin/nvim" "$home/editor/nvim-linux-x86_64/bin/nvim"
+status=0
+HOME="$home" PATH="$TEST_ROOT/bin:/usr/bin:/bin" "$home/.local/bin/nvim" 'nested runtime' || status=$?
+[[ "$status" == 23 ]] || fail 'launcher did not use nested mise runtime'
+mapfile -t output < "$home/editor-output"
+[[ "${output[0]}" == nvim-matt && "${output[2]}" == 'nested runtime' ]] ||
+  fail 'nested runtime did not receive launcher arguments'
+pass
+
 HOME="$home" PATH="$TEST_ROOT/bin:/usr/bin:/bin" bash -c '
   _dotfiles_bash_trace() { :; }
   EDITOR=nvim VISUAL=/usr/bin/nvim
@@ -65,7 +75,7 @@ pass
 
 # Arch must select the native runtime even when mise cannot resolve anything.
 mkdir -p "$TEST_ROOT/system/usr/bin" "$TEST_ROOT/system/etc"
-cp "$home/editor/bin/nvim" "$TEST_ROOT/system/usr/bin/nvim"
+cp "$home/editor/nvim-linux-x86_64/bin/nvim" "$TEST_ROOT/system/usr/bin/nvim"
 touch "$TEST_ROOT/system/etc/arch-release"
 status=0
 HOME="$home" PATH="$home/node/bin:$TEST_ROOT/bin:/usr/bin:/bin" NVIM_APPNAME=other \
