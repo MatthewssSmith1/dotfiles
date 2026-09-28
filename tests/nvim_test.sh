@@ -180,4 +180,51 @@ if run_area "$home" "$native" omarchy apply >/dev/null 2>&1; then fail 'unsafe l
 [[ ! -e "$home/.config/nvim-matt/init.lua" && -L "$outside/nvim/personal.lua" ]] || fail 'unsafe parent mutated deployment'
 pass
 
+# Resolve effective native specs without evaluating their Lua; polling survives
+# native's replacement of the entire current theme directory.
+home="$(new_home nvim-theme)"
+mkdir -p "$home/.local/state/omarchy/current/theme"
+theme_dir="$REPO_DIR/packages/upstream/reference/omarchy/themes"
+module_dir="$REPO_DIR/packages/common/nvim/.config/nvim-matt/lua"
+for slug in everforest catppuccin tokyo-night; do
+  printf '%s\n' "$slug" > "$home/.local/state/omarchy/current/theme.name"
+  cp "$theme_dir/$slug/neovim.lua" "$home/.local/state/omarchy/current/theme/neovim.lua"
+  expected=everforest
+  [[ "$slug" != catppuccin ]] || expected=catppuccin-nvim
+  [[ "$slug" != tokyo-night ]] || expected=tokyonight-night
+  result="$(HOME="$home" XDG_STATE_HOME="$home/other-state" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+    '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; print(require("config.dotfiles_theme").resolve().colorscheme)' +qa 2>&1)"
+  [[ "$result" == "$expected" ]] || fail "$slug native spec was not resolved: $result"
+done
+printf 'unknown\n' > "$home/.local/state/omarchy/current/theme.name"
+printf 'error("executed")\n' > "$home/.local/state/omarchy/current/theme/neovim.lua"
+result="$(HOME="$home" XDG_STATE_HOME="$home/other-state" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+  '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; print(require("config.dotfiles_theme").resolve().colorscheme)' +qa 2>&1)"
+[[ "$result" == *tokyonight-night* && "$result" == *'unsupported native theme'* ]] || fail 'unsupported native Lua was used without a warning'
+printf 'everforest\n' > "$home/.local/state/omarchy/current/theme.name"
+cp "$theme_dir/everforest/neovim.lua" "$home/.local/state/omarchy/current/theme/neovim.lua"
+printf '\n-- user note\n' >> "$home/.local/state/omarchy/current/theme/neovim.lua"
+result="$(HOME="$home" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+  '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; print(require("config.dotfiles_theme").resolve().colorscheme)' +qa 2>&1)"
+[[ "$result" == everforest ]] || fail 'harmless native comment rejected'
+printf '\nvim.cmd("bad")\n' >> "$home/.local/state/omarchy/current/theme/neovim.lua"
+result="$(HOME="$home" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+  '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; print(require("config.dotfiles_theme").resolve().colorscheme)' +qa 2>&1)"
+[[ "$result" == *tokyonight-night* && "$result" == *'spec differs'* ]] || fail 'changed native spec lacked fallback warning'
+# The first failed reload must not mark the desired theme as applied.
+result="$(HOME="$home" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+  '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; local m=require("config.dotfiles_theme"); local calls=0; vim.cmd.colorscheme=function() calls=calls+1; if calls==1 then error("temporary") end end; m.apply({colorscheme="retry"}); m.apply({colorscheme="retry"}); print("attempts="..calls)' +qa 2>&1)"
+[[ "$result" == *attempts=2* ]] || fail 'failed theme application was not retried'
+# The provision-time LazyVim spec must not request an uncloned theme or start a timer.
+result="$(HOME="$home" DOTFILES_NVIM_PROVISIONING=1 NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+  '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; local specs=dofile(vim.env.NVIM_THEME_MODULE.."/plugins/theme.lua"); local opts={}; specs[4].opts(nil,opts); print("provision="..opts.colorscheme)' +qa 2>&1)"
+[[ "$result" == provision=habamax ]] || fail 'provision selected native colorscheme before plugin install'
+# A changed native spec with the same slug must be applied once after success;
+# failure keeps its identity pending until a later poll succeeds.
+cp "$theme_dir/everforest/neovim.lua" "$home/.local/state/omarchy/current/theme/neovim.lua"
+result="$(HOME="$home" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+  '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; local m=require("config.dotfiles_theme"); local calls=0; vim.cmd.colorscheme=function() calls=calls+1; if calls==1 then error("transient") end end; package.loaded.everforest={setup=function() end}; m.watch(); local path=vim.env.HOME.."/.local/state/omarchy/current/theme/neovim.lua"; local lines=vim.fn.readfile(path); table.insert(lines,"-- updated"); vim.fn.writefile(lines,path); vim.wait(3300); print("watch-attempts="..calls)' +qa 2>&1)"
+[[ "$result" == *watch-attempts=2* ]] || fail "watcher did not retry changed same-slug native input: $result"
+pass
+
 printf 'PASS: Neovim area (%d groups)\n' "$TEST_COUNT"

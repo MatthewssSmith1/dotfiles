@@ -22,6 +22,10 @@ readonly OMARCHY_FILES=(
   'omarchy-themed-neovim-template|default/themed/neovim.lua.tpl|packages/upstream/reference/omarchy/default/themed/neovim.lua.tpl|reference|-'
   'omarchy-theme-tokyo-night-colors|themes/tokyo-night/colors.toml|packages/upstream/reference/omarchy/themes/tokyo-night/colors.toml|reference|-'
   'omarchy-theme-tokyo-night-neovim|themes/tokyo-night/neovim.lua|packages/upstream/reference/omarchy/themes/tokyo-night/neovim.lua|reference|-'
+  'omarchy-theme-everforest-colors|themes/everforest/colors.toml|packages/upstream/reference/omarchy/themes/everforest/colors.toml|reference|-'
+  'omarchy-theme-everforest-neovim|themes/everforest/neovim.lua|packages/upstream/reference/omarchy/themes/everforest/neovim.lua|reference|-'
+  'omarchy-theme-catppuccin-colors|themes/catppuccin/colors.toml|packages/upstream/reference/omarchy/themes/catppuccin/colors.toml|reference|-'
+  'omarchy-theme-catppuccin-neovim|themes/catppuccin/neovim.lua|packages/upstream/reference/omarchy/themes/catppuccin/neovim.lua|reference|-'
 )
 readonly OMARCHY_TREE_ID_PREFIX='omarchy-bash'
 readonly OMARCHY_TREE_PREFIX='default/bash'
@@ -90,6 +94,97 @@ accepted_stable_artifact_present() {
       .id == "omarchy-nvim-lazy-lock" and
       .provenance.trust == "verified signed stable package; archive omitted due size")
   ' "$manifest" >/dev/null
+}
+
+verify_theme_catalog() {
+  local root="$1" manifest="$2" catalog="$root/packages/common/tools/.local/share/dotfiles/themes"
+  local slug source palette expected
+  [[ -f "$catalog/catalog.json" && -f "$catalog/stock.json" && -f "$root/manifests/hidden-themes.txt" ]] || \
+    die 'theme catalog, stock inventory, or hidden themes missing'
+  jq -e --arg commit "$(jq -r '.sources[] | select(.id == "omarchy-theme-tokyo-night-colors") | .commit' "$manifest")" '
+    .version == 1 and .commit == $commit and
+    (.tree | type == "string" and test("^[0-9a-f]{40}$")) and
+    (.themes | type == "array" and length > 0 and . == (sort | unique) and
+      all(.[]; type == "string" and test("^[a-z0-9]+(-[a-z0-9]+)*$")))
+  ' "$catalog/stock.json" >/dev/null || die 'invalid pinned stock-theme inventory'
+  command -v python3 >/dev/null 2>&1 || die 'python3 is required for offline stock-tree verification'
+  python3 - "$catalog" <<'PY' || die 'stock-theme Git object provenance or inventory drifted'
+import hashlib
+import json
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+stock = json.loads((root / 'stock.json').read_bytes())
+
+def object_bytes(kind, filename, identity):
+    raw = (root / filename).read_bytes()
+    digest = hashlib.sha1(kind.encode() + b' ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
+    if digest != identity:
+        raise ValueError(f'{filename}: Git {kind} identity mismatch')
+    return raw
+
+def parse_tree(raw):
+    entries = {}
+    offset = 0
+    while offset < len(raw):
+        separator = raw.index(b' ', offset)
+        terminator = raw.index(b'\0', separator)
+        mode = raw[offset:separator]
+        name = raw[separator + 1:terminator]
+        oid = raw[terminator + 1:terminator + 21]
+        if len(oid) != 20 or not name or b'/' in name or name in entries:
+            raise ValueError('malformed Git tree entry')
+        entries[name] = (mode, oid.hex())
+        offset = terminator + 21
+    return entries
+
+commit = object_bytes('commit', 'stock-commit.raw', stock['commit'])
+match = re.match(rb'tree ([0-9a-f]{40})\n', commit)
+if not match:
+    raise ValueError('commit omits root tree')
+root_tree = object_bytes('tree', 'stock-root-tree.raw', match.group(1).decode())
+theme_mode, theme_oid = parse_tree(root_tree)[b'themes']
+if theme_mode != b'40000' or theme_oid != stock['tree']:
+    raise ValueError('commit root tree does not contain recorded themes tree')
+themes_tree = object_bytes('tree', 'stock-themes-tree.raw', theme_oid)
+names = sorted(name.decode('ascii') for name, (mode, _) in parse_tree(themes_tree).items()
+               if mode == b'40000')
+if names != stock['themes']:
+    raise ValueError('stock theme directories differ from pinned Git tree')
+PY
+  jq -e '
+    .version == 1 and
+    (.supported | keys == ["catppuccin", "everforest", "tokyo-night"]) and
+    (.eligible | type == "array" and . == (sort | unique)) and
+    (.supported | all(.[]; (.colors | type == "string") and
+      (.neovim.plugin | type == "string") and (.neovim.name | type == "string") and
+      (.neovim.colorscheme | type == "string")))
+  ' "$catalog/catalog.json" >/dev/null || die 'invalid supported theme mappings'
+  expected="$(jq -n --slurpfile stock "$catalog/stock.json" --rawfile hidden "$root/manifests/hidden-themes.txt" \
+    '$stock[0].themes - ($hidden | split("\n") | map(select(length > 0))) | sort')"
+  jq -e --argjson expected "$expected" '.eligible == $expected and
+    ([.supported | keys[]] - .eligible | length == 0)' "$catalog/catalog.json" >/dev/null || \
+    die 'theme eligibility differs from pinned stock inventory minus hidden themes'
+  for slug in catppuccin everforest tokyo-night; do
+    source="$root/packages/upstream/reference/omarchy/themes/$slug/colors.toml"
+    palette="$catalog/$slug/colors.toml"
+    [[ -f "$palette" && ! -L "$palette" ]] && cmp -s "$source" "$palette" || \
+      die "portable theme palette differs from pinned reference: $slug"
+    jq -e --arg slug "$slug" '.supported[$slug].colors == ($slug + "/colors.toml")' \
+      "$catalog/catalog.json" >/dev/null || die "invalid palette mapping: $slug"
+    jq -e --arg slug "$slug" --arg prefix "packages/upstream/reference/omarchy/themes/$slug/" '
+      [.sources[] | select(.source.path == ("themes/" + $slug + "/colors.toml") or
+        .source.path == ("themes/" + $slug + "/neovim.lua")) |
+        select(.snapshot == ($prefix + (.source.path | split("/")[-1])) and .transform == "none")] | length == 2
+    ' "$manifest" >/dev/null || die "missing pinned theme input: $slug"
+  done
+  jq -e '
+    .supported.catppuccin.neovim == {plugin:"catppuccin/nvim", name:"catppuccin", colorscheme:"catppuccin-nvim"} and
+    .supported.everforest.neovim == {plugin:"neanias/everforest-nvim", name:"everforest-nvim", colorscheme:"everforest", background:"soft"} and
+    .supported["tokyo-night"].neovim == {plugin:"folke/tokyonight.nvim", name:"tokyonight.nvim", colorscheme:"tokyonight-night"}
+  ' "$catalog/catalog.json" >/dev/null || die 'Neovim mappings differ from reviewed pinned theme specs'
 }
 
 verify_nvim_artifact_evidence() {
@@ -502,6 +597,9 @@ verify_tree() {
       die "artifact hash drift for $snapshot_path: expected ${artifact_hashes[$index]}, found $actual_hash"
   done
   verify_nvim_artifact_evidence "$root" "$manifest"
+  if jq -e 'any(.sources[]; .id == "omarchy-theme-everforest-colors")' "$manifest" >/dev/null; then
+    verify_theme_catalog "$root" "$manifest"
+  fi
 
   [[ "$report" != quiet ]] || return 0
 
@@ -533,4 +631,3 @@ destination_label() {
     printf 'reference'
   fi
 }
-

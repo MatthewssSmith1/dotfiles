@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Like the dotfiles launcher, resolve through Stow back to the owning checkout.
+directory="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+while [[ "$directory" != / && ! -f "$directory/manifests/areas.tsv" ]]; do
+  directory="$(dirname -- "$directory")"
+done
+die() { printf 'dotfiles-theme: %s\n' "$*" >&2; exit 2; }
+[[ -f "$directory/lib/host.sh" ]] || die 'cannot resolve the owning checkout'
+HOST_ROOT=''
+if [[ "${DOTFILES_TESTING:-}" == 1 ]]; then
+  HOST_ROOT="${DOTFILES_TEST_HOST_ROOT:-}"
+  [[ -n "$HOST_ROOT" && "$HOST_ROOT" != / ]] || die 'tests require an isolated host root'
+fi
+# Share deployment's native package authority and Ubuntu version policy.
+source "$directory/lib/host.sh"
+detect_host
+exec python3 "$directory/packages/common/tools/.local/share/dotfiles/bin/theme.py" \
+  "$DETECTED_PROFILE" "$@"

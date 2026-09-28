@@ -1,0 +1,26 @@
+tree 1d48adc1ba8636fd9362f7b9bf8819f3ac3258a4
+parent cbaab83a1e504d02c858880122a78192135ab49a
+parent 8f3ab025b8bbcd055b8ccd32ce5f9bfdf4c448c3
+author Ryan Hughes <ryan@heyoodle.com> 1789450452 -0700
+committer GitHub <noreply@github.com> 1789450452 -0700
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ wsFcBAABCAAQBQJqqNjUCRC1aQ7uu5UhlAAAJhQQAH71AWZxNnEG9mLAL74RE3FX
+ PUVAb7RmaWhRTPhx4o+85o9X/5xMrvVfFoY/Q4gZqAHbke0PX+5Lo1PI71Rg5je8
+ UzMHkyqzGSeShCuhoKVFNLawpdCMX9GAIj0dzN5kpuN3T0u5zv8PUsEWDXNH+wT6
+ LirP0zi1HF5iOxFxDboxp4CZiXU+Akze7DOTZQTRs7RTNNqTFPsVanHB+L52MltF
+ lm2ae/B/YebfjeGqzzWZXMSRO/IquDLJsyvA2kbGmP0WzejT1g/sojOukzWUfcLo
+ +0PSoiJrx0ZUKPTT52fyQMvh0xnjjMcoUYUsxvoOhpSVQS8yQ4/+rQNM7KGco8Jp
+ pc/4cpxDrKzpeFLm90sU0hR+w7F3CFvlYkf7aub3KbZRoMeNNwH8C9K1vRXOQRVI
+ z24+cI/kl9QDa8p+gTF4xG5mpgglR+Itmhg31AMCItJXAvMgRBlyLrge9EF96og1
+ VqIN7GceFYynzc4sSVO0E89yXp3A03Ze62qe5vEWRUikfRSc+QNjj/AuaxIxclYZ
+ NYBj2OGitd8wDO+KODUPkpO0SZjh4/EoippPUePMseNoL/Esl95bmwtebGxH+3y2
+ P9CN5n2nmiy+O5Gmyap+/BSx75dsuR5dq1ZwYZmKINpgAUhG1lPrsxF9FpL9CQp0
+ NWng8GCqCf/Zu3MrNU+3
+ =NN0N
+ -----END PGP SIGNATURE-----
+ 
+
+Merge pull request #11901 from omacom/fix/v4-0-4-complete-kernel-headers
+
+Treat kernel headers as part of the 4.0.4 base system

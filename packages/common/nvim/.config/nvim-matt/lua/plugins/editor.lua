@@ -1,5 +1,4 @@
 return {
-  { "LazyVim/LazyVim", opts = { colorscheme = "tokyonight-night" } },
   { "nvim-neo-tree/neo-tree.nvim", opts = { window = { width = 25 } } },
   { "folke/snacks.nvim", opts = { scroll = { enabled = false } } },
   { "nvim-treesitter/nvim-treesitter", opts = { ensure_installed = { "css" } } },

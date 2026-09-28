@@ -602,4 +602,147 @@ run('apply', code=2)
 PYTHON
 pass
 
+# Theme launcher uses the deployment host fixture and native state as authority.
+python3 - "$REPO_DIR" "$TEST_ROOT" "$DOTFILES" "$ubuntu" "$native" "$fake_bin" <<'PYTHON'
+import concurrent.futures
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+repo, root, dotfiles, ubuntu, native, bin_dir = map(Path, sys.argv[1:])
+home = root / 'theme-home'
+home.mkdir()
+config = home / '.config'
+state = home / '.local/state/dotfiles/theme'
+current = home / '.local/state/omarchy/current'
+command = repo / 'packages/common/tools/.local/bin/dotfiles-theme'
+catalog = json.loads((repo / 'packages/common/tools/.local/share/dotfiles/themes/catalog.json').read_text())
+supported = sorted(catalog['supported'])
+assert supported
+selected = supported[0]
+other = supported[-1]
+env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(config),
+           XDG_STATE_HOME=str(home / '.local/state'), XDG_DATA_HOME=str(home / '.local/share'),
+           DOTFILES_TESTING='1', PATH=str(bin_dir) + ':' + os.environ['PATH'])
+
+def run(host, *args, code=0):
+    result = subprocess.run([str(command), *args], env={**env, 'DOTFILES_TEST_HOST_ROOT': str(host)},
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == code, (args, result.returncode, result.stdout, result.stderr)
+    return result.stdout + result.stderr
+
+def stage(name):
+    current.mkdir(parents=True, exist_ok=True)
+    (current / 'theme').mkdir(exist_ok=True)
+    (current / 'theme.name').write_text(name + '\n')
+    (current / 'theme/colors.toml').write_text('palette=' + name)
+    (current / 'theme/neovim.lua').write_text('return "' + name + '"')
+
+def expected(name):
+    return {'version': 1, 'host': 'omarchy', 'theme': name, 'supported': name in supported,
+            'inputs': {key: hashlib.sha256((current / 'theme' / key).read_bytes()).hexdigest()
+                       for key in ('colors.toml', 'neovim.lua')}}
+
+assert run(ubuntu, 'list').splitlines() == supported
+assert run(native, 'list').splitlines() == supported
+assert 'host: ubuntu' in run(ubuntu, 'status', code=1)
+assert 'tokyo-night' in run(ubuntu, 'check', code=1)
+assert run(ubuntu, 'set', selected, code=2)
+assert run(ubuntu, 'sync', code=2)
+assert not state.exists()
+local = config / 'dotfiles/local/theme'
+local.parent.mkdir(parents=True)
+local.write_text('unlisted\n')
+assert 'invalid local selection' in run(ubuntu, 'status', code=1)
+local.write_text(selected + '\n')
+assert f'theme: {selected}' in run(ubuntu, 'status', code=1)
+assert run(ubuntu, 'set', selected, code=2)
+assert not state.exists() and local.read_text() == selected + '\n'
+
+assert 'unavailable' in run(native, 'status', code=2)
+assert not state.exists()
+stage(selected)
+assert 'stale or absent' in run(native, 'status', code=1)
+assert run(native, 'check', code=1)
+assert not state.exists()
+assert 'unsupported theme' in run(native, 'set', 'not-reviewed', code=2)
+assert not state.exists()
+run(native, 'sync')
+saved = state / 'current.json'
+assert json.loads(saved.read_text()) == expected(selected)
+assert set(state.iterdir()) == {state / 'sync.lock', saved}
+stamp = saved.stat().st_mtime_ns
+run(native, 'sync')
+assert saved.stat().st_mtime_ns == stamp
+assert 'synchronization: current' in run(native, 'status')
+run(native, 'check')
+stage(other)
+assert run(native, 'check', code=1)
+with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+    list(pool.map(lambda _: run(native, 'sync'), range(16)))
+assert json.loads(saved.read_text()) == expected(other)
+assert not list(state.glob('.current-*'))
+
+# Fake Omarchy stages before invoking the real hook, which must ignore the old event argument.
+hook = repo / 'packages/omarchy/desktop/.config/omarchy/hooks/theme-set.d/90-dotfiles-theme'
+assert hook.exists(), hook
+installed_hook = config / 'omarchy/hooks/theme-set.d/90-dotfiles-theme'
+installed_hook.parent.mkdir(parents=True)
+installed_hook.symlink_to(hook)
+launcher = home / '.local/bin/dotfiles-theme'
+launcher.parent.mkdir(parents=True, exist_ok=True)
+launcher.symlink_to(command)
+fake = bin_dir / 'omarchy'
+fake.write_text('#!/usr/bin/env bash\n'
+                '[[ "$1" == theme && "$2" == set ]] || exit 91\n'
+                'printf "%s\\n" "$3" > "$HOME/.local/state/omarchy/current/theme.name"\n'
+                'printf "palette=%s" "$3" > "$HOME/.local/state/omarchy/current/theme/colors.toml"\n'
+                'printf "return \\\"%s\\\"" "$3" > "$HOME/.local/state/omarchy/current/theme/neovim.lua"\n'
+                '"$HOME/.config/omarchy/hooks/theme-set.d/90-dotfiles-theme" old-event\n')
+fake.chmod(0o755)
+run(native, 'set', selected)
+assert json.loads(saved.read_text()) == expected(selected)
+stage(other)
+subprocess.run([str(installed_hook), selected], env={**env, 'DOTFILES_TEST_HOST_ROOT': str(native)},
+               check=True, capture_output=True, timeout=15)
+assert json.loads(saved.read_text()) == expected(other)
+
+# A failed hook remains visible even if a later command refreshes observation.
+# Recover only after this hook succeeds; status/check themselves never clear it.
+native_spec = current / 'theme/neovim.lua'
+native_spec.unlink()
+failed = subprocess.run([str(installed_hook)], env={**env, 'DOTFILES_TEST_HOST_ROOT': str(native)},
+                        capture_output=True, text=True, timeout=15)
+assert failed.returncode == 2, failed
+failure = state / 'hook-error'
+assert failure.is_file()
+stage(other)
+run(native, 'sync')
+assert 'native theme hook failed' in run(native, 'check', code=1)
+assert 'native-hook-error:' in run(native, 'status', code=1)
+assert failure.is_file()
+subprocess.run([str(installed_hook), selected], env={**env, 'DOTFILES_TEST_HOST_ROOT': str(native)},
+               check=True, capture_output=True, timeout=15)
+assert not failure.exists()
+run(native, 'check')
+
+# Removing tools only removes links; persisted observation and unrelated data survive.
+launcher.unlink()
+sentinel = home / '.local/state/other-app/keep'
+sentinel.parent.mkdir(parents=True)
+sentinel.write_text('keep')
+for action in ('apply', 'remove'):
+    result = subprocess.run([str(dotfiles), action, 'tools'],
+                            env={**env, 'DOTFILES_TEST_HOST_ROOT': str(native)},
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, (action, result.stdout, result.stderr)
+assert saved.exists() and json.loads(saved.read_text()) == expected(other)
+assert sentinel.read_text() == 'keep'
+assert not (home / '.local/bin/dotfiles-theme').exists()
+PYTHON
+pass
+
 printf 'PASS: %s tools/mise test groups\n' "$TEST_COUNT"

@@ -31,6 +31,7 @@ PROPOSAL=""
 UPSTREAM_SWAP_ACTIVE=false
 UPSTREAM_SWAP_OLD_TREE=""
 UPSTREAM_SWAP_OLD_MANIFEST=""
+UPSTREAM_SWAP_OLD_CATALOG=""
 
 declare -A PIN_COMMIT=()
 declare -A PIN_RELEASE=()
@@ -273,6 +274,37 @@ enumerate_scope() {
 
   enumerate_nvim_assembly
   fault sync-enumerate
+}
+
+generate_theme_catalog() {
+  local root="$STAGING/candidate/packages/common/tools/.local/share/dotfiles/themes"
+  local slug tree lines
+  mkdir -p -- "$root"
+  for slug in catppuccin everforest tokyo-night; do
+    mkdir -p -- "$root/$slug"
+    cp -- "$STAGING/candidate/packages/upstream/reference/omarchy/themes/$slug/colors.toml" \
+      "$root/$slug/colors.toml"
+  done
+  tree="$(git_quiet --git-dir="${PIN_GIT_DIR[omarchy]}" rev-parse "${PIN_COMMIT[omarchy]}:themes")"
+  git_quiet --git-dir="${PIN_GIT_DIR[omarchy]}" cat-file commit "${PIN_COMMIT[omarchy]}" > "$root/stock-commit.raw"
+  git_quiet --git-dir="${PIN_GIT_DIR[omarchy]}" cat-file tree "${PIN_COMMIT[omarchy]}^{tree}" > "$root/stock-root-tree.raw"
+  git_quiet --git-dir="${PIN_GIT_DIR[omarchy]}" cat-file tree "$tree" > "$root/stock-themes-tree.raw"
+  lines="$(git_quiet --git-dir="${PIN_GIT_DIR[omarchy]}" ls-tree -d --name-only \
+    "${PIN_COMMIT[omarchy]}:themes")"
+  [[ -n "$lines" ]] || die 'pinned stock-theme inventory is empty'
+  jq -Rn --arg commit "${PIN_COMMIT[omarchy]}" --arg tree "$tree" \
+    '{version: 1, commit: $commit, tree: $tree,
+      themes: [inputs | select(length > 0)] | sort}' <<< "$lines" > "$root/stock.json"
+  cp -- "$REPO_DIR/manifests/hidden-themes.txt" "$STAGING/candidate/manifests/hidden-themes.txt"
+  jq -n --slurpfile stock "$root/stock.json" \
+    --rawfile hidden "$REPO_DIR/manifests/hidden-themes.txt" '
+    {version: 1,
+     eligible: ($stock[0].themes - ($hidden | split("\n") | map(select(length > 0))) | sort),
+     supported: {
+       "catppuccin": {colors: "catppuccin/colors.toml", neovim: {plugin: "catppuccin/nvim", name: "catppuccin", colorscheme: "catppuccin-nvim"}},
+       "everforest": {colors: "everforest/colors.toml", neovim: {plugin: "neanias/everforest-nvim", name: "everforest-nvim", colorscheme: "everforest", background: "soft"}},
+       "tokyo-night": {colors: "tokyo-night/colors.toml", neovim: {plugin: "folke/tokyonight.nvim", name: "tokyonight.nvim", colorscheme: "tokyonight-night"}}
+     }}' > "$root/catalog.json"
 }
 
 declare -A NVIM_RECORD_INDEX=()
@@ -618,12 +650,17 @@ generate_candidate_manifest() {
 replace_active_snapshot() {
   local active="$REPO_DIR/packages/upstream"
   local manifest="$REPO_DIR/manifests/sources.json"
+  local catalog="$REPO_DIR/packages/common/tools/.local/share/dotfiles/themes"
 
   fault sync-replace
   UPSTREAM_SWAP_OLD_TREE="$STAGING/replaced-upstream"
   UPSTREAM_SWAP_OLD_MANIFEST="$STAGING/replaced-sources.json"
   cp -p -- "$manifest" "$UPSTREAM_SWAP_OLD_MANIFEST" || \
     die 'unable to preserve the active manifest for replacement'
+  if [[ -d "$catalog" ]]; then
+    UPSTREAM_SWAP_OLD_CATALOG="$STAGING/replaced-themes"
+    cp -a -- "$catalog" "$UPSTREAM_SWAP_OLD_CATALOG" || die 'unable to preserve theme catalog'
+  fi
   mv -- "$active" "$UPSTREAM_SWAP_OLD_TREE" || \
     die 'unable to stage the active snapshot for replacement'
   UPSTREAM_SWAP_ACTIVE=true
@@ -633,6 +670,12 @@ replace_active_snapshot() {
   fault sync-replaced-tree
   mv -- "$STAGING/candidate/manifests/sources.json" "$manifest" || \
     die 'manifest replacement failed after the snapshot swap'
+  mkdir -p -- "${catalog%/*}"
+  if [[ -d "$catalog" ]]; then
+    mv -- "$catalog" "$STAGING/replaced-live-themes" || die 'theme catalog replacement failed'
+  fi
+  mv -- "$STAGING/candidate/packages/common/tools/.local/share/dotfiles/themes" "$catalog" || \
+    die 'theme catalog replacement failed'
   UPSTREAM_SWAP_ACTIVE=false
 }
 
@@ -662,6 +705,13 @@ cleanup_before_temp_paths() {
         "$SCRIPT_NAME" "$STAGING" >&2
       return 1
     }
+  local catalog="$REPO_DIR/packages/common/tools/.local/share/dotfiles/themes"
+  if [[ -n "$UPSTREAM_SWAP_OLD_CATALOG" ]]; then
+    rm -rf -- "$catalog"
+    mv -- "$UPSTREAM_SWAP_OLD_CATALOG" "$catalog" || die 'unable to restore theme catalog'
+  else
+    rm -rf -- "$catalog"
+  fi
   UPSTREAM_SWAP_ACTIVE=false
   log 'restored the active snapshot after an interrupted replacement'
 }
@@ -688,6 +738,7 @@ run_sync() {
   preserve_artifacts
   preserve_framework_markers
   generate_candidate_manifest
+  generate_theme_catalog
 
   if accepted_stable_artifact_present "$REPO_DIR/manifests/sources.json"; then
     mkdir -p -- "$STAGING/candidate/${NVIM_EVIDENCE_DIR%/*}"

@@ -48,6 +48,12 @@ Personal dispatch falls back to `command opencode` when the optional launcher is
 
 The TUI order begins with native `tui.json`, Herdr's `tui.jsonc`, then the explicit dotfiles overlay. Project TUI configuration may load later. The overlay maps `Ctrl+Enter`, `Shift+Enter`, `Alt+Enter`, and `Ctrl+J` to newline; `Ctrl+S` stashes a prompt; `Ctrl+Y` restores the latest stash; `Ctrl+X K` clears; and `Ctrl+X Q` quits.
 
+### Native Omarchy theme
+
+Both named launchers pass the same keybinding-only `OPENCODE_TUI_CONFIG` overlay. It has no `theme` key; the native `~/.config/opencode/tui.json` sets `"theme": "system"`. OpenCode therefore takes colors from the terminal's effective Omarchy palette for new launches, including after native picker changes. The launcher does not read the shared tools area's `~/.local/state/dotfiles/theme/current.json`: that file is synchronization status, not a second native selection. Unsupported native themes also retain native OpenCode colors. Do not map these selections to similarly named OpenCode built-in themes; they need not reproduce Omarchy's palette.
+
+On the installed Omarchy v4, `omarchy-theme-set` stages the effective theme under `~/.local/state/omarchy/current/theme/`, then runs `omarchy-restart-terminal` and `omarchy-restart-opencode`; the latter sends `SIGUSR2` to running `opencode` processes. This is native reload behavior, not an OpenCode overlay watcher. If an existing session does not update, quit and restart it; config changes require a restart. The native `tui.json`, Herdr `tui.jsonc` and integration script remain host-owned. Ubuntu phase one keeps its existing TUI configuration and terminal inheritance; explicit portable palette mapping for its OpenCode profiles remains Ubuntu integration work.
+
 ### Harness separation and Codex CLI restrictions
 
 The shared launcher sets `OPENCODE_DISABLE_CLAUDE_CODE=1` for both profiles, disabling OpenCode's automatic Claude Code prompt and skill discovery. Shared `.agents/skills` and OpenCode-native skills remain discoverable. This covers `opencode-personal`, `opencode-work`, and managed interactive Bash's plain `opencode` command.

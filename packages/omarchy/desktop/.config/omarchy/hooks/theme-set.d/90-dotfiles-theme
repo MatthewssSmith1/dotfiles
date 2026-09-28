@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The event may be stale; sync reads Omarchy's effective selection instead.
+helper="$HOME/.local/bin/dotfiles-theme"
+if [[ -x "$helper" ]]; then
+  state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/theme"
+  mkdir -p -- "$state" || exit 1
+  # Serialize result publication as well as sync. A later common-command sync
+  # must not hide a failed native hook; only a successful hook clears it.
+  exec 8>>"$state/hook.lock" || exit 1
+  flock -x 8 || exit 1
+  if "$helper" sync; then
+    rm -f -- "$state/hook-error"
+  else
+    result=$?
+    temporary="$(mktemp "$state/.hook-error-XXXXXX")" || exit "$result"
+    printf 'native theme hook failed (exit %s); rerun %s\n' "$result" "${BASH_SOURCE[0]}" > "$temporary"
+    mv -f -- "$temporary" "$state/hook-error"
+    exit "$result"
+  fi
+fi

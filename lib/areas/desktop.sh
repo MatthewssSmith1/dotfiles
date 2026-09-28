@@ -16,6 +16,9 @@ readonly DESKTOP_MENU_SHORTCUTS='.config/dotfiles/omarchy/menu-shortcuts.jsonc'
 readonly DESKTOP_MENU_DOTFILES='.config/dotfiles/omarchy/menu-dotfiles.jsonc'
 readonly DESKTOP_MENU_HELPER='.local/libexec/dotfiles-menu'
 readonly DESKTOP_THEME_SWITCHER='.local/bin/dotfiles-omarchy-theme-switcher'
+readonly DESKTOP_THEME_HOOK='.config/omarchy/hooks/theme-set.d/90-dotfiles-theme'
+readonly DESKTOP_THEME_HELPER='.local/bin/dotfiles-theme'
+readonly DESKTOP_NATIVE_THEME='.local/state/omarchy/current/theme.name'
 readonly DESKTOP_THEME_MENU_ADAPTER='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
 readonly DESKTOP_COMPOSE_SHORTCUT='.local/bin/dotfiles-omarchy-compose-shortcut'
 readonly DESKTOP_SHORTCUTS='.local/bin/dotfiles-shortcuts'
@@ -296,6 +299,15 @@ validate_desktop_theme_filter() {
     die 'desktop theme selector denylist is not exact'
 }
 
+desktop_theme_ready() {
+  [[ -x "$HOME/$DESKTOP_THEME_HELPER" && -f "$HOME/$DESKTOP_NATIVE_THEME" ]]
+}
+
+desktop_theme_check() {
+  desktop_theme_ready || return 0
+  "$HOME/$DESKTOP_THEME_HELPER" check || die 'desktop theme synchronization is stale or failed; inspect: dotfiles-theme status'
+}
+
 desktop_menu_json() {
   jq -eRsc '
     gsub("(?m)^\\s*//[^\\n]*(\\n|$)"; "") |
@@ -424,6 +436,10 @@ validate_desktop_closure() {
     validate_desktop_shortcuts
     validate_desktop_dotfiles_menu
     validate_desktop_theme_filter
+    local hook="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_THEME_HOOK"
+    [[ -f "$hook" && ! -L "$hook" && -x "$hook" && "$(stat -c %a -- "$hook")" == 755 ]] ||
+      die 'desktop theme hook is not an accepted executable payload'
+    bash -n "$hook" || die 'desktop theme hook has invalid Bash syntax'
     local wrapper="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_WINDOWS_VM"
     local entry="$DOTFILES_DIR/packages/omarchy/desktop/$DESKTOP_WINDOWS_ENTRY"
     [[ -f "$wrapper" && ! -L "$wrapper" && "$(stat -c %a -- "$wrapper")" == 755 ]] ||
@@ -479,6 +495,7 @@ preflight_desktop() {
     validate_desktop_menu
   fi
   lean_preflight_area "$MODE"
+  if [[ "$SELECTED_PROFILE" == omarchy && "$MODE" == check ]]; then desktop_theme_check; fi
   if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
     log_neutral 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'
   fi
@@ -492,6 +509,9 @@ apply_desktop() {
   fi
   lean_apply_area
   if [[ "$SELECTED_PROFILE" == omarchy ]]; then
+    if desktop_theme_ready; then
+      "$HOME/$DESKTOP_THEME_HELPER" sync || die 'desktop theme synchronization failed; run: dotfiles-theme sync'
+    fi
     log_success 'applied desktop preferences and theme filter without restarting the Omarchy shell'
   else
     log_neutral 'Omarchy desktop configuration is outside the Ubuntu profile; no changes made'

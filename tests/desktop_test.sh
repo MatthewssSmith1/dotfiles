@@ -34,6 +34,7 @@ readonly MENU_FRAGMENT_REL='.config/dotfiles/omarchy/menu-shortcuts.jsonc'
 readonly SHELL_REL='.config/omarchy/shell.json'
 readonly MENU_REL='.config/omarchy/extensions/omarchy-menu.jsonc'
 readonly SWITCHER_REL='.local/bin/dotfiles-omarchy-theme-switcher'
+readonly THEME_HOOK_REL='.config/omarchy/hooks/theme-set.d/90-dotfiles-theme'
 readonly COMPOSE_SHORTCUT_REL='.local/bin/dotfiles-omarchy-compose-shortcut'
 readonly SHORTCUTS_REL='.local/bin/dotfiles-shortcuts'
 readonly MENU_ADAPTER_REL='.local/libexec/dotfiles-omarchy-theme-switcher/omarchy-menu-images'
@@ -121,7 +122,7 @@ if command -v lua >/dev/null 2>&1; then
 else
   printf 'SKIP: lua unavailable; capture binding runtime checks skipped\n'
 fi
-[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 13 &&
+[[ "$(find "$REPO_DIR/packages/omarchy/desktop" -type f | wc -l)" == 14 &&
   ! -e "$REPO_DIR/packages/omarchy/desktop/$MENU_REL" ]] || fail 'desktop package payload inventory is not exact'
 [[ -x "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_REL" &&
   -f "$REPO_DIR/packages/omarchy/desktop/$WINDOWS_VM_DESKTOP_REL" ]] ||
@@ -153,6 +154,34 @@ if command -v xkbcli >/dev/null 2>&1; then
 else
   printf 'SKIP: xkbcli unavailable; exact Compose aliases were checked\n'
 fi
+pass
+
+# The hook owns one symlink and uses the current native state, never the event
+# argument. An absent common command is harmless; other hooks survive removal.
+read -r theme_host theme_home < <(prepare_native_desktop theme-hook)
+mkdir -p "$theme_home/.config/omarchy/hooks/theme-set.d" "$theme_home/.local/state/omarchy/current" "$theme_home/.local/bin"
+printf '#!/usr/bin/env bash\nexit 99\n' > "$theme_home/.config/omarchy/hooks/theme-set.d/10-unrelated"
+printf '#!/usr/bin/env bash\nexit 99\n' > "$theme_home/.config/omarchy/hooks/theme-set"
+printf 'everforest\n' > "$theme_home/.local/state/omarchy/current/theme.name"
+expect_success "$theme_home" "$theme_host" "$DOTFILES" apply desktop
+[[ -L "$theme_home/$THEME_HOOK_REL" ]] || fail 'desktop hook was not linked'
+HOME="$theme_home" "$theme_home/$THEME_HOOK_REL" stale-event || fail 'hook should tolerate missing helper'
+cat > "$theme_home/.local/bin/dotfiles-theme" <<'SCRIPT'
+#!/usr/bin/env bash
+printf '%s:%s\n' "$1" "$(< "$HOME/.local/state/omarchy/current/theme.name")" >> "$HOME/theme-sync.trace"
+[[ "${THEME_FAIL:-0}" != 1 ]]
+SCRIPT
+chmod 0755 "$theme_home/.local/bin/dotfiles-theme"
+expect_success "$theme_home" "$theme_host" "$DOTFILES" apply desktop
+HOME="$theme_home" "$theme_home/$THEME_HOOK_REL" tokyo-night
+[[ "$(< "$theme_home/theme-sync.trace")" == $'sync:everforest\nsync:everforest' ]] || fail 'hook used stale event or apply failed to reconcile'
+expect_success "$theme_home" "$theme_host" "$DOTFILES" check desktop
+THEME_FAIL=1 expect_failure 'theme synchronization is stale' "$theme_home" "$theme_host" "$DOTFILES" check desktop
+THEME_FAIL=1 expect_failure 'theme synchronization failed' "$theme_home" "$theme_host" "$DOTFILES" apply desktop
+expect_success "$theme_home" "$theme_host" "$DOTFILES" remove desktop
+[[ ! -e "$theme_home/$THEME_HOOK_REL" && ! -L "$theme_home/$THEME_HOOK_REL" &&
+  -f "$theme_home/.config/omarchy/hooks/theme-set.d/10-unrelated" &&
+  -f "$theme_home/.config/omarchy/hooks/theme-set" ]] || fail 'hook removal touched other hooks'
 pass
 
 # Approved Dotfiles menu hierarchy, helper dispatch, and focused lifecycle.

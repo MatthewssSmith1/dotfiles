@@ -65,7 +65,11 @@ copy_fixture() {
   cp -p "$REPO_DIR/lib/upstream/verify.sh" "$destination/lib/upstream/verify.sh"
   cp -p "$REPO_DIR/schemas/source-manifest.schema.json" "$destination/schemas/"
   cp -p "$REPO_DIR/manifests/sources.json" "$destination/manifests/"
+  cp -p "$REPO_DIR/manifests/hidden-themes.txt" "$destination/manifests/"
   cp -a "$REPO_DIR/packages/upstream" "$destination/packages/upstream"
+  mkdir -p "$destination/packages/common/tools/.local/share/dotfiles"
+  cp -a "$REPO_DIR/packages/common/tools/.local/share/dotfiles/themes" \
+    "$destination/packages/common/tools/.local/share/dotfiles/"
   cp -a "$NVIM_EVIDENCE" "$destination/docs/artifacts/"
 }
 
@@ -120,6 +124,11 @@ make_repositories() {
   write_file "$OMARCHY_REPO/default/themed/neovim.lua.tpl" $'return { accent = "{{ accent }}" }\n'
   write_file "$OMARCHY_REPO/themes/tokyo-night/colors.toml" $'accent = "#7aa2f7"\n'
   write_file "$OMARCHY_REPO/themes/tokyo-night/neovim.lua" $'return { background = "dark" }\n'
+  write_file "$OMARCHY_REPO/themes/everforest/colors.toml" $'accent = "#a7c080"\n'
+  write_file "$OMARCHY_REPO/themes/everforest/neovim.lua" $'return { colorscheme = "everforest" }\n'
+  write_file "$OMARCHY_REPO/themes/catppuccin/colors.toml" $'accent = "#89b4fa"\n'
+  write_file "$OMARCHY_REPO/themes/catppuccin/neovim.lua" $'return { colorscheme = "catppuccin-nvim" }\n'
+  write_file "$OMARCHY_REPO/themes/hidden-fixture/colors.toml" $'accent = "#000000"\n'
   write_file "$OMARCHY_REPO/default/bash/shell" $'shopt -s histappend\n'
   write_file "$OMARCHY_REPO/default/bash/aliases" $'alias a=\'omarchy-agent --inline\'\nalias g=git\n'
   write_file "$OMARCHY_REPO/default/bash/fns/tmux" $'tdl() {\n  tmux select-pane -t "$opencode_pane"\n}\n\n# Create a Tmux Dev Square layout with editor, diff watch, terminal, and opencode\ntds() { hunk diff --watch; }\n\n# Create multiple tdl windows with one per subdirectory in the current directory\ntdlm() { :; }\n'
@@ -155,6 +164,7 @@ seed_active_checkout() {
   cp -p "$REPO_DIR/lib/upstream/verify.sh" "$checkout/lib/upstream/verify.sh"
   cp -p "$REPO_DIR/lib/common.sh" "$checkout/lib/common.sh"
   cp -p "$REPO_DIR/schemas/source-manifest.schema.json" "$checkout/schemas/"
+  cp -p "$REPO_DIR/manifests/hidden-themes.txt" "$checkout/manifests/"
   cp -p "$LOCK_SOURCE" "$checkout/packages/upstream/nvim/.config/nvim/lazy-lock.json"
   printf 'active baseline\n' > "$checkout/packages/upstream/git/.config/git/config"
   blob="$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git hash-object --no-filters -- "$checkout/packages/upstream/git/.config/git/config")"
@@ -349,6 +359,31 @@ new_fixture 'content-drift'
 printf '\ndrift\n' >> "$FIXTURE/packages/upstream/git/.config/git/config"
 expect_command_failure 'content drift' 'snapshot blob drift' "$FIXTURE/scripts/upstream" verify
 
+new_fixture 'palette-drift'
+printf '\ndrift\n' >> "$FIXTURE/packages/common/tools/.local/share/dotfiles/themes/everforest/colors.toml"
+expect_command_failure 'portable palette drift' 'portable theme palette differs' "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'eligibility-drift'
+rewrite_catalog="$FIXTURE/packages/common/tools/.local/share/dotfiles/themes/catalog.json"
+jq '.eligible -= ["everforest"]' "$rewrite_catalog" > "$rewrite_catalog.new"
+mv -- "$rewrite_catalog.new" "$rewrite_catalog"
+expect_command_failure 'eligibility drift' 'theme eligibility differs' "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'stock-inventory-forgery'
+stock="$FIXTURE/packages/common/tools/.local/share/dotfiles/themes/stock.json"
+jq '.themes += ["invented"] | .themes |= sort' "$stock" > "$stock.new"
+mv -- "$stock.new" "$stock"
+catalog="$FIXTURE/packages/common/tools/.local/share/dotfiles/themes/catalog.json"
+jq '.eligible += ["invented"] | .eligible |= sort' "$catalog" > "$catalog.new"
+mv -- "$catalog.new" "$catalog"
+expect_command_failure 'forged stock inventory and eligibility' 'stock-theme Git object provenance' \
+  "$FIXTURE/scripts/upstream" verify
+
+new_fixture 'stock-tree-corruption'
+printf 'drift' >> "$FIXTURE/packages/common/tools/.local/share/dotfiles/themes/stock-themes-tree.raw"
+expect_command_failure 'stock tree corruption' 'stock-theme Git object provenance' \
+  "$FIXTURE/scripts/upstream" verify
+
 new_fixture 'artifact-evidence-drift'
 printf 'drift\n' >> "$FIXTURE/$NVIM_EVIDENCE_REL/config.sha256"
 expect_command_failure 'artifact evidence drift' \
@@ -527,6 +562,27 @@ expect_command_failure 'non-HTTPS proposal repository' 'unexpected repository' \
 HAPPY="$TEMP_ROOT/happy"
 cp -a "$BASE" "$HAPPY"
 sync_checkout "$HAPPY" "$PROPOSAL" >/dev/null || fail 'happy sync failed'
+jq -e '.eligible | index("hidden-fixture") != null' \
+  "$HAPPY/packages/common/tools/.local/share/dotfiles/themes/catalog.json" >/dev/null || \
+  fail 'new upstream theme was not eligible'
+jq -e '.supported | has("hidden-fixture") | not' \
+  "$HAPPY/packages/common/tools/.local/share/dotfiles/themes/catalog.json" >/dev/null || \
+  fail 'new upstream theme was incorrectly supported'
+EXCLUDED="$TEMP_ROOT/excluded-theme"
+cp -a "$BASE" "$EXCLUDED"
+printf 'hidden-fixture\n' >> "$EXCLUDED/manifests/hidden-themes.txt"
+sync_checkout "$EXCLUDED" "$PROPOSAL" >/dev/null || fail 'excluded-theme sync failed'
+jq -e '.eligible | index("hidden-fixture") == null' \
+  "$EXCLUDED/packages/common/tools/.local/share/dotfiles/themes/catalog.json" >/dev/null || \
+  fail 'excluded upstream theme became eligible'
+INCOMPLETE="$TEMP_ROOT/incomplete-theme"
+cp -a "$BASE" "$INCOMPLETE"
+printf 'everforest\n' >> "$INCOMPLETE/manifests/hidden-themes.txt"
+before="$(fingerprint_active "$INCOMPLETE")"
+expect_command_failure 'excluded supported theme' 'theme eligibility differs' \
+  sync_checkout "$INCOMPLETE" "$PROPOSAL"
+[[ "$(fingerprint_active "$INCOMPLETE")" == "$before" ]] || \
+  fail 'incomplete supported theme changed active snapshot'
 "$HAPPY/scripts/upstream" verify >/dev/null || fail 'synchronized checkout does not verify'
 first_fingerprint="$(fingerprint_active "$HAPPY")"
 sync_checkout "$HAPPY" "$PROPOSAL" >/dev/null || fail 'convergent sync failed'

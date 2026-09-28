@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "eligible": [
+    "catppuccin",
+    "catppuccin-latte",
+    "everforest",
+    "gruvbox",
+    "kanagawa",
+    "matte-black",
+    "nord",
+    "osaka-jade",
+    "retro-82",
+    "ristretto",
+    "solitude",
+    "tokyo-night"
+  ],
+  "supported": {
+    "catppuccin": {
+      "colors": "catppuccin/colors.toml",
+      "neovim": {
+        "plugin": "catppuccin/nvim",
+        "name": "catppuccin",
+        "colorscheme": "catppuccin-nvim"
+      }
+    },
+    "everforest": {
+      "colors": "everforest/colors.toml",
+      "neovim": {
+        "plugin": "neanias/everforest-nvim",
+        "name": "everforest-nvim",
+        "colorscheme": "everforest",
+        "background": "soft"
+      }
+    },
+    "tokyo-night": {
+      "colors": "tokyo-night/colors.toml",
+      "neovim": {
+        "plugin": "folke/tokyonight.nvim",
+        "name": "tokyonight.nvim",
+        "colorscheme": "tokyonight-night"
+      }
+    }
+  }
+}

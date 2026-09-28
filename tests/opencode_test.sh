@@ -102,6 +102,10 @@ jq -e '.keybinds == {
   "prompt_stash_pop":"ctrl+y",
   "input_newline":"ctrl+return,shift+return,alt+return,ctrl+j"
 }' "$tui_profile" >/dev/null || fail 'shared OpenCode TUI bindings drifted'
+jq -e 'has("theme") | not' "$tui_profile" >/dev/null || fail 'managed TUI overlay must not override native Omarchy theme'
+for profile in "$personal_profile" "$work_profile"; do
+  jq -e 'has("theme") | not' "$profile" >/dev/null || fail "profile overrides native theme: $profile"
+done
 pass
 
 # Both hosts deploy six links while preserving native and integration files.
@@ -126,6 +130,26 @@ for profile_host in "$ubuntu" "$native"; do
   expect_success "$home" "$profile_host" "$DOTFILES" check opencode
 done
 CAPTURE_PATH_PREFIX="$fake_bin"
+pass
+
+# Native theme staging can replace its directory; both profiles continue to use
+# the host's system theme without snapshotting theme.name or writing generated state.
+themed="$(new_home native-themed)"
+seed_native_home "$themed"
+mkdir -p "$themed/.local/state/omarchy/current/theme"
+printf 'everforest\n' > "$themed/.local/state/omarchy/current/theme.name"
+expect_success "$themed" "$native" "$DOTFILES" apply opencode
+for selection in everforest tokyo-night catppuccin unknown; do
+  printf '%s\n' "$selection" > "$themed/.local/state/omarchy/current/theme.name"
+  for profile in personal work; do
+    output="$(HOME="$themed" PATH="$themed/.local/bin:/usr/bin:/bin" "$themed/.local/bin/opencode-$profile")"
+    [[ "$output" == "$themed/.config/dotfiles/opencode/$profile.jsonc"$'\n'"$themed/.config/dotfiles/opencode/tui.jsonc"$'\n1\n<>' ]] ||
+      fail "native theme change altered $profile launch overlay"
+  done
+  jq -e '.theme == "system"' "$themed/.config/opencode/tui.json" >/dev/null || fail 'native TUI theme was changed'
+done
+[[ ! -e "$themed/.local/state/dotfiles/theme/current.json" ]] || fail 'OpenCode persisted a second native theme selection'
+expect_success "$themed" "$native" "$DOTFILES" check opencode
 pass
 
 # Exact links from the previous layout migrate without touching unrelated data.

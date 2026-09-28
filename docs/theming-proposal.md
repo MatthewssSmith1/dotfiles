@@ -1,12 +1,12 @@
 # Portable Application Theming Proposal
 
-Status: agreed direction; not implemented. Commands and paths below describe the proposed interface.
+Status: agreed direction. Shared foundation and Omarchy integration implemented; visual acceptance and Ubuntu adapters remain pending. See [operations](tools/theming.md) and the [Ubuntu handoff](theming-ubuntu-handoff.md) for current behavior and verification.
 
 ## Purpose
 
 Select one theme per machine and have the relevant applications follow it. Native Omarchy remains the reference environment and continues to theme the whole desktop. Ubuntu receives the same theme vocabulary and reviewed palettes for Neovim, OpenCode, Herdr, and Bash/Starship.
 
-The immediate motivation is personal Neovim: `packages/common/nvim/.config/nvim-matt/lua/plugins/editor.lua` currently hard-codes Tokyo Night, even when this machine's native Omarchy theme is Everforest. Shared preferences should define how applications follow a theme; the selected theme belongs to the host.
+The initial motivation was personal Neovim's hard-coded Tokyo Night, even when this machine's native Omarchy theme was Everforest. Shared preferences define how applications follow a theme; the selected theme belongs to the host.
 
 ## User Experience
 

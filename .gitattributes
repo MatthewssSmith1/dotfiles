@@ -1,0 +1,2 @@
+# Raw Git provenance objects must retain exact bytes, including signature whitespace.
+packages/common/tools/.local/share/dotfiles/themes/stock-*.raw binary

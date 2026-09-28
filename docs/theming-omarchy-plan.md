@@ -1,6 +1,6 @@
 # Portable Theming: Omarchy Implementation Plan
 
-Status: proposed work; no implementation completed by this document.
+Status: shared foundation and native integration implemented. Automated checks and offline native selection/Neovim acceptance passed on 2026-09-27; the visual application/picker matrix remains open. [Operations](tools/theming.md) describes the implemented contract; [Ubuntu handoff](theming-ubuntu-handoff.md) records evidence, limitations, and remaining work. The sections below retain the original implementation and acceptance requirements.
 
 Scope: phase one of the [Portable Application Theming Proposal](theming-proposal.md). Establish the shared foundation and native integration on Omarchy, then hand off a stable interface for Ubuntu implementation and real-host validation.
 

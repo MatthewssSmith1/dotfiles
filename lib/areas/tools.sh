@@ -73,6 +73,11 @@ preflight_tools() {
 apply_tools() {
   preflight_tools
   lean_apply_area
+  # Reconcile native observation without selecting a theme. Applications read
+  # native state directly, so tools and desktop can be installed independently.
+  if [[ "$SELECTED_PROFILE" == omarchy && -f "$HOME/.local/state/omarchy/current/theme.name" ]]; then
+    "$HOME/.local/bin/dotfiles-theme" sync
+  fi
   log_success "applied tools area for profile '$SELECTED_PROFILE'; install selected tools manually with mise"
 }
 

@@ -122,6 +122,70 @@
       "transform": "none"
     },
     {
+      "id": "omarchy-theme-everforest-colors",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
+      "source": {
+        "path": "themes/everforest/colors.toml",
+        "blob": "a27781288ffb4889220799dff380d6f32c7b7b62",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/reference/omarchy/themes/everforest/colors.toml",
+      "destination": {
+        "root": "reference"
+      },
+      "transform": "none"
+    },
+    {
+      "id": "omarchy-theme-everforest-neovim",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
+      "source": {
+        "path": "themes/everforest/neovim.lua",
+        "blob": "80551c7801fcdb0202a030356bacb227c98d09ee",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/reference/omarchy/themes/everforest/neovim.lua",
+      "destination": {
+        "root": "reference"
+      },
+      "transform": "none"
+    },
+    {
+      "id": "omarchy-theme-catppuccin-colors",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
+      "source": {
+        "path": "themes/catppuccin/colors.toml",
+        "blob": "ee62f932c937df09e57cf748c176922f29389416",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/reference/omarchy/themes/catppuccin/colors.toml",
+      "destination": {
+        "root": "reference"
+      },
+      "transform": "none"
+    },
+    {
+      "id": "omarchy-theme-catppuccin-neovim",
+      "repository": "https://github.com/basecamp/omarchy",
+      "release": "v4.0.4",
+      "commit": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
+      "source": {
+        "path": "themes/catppuccin/neovim.lua",
+        "blob": "f0d503f9022fe3818788836a9ea4a3faefae6f16",
+        "mode": "100644"
+      },
+      "snapshot": "packages/upstream/reference/omarchy/themes/catppuccin/neovim.lua",
+      "destination": {
+        "root": "reference"
+      },
+      "transform": "none"
+    },
+    {
       "id": "omarchy-bash-aliases",
       "repository": "https://github.com/basecamp/omarchy",
       "release": "v4.0.4",
