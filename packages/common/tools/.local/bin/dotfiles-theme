@@ -16,5 +16,9 @@ fi
 # Share deployment's native package authority and Ubuntu version policy.
 source "$directory/lib/host.sh"
 detect_host
+if [[ $# == 1 && "$1" == host ]]; then
+  printf '%s\n' "$DETECTED_PROFILE"
+  exit 0
+fi
 exec python3 "$directory/packages/common/tools/.local/share/dotfiles/bin/theme.py" \
   "$DETECTED_PROFILE" "$@"

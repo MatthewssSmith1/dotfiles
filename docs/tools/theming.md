@@ -1,6 +1,6 @@
 # Application Themes
 
-The tools area supplies the shared selector and reviewed offline catalog. Omarchy integration is implemented; Ubuntu adapters remain phase two.
+The tools area supplies the shared selector and reviewed offline catalog, with native Omarchy integration and explicit-color Ubuntu adapters.
 
 ```bash
 dotfiles-theme                   # current selection, synchronization, integrations
@@ -29,7 +29,9 @@ Initial checks can report pending deployment/provisioning. Neovim apply installs
 | `tools` | `~/.local/bin/dotfiles-theme`, Python helper and catalog below `~/.local/share/dotfiles/` |
 | `desktop` | Only `~/.config/omarchy/hooks/theme-set.d/90-dotfiles-theme` within native theme hooks |
 | `nvim` | Personal resolver, watcher, static plugins and lockfile within `nvim-matt` |
-| `opencode` | Existing named profile/keybinding overlays; native theme inheritance |
+| `opencode` | Named profile/keybinding overlays; native theme inheritance or Ubuntu generated TUI overlay |
+| `herdr` | Ubuntu launcher and shell dispatcher; native remains validation-only |
+| `bash` | Ubuntu prompt-time Starship and FZF accent integration |
 
 These areas remain independently deployable. The hook is inert without the common helper; personal Neovim reads native state even without tools or desktop. Tools/desktop apply reconcile available native state without selecting a theme. Removal preserves installed tools/plugins, native selection, application data and generated observation. The hook is an exact managed symlink rather than a copy installed outside deployment ownership.
 
@@ -65,16 +67,35 @@ Unsupported native selections keep the desktop selection and use Tokyo Night in 
 
 ## Ubuntu Contract
 
-`list` works without Omarchy. Status reads `${XDG_CONFIG_HOME:-~/.config}/dotfiles/local/theme`, defaulting missing/invalid selections to Tokyo Night without writing anything. It reports Ubuntu integration pending; personal Neovim continues using Tokyo Night in this phase. `set` and `sync` refuse mutation. Tools apply/check/remove preserve the local selection and existing application configuration.
+`list` works without Omarchy. Selection lives at `${XDG_CONFIG_HOME:-~/.config}/dotfiles/local/theme`: a user-owned regular file containing one supported slug followed by a newline. Missing/invalid selections use Tokyo Night without persisting the fallback. `set` validates the slug and writes selection atomically; `sync` regenerates from the current selection without changing it. Status/check remain local and read-only.
 
-Future adapters must consume the reviewed portable palettes and use explicit application colors, preserving the SSH client's terminal palette.
+```bash
+./dotfiles.sh check tools nvim opencode herdr bash
+./dotfiles.sh apply tools nvim opencode herdr bash
+dotfiles-theme set tokyo-night
+./dotfiles.sh check tools nvim opencode herdr bash
+dotfiles-theme check
+```
+
+Generated output lives in `${XDG_STATE_HOME:-~/.local/state}/dotfiles/theme/ubuntu/`. A `sync.lock` serializes writers and read-only observations. Each complete `generation-*` contains OpenCode palette/TUI JSON, Herdr and Starship TOML, an accent, and the applied slug. An atomic `current` symlink publishes the generation after validation. Prior generations are retained for processes using resolved paths. Failed validation leaves the previous selection and generation active; failed selection publication rolls back the generation pointer. An interrupted process can leave selection/output out of sync: `check` detects this and `sync` repairs it.
+
+Tools apply and Ubuntu OpenCode apply synchronize available integration. Tools check detects stale output. A discovered managed OpenCode launcher enables the generated discovery link `${XDG_CONFIG_HOME:-~/.config}/opencode/themes/dotfiles-host.json`; conflicting user files are refused. App settings are derived from repository baselines, never written through Stow links. Herdr's installed 0.8.2 runtime additionally validates generated config in an isolated temporary home.
+
+| Application | Ubuntu behavior |
+| --- | --- |
+| Personal Neovim | Reads local selection directly; one-second watcher retries failed reloads; works without tools |
+| OpenCode personal/work | Explicit `dotfiles-host` palette, shared keybindings preserved; quit and restart existing sessions |
+| Herdr | Managed `~/.local/bin/herdr` selects generated config through `HERDR_CONFIG_PATH`; explicit caller override wins; use reload-config and reconnect, or restart a pre-integration server deliberately |
+| Bash/Starship | Next prompt selects generated Starship config and FZF accents; explicit `STARSHIP_CONFIG` wins; open a new shell after first deployment |
+
+Adapters use explicit colors without emitting terminal-palette escape sequences. Local and remote hosts keep independent selections. Tools removal preserves selection/generated data; launchers and prompt integration stop consuming it when the selector is absent. App-area removal removes only its managed links and preserves application data. Retained OpenCode theme files remain discoverable but are no longer forced by removed profile launchers. Herdr settings edited through its themed runtime affect generated data and are replaced by the next synchronization; permanent preferences belong in the reviewed repository baseline.
 
 ## Exit Codes
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Successful list/sync; current supported Omarchy status/set; or synchronized check without hook failure |
-| `1` | Stale/absent observation, unsupported native status/set, recorded hook failure, or Ubuntu status/check with pending integration |
-| `2` | Invalid arguments/catalog, native read/command failure, or unsupported Ubuntu mutation |
+| `0` | Successful list/sync; synchronized supported status/set; synchronized check without hook failure |
+| `1` | Stale/absent output or observation, unsupported native status/set, or recorded hook failure |
+| `2` | Invalid arguments/catalog, unsafe/conflicting output paths, or read/command/adapter failure |
 
 The catalog contract and exact source evidence are documented in [Upstream Sources](../upstream.md#portable-theme-catalog). Selected themes and generated state are host-local and never committed.

@@ -110,6 +110,9 @@ apply_opencode() {
   remove_opencode_legacy_links
   validate_opencode_global_configs
   lean_apply_area
+  if [[ "$SELECTED_PROFILE" == ubuntu && -x "$HOME/.local/bin/dotfiles-theme" ]]; then
+    "$HOME/.local/bin/dotfiles-theme" sync
+  fi
   log_success "applied optional OpenCode area for profile '$SELECTED_PROFILE'"
 }
 

@@ -45,6 +45,9 @@ validate_herdr_runtime() {
     }
     binary="$(realpath -e -- "$resolved" 2>/dev/null || true)"
     expected="$HOME/.local/share/mise/installs/aqua-ogulcancelik-herdr/$HERDR_VERSION/herdr"
+    if [[ "$binary" == "$DOTFILES_DIR/packages/ubuntu/herdr/.local/bin/herdr" ]]; then
+      binary="$expected"
+    fi
     [[ "$binary" == "$expected" ]] ||
       die "Ubuntu Herdr must resolve to the selected mise install '$expected', not '${binary:-missing}'; install it with: mise install $HERDR_SELECTOR"
   fi
@@ -130,6 +133,7 @@ validate_herdr_closure() {
     .config/herdr/config.toml
     .config/mise/conf.d/50-dotfiles-herdr-ubuntu.toml
     .config/systemd/user/moshi-hook.service.d/10-herdr-path.conf
+    .local/bin/herdr
   )
   [[ -f "$DOTFILES_DIR/$HERDR_REFERENCE" && ! -L "$DOTFILES_DIR/$HERDR_REFERENCE" ]] ||
     die 'accepted Herdr v4 reference config is missing'
@@ -148,7 +152,9 @@ validate_herdr_closure() {
     for index in "${!LEAN_TARGET_PATHS[@]}"; do
       relative="${LEAN_TARGET_PATHS[index]}"
       source="${LEAN_TARGET_SOURCES[index]}"
-      [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Ubuntu Herdr payload mode for $relative"
+      local mode=644
+      [[ "$relative" != .local/bin/herdr ]] || mode=755
+      [[ "$(stat -c %a -- "$source")" == "$mode" ]] || die "unexpected Ubuntu Herdr payload mode for $relative"
     done
     bash -n "$DOTFILES_DIR/packages/ubuntu/herdr/.config/dotfiles/bash/fns/herdr" || die 'Ubuntu Herdr helpers have invalid Bash syntax'
   fi

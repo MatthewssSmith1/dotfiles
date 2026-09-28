@@ -39,6 +39,15 @@ local function native()
   return slug, spec
 end
 
+local function ubuntu()
+  local config = vim.env.XDG_CONFIG_HOME or (vim.env.HOME .. "/.config")
+  local path = config .. "/dotfiles/local/theme"
+  local info = uv.fs_lstat(path)
+  local text = info and info.type == "file" and info.uid == uv.getuid() and read(path) or nil
+  local slug = text and text:match("^([%w%-]+)\n$")
+  return supported[slug] or fallback, text or ""
+end
+
 local function validated(slug, spec)
   local expected = supported[slug]
   if not expected then
@@ -64,11 +73,10 @@ local function validated(slug, spec)
 end
 
 function M.resolve()
-  if not is_omarchy() then return fallback end
+  if not is_omarchy() then return (ubuntu()) end
   local slug, spec = native()
   if spec then return validated(slug, spec) end
   warn("native theme state unavailable; using Tokyo Night")
-  -- On Ubuntu retain the existing Tokyo Night default until phase two.
   return fallback
 end
 
@@ -94,8 +102,18 @@ function M.apply(selected)
 end
 
 function M.watch()
-  if timer or not is_omarchy() then return end
+  if timer then return end
   current = M.resolve()
+  if not is_omarchy() then
+    local _, identity = ubuntu()
+    current_identity = identity
+    timer = uv.new_timer()
+    timer:start(1000, 1000, vim.schedule_wrap(function()
+      local selected, next_identity = ubuntu()
+      if next_identity ~= current_identity and M.apply(selected) then current_identity = next_identity end
+    end))
+    return
+  end
   local initial_slug, initial_spec = native()
   if initial_spec then current_identity = tostring(initial_slug) .. "\0" .. initial_spec end
   timer = uv.new_timer()

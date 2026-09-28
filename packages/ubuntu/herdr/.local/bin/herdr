@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+runtime="$HOME/.local/share/mise/installs/aqua-ogulcancelik-herdr/0.8.2/herdr"
+[[ -x "$runtime" ]] || { printf 'herdr: install mise aqua:ogulcancelik/herdr@0.8.2\n' >&2; exit 127; }
+theme="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/theme/ubuntu/current/herdr.toml"
+# An explicit caller override wins (including deployment's isolated config check).
+if [[ ! -v HERDR_CONFIG_PATH && -x "$HOME/.local/bin/dotfiles-theme" &&
+      -f "$HOME/.config/herdr/config.toml" && -f "$theme" ]]; then
+  export HERDR_CONFIG_PATH="$theme"
+fi
+exec "$runtime" "$@"

@@ -67,6 +67,9 @@ preflight_tools() {
   lean_preflight_area "$MODE"
   if [[ "$MODE" == check ]]; then
     validate_selected_tool_versions
+    if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
+      "$HOME/.local/bin/dotfiles-theme" check || die 'Ubuntu theme synchronization is stale; run dotfiles-theme sync'
+    fi
   fi
 }
 
@@ -76,6 +79,8 @@ apply_tools() {
   # Reconcile native observation without selecting a theme. Applications read
   # native state directly, so tools and desktop can be installed independently.
   if [[ "$SELECTED_PROFILE" == omarchy && -f "$HOME/.local/state/omarchy/current/theme.name" ]]; then
+    "$HOME/.local/bin/dotfiles-theme" sync
+  elif [[ "$SELECTED_PROFILE" == ubuntu ]]; then
     "$HOME/.local/bin/dotfiles-theme" sync
   fi
   log_success "applied tools area for profile '$SELECTED_PROFILE'; install selected tools manually with mise"

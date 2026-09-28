@@ -164,13 +164,9 @@ def main():
     if command == "set" and args[1] not in data["supported"]:
         raise ValueError(f"unsupported theme: {args[1]}; see dotfiles-theme list")
     if host == "ubuntu":
-        selection = CONFIG / "dotfiles/local/theme"
-        value = selection.read_text().strip() if selection.exists() else "tokyo-night"
-        valid = value in data["supported"]
-        print(f"host: ubuntu\ntheme: {value if valid else 'tokyo-night'}" +
-              (" (fallback; invalid local selection)" if not valid else ""))
-        print("integration: pending Ubuntu phase; application configuration unchanged")
-        return 2 if command in ("set", "sync") else 1
+        sys.dont_write_bytecode = True
+        from theme_ubuntu import run
+        return run(command, args, data, THEMES, CONFIG, STATE)
     if command == "set":
         # Never hold the synchronization lock while the native command runs its hook.
         subprocess.run(["omarchy", "theme", "set", args[1]], check=True)
@@ -195,6 +191,6 @@ def main():
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
         print(f"dotfiles-theme: {error}", file=sys.stderr)
         sys.exit(2)

@@ -650,8 +650,7 @@ assert run(ubuntu, 'list').splitlines() == supported
 assert run(native, 'list').splitlines() == supported
 assert 'host: ubuntu' in run(ubuntu, 'status', code=1)
 assert 'tokyo-night' in run(ubuntu, 'check', code=1)
-assert run(ubuntu, 'set', selected, code=2)
-assert run(ubuntu, 'sync', code=2)
+assert run(ubuntu, 'set', 'not-reviewed', code=2)
 assert not state.exists()
 local = config / 'dotfiles/local/theme'
 local.parent.mkdir(parents=True)
@@ -659,7 +658,6 @@ local.write_text('unlisted\n')
 assert 'invalid local selection' in run(ubuntu, 'status', code=1)
 local.write_text(selected + '\n')
 assert f'theme: {selected}' in run(ubuntu, 'status', code=1)
-assert run(ubuntu, 'set', selected, code=2)
 assert not state.exists() and local.read_text() == selected + '\n'
 
 assert 'unavailable' in run(native, 'status', code=2)
@@ -742,7 +740,18 @@ for action in ('apply', 'remove'):
 assert saved.exists() and json.loads(saved.read_text()) == expected(other)
 assert sentinel.read_text() == 'keep'
 assert not (home / '.local/bin/dotfiles-theme').exists()
+# Ubuntu removal retains host selection and generated data; reapply reconciles it.
+for action in ('apply', 'remove', 'apply', 'remove'):
+    result = subprocess.run([str(dotfiles), action, 'tools'],
+                            env={**env, 'DOTFILES_TEST_HOST_ROOT': str(ubuntu)},
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, (action, result.stdout, result.stderr)
+    assert local.read_text() == selected + '\n'
+    assert (state / 'ubuntu/current/selection').read_text() == selected + '\n'
+    assert json.loads(saved.read_text()) == expected(other)
 PYTHON
 pass
 
+python3 "$REPO_DIR/tests/theme_ubuntu_test.py" || fail 'Ubuntu theme adapters failed'
+pass
 printf 'PASS: %s tools/mise test groups\n' "$TEST_COUNT"

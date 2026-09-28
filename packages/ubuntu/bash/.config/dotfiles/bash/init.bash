@@ -10,8 +10,35 @@ if [[ ${DOTFILES_BASH_VALIDATE_OWNERSHIP-} != 1 ]] && command -v mise >/dev/null
 fi
 
 _dotfiles_bash_trace starship
+# Read only generated colors; never source generated shell code or change OSC palettes.
+_dotfiles_bash_theme_prompt() {
+  local status=$? root="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/theme/ubuntu/current" accent
+  if [[ -x "$HOME/.local/bin/dotfiles-theme" && -r "$root/starship.toml" ]]; then
+    if [[ ! -v STARSHIP_CONFIG || "$STARSHIP_CONFIG" == "$root/starship.toml" ]]; then
+      export STARSHIP_CONFIG="$root/starship.toml"
+    fi
+    if IFS= read -r accent < "$root/accent" && [[ "$accent" =~ ^#[[:xdigit:]]{6}$ ]]; then
+      FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS/"${_dotfiles_theme_fzf_suffix-}"/}"
+      _dotfiles_theme_fzf_suffix=" --color=hl:$accent,hl+:$accent,pointer:$accent,marker:$accent,prompt:$accent"
+      export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS}${_dotfiles_theme_fzf_suffix}"
+    fi
+  else
+    [[ ${STARSHIP_CONFIG-} != "$root/starship.toml" ]] || unset STARSHIP_CONFIG
+    if [[ -n ${_dotfiles_theme_fzf_suffix-} ]]; then
+      export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS/"$_dotfiles_theme_fzf_suffix"/}"
+      unset _dotfiles_theme_fzf_suffix
+    fi
+  fi
+  return "$status"
+}
+if [[ ${DOTFILES_BASH_VALIDATE_OWNERSHIP-} != 1 ]]; then
+  _dotfiles_bash_theme_prompt
+fi
 if [[ ${DOTFILES_BASH_VALIDATE_OWNERSHIP-} != 1 && ${TERM:-} != dumb ]] && command -v starship >/dev/null 2>&1; then
   _dotfiles_bash_eval_initializer env MISE_OFFLINE=1 starship init bash
+fi
+if [[ ${DOTFILES_BASH_VALIDATE_OWNERSHIP-} != 1 ]]; then
+  PROMPT_COMMAND=(_dotfiles_bash_theme_prompt "${PROMPT_COMMAND[@]}")
 fi
 
 _dotfiles_bash_trace zoxide

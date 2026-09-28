@@ -119,3 +119,11 @@ hsl() {
   done
   for pane in "${panes[@]}"; do herdr pane run "$pane" "$cmd" >/dev/null || return; done
 }
+herdr() {
+  # mise activation can put its backend before the managed theme launcher.
+  if [[ -x "$HOME/.local/bin/herdr" ]]; then
+    "$HOME/.local/bin/herdr" "$@"
+  else
+    command herdr "$@"
+  fi
+}

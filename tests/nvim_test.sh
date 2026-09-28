@@ -186,6 +186,9 @@ home="$(new_home nvim-theme)"
 mkdir -p "$home/.local/state/omarchy/current/theme"
 theme_dir="$REPO_DIR/packages/upstream/reference/omarchy/themes"
 module_dir="$REPO_DIR/packages/common/nvim/.config/nvim-matt/lua"
+nvim() {
+  command nvim --cmd 'lua local open=io.open; io.open=function(path,...) if path=="/etc/os-release" then return {read=function() return "ID="..(vim.env.NVIM_THEME_TEST_HOST or "omarchy").."\n" end,close=function() end} end; return open(path,...) end' "$@"
+}
 for slug in everforest catppuccin tokyo-night; do
   printf '%s\n' "$slug" > "$home/.local/state/omarchy/current/theme.name"
   cp "$theme_dir/$slug/neovim.lua" "$home/.local/state/omarchy/current/theme/neovim.lua"
@@ -225,6 +228,14 @@ cp "$theme_dir/everforest/neovim.lua" "$home/.local/state/omarchy/current/theme/
 result="$(HOME="$home" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
   '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; local m=require("config.dotfiles_theme"); local calls=0; vim.cmd.colorscheme=function() calls=calls+1; if calls==1 then error("transient") end end; package.loaded.everforest={setup=function() end}; m.watch(); local path=vim.env.HOME.."/.local/state/omarchy/current/theme/neovim.lua"; local lines=vim.fn.readfile(path); table.insert(lines,"-- updated"); vim.fn.writefile(lines,path); vim.wait(3300); print("watch-attempts="..calls)' +qa 2>&1)"
 [[ "$result" == *watch-attempts=2* ]] || fail "watcher did not retry changed same-slug native input: $result"
+pass
+
+# Ubuntu follows the host-local file, including fallback and failed reload retries.
+home="$(new_home nvim-ubuntu-theme)"
+mkdir -p "$home/custom-config/dotfiles/local"
+result="$(HOME="$home" NVIM_THEME_TEST_HOST=ubuntu XDG_CONFIG_HOME="$home/custom-config" NVIM_THEME_MODULE="$module_dir" nvim --headless -u NONE \
+  '+lua package.path=vim.env.NVIM_THEME_MODULE.."/?.lua;"..package.path; local m=require("config.dotfiles_theme"); assert(m.resolve().colorscheme=="tokyonight-night"); local path=vim.env.XDG_CONFIG_HOME.."/dotfiles/local/theme"; vim.fn.writefile({"everforest"},path); assert(m.resolve().colorscheme=="everforest"); local calls=0; vim.cmd.colorscheme=function() calls=calls+1; if calls==1 then error("transient") end end; m.watch(); vim.fn.writefile({"catppuccin"},path); vim.wait(3300); assert(calls==2); vim.fn.writefile({"invalid"},path); assert(m.resolve().colorscheme=="tokyonight-night"); print("ubuntu-theme-ok")' +qa 2>&1)"
+[[ "$result" == *ubuntu-theme-ok* ]] || fail "Ubuntu theme resolver/watcher failed: $result"
 pass
 
 printf 'PASS: Neovim area (%d groups)\n' "$TEST_COUNT"

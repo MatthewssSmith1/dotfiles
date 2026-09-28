@@ -8,7 +8,7 @@ Recorded 2026-09-27. Shared foundation and Omarchy code are implemented and depl
 - [Catalog provenance](upstream.md#portable-theme-catalog): version-1 supported mappings, generated eligibility, exact palette copies and Git inventory evidence.
 - Core remains v4.0.4, commit `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`. Historical Neovim package remains `2026.8.13-1`; neither pin was advanced.
 - Supported slugs: `everforest`, `tokyo-night`, dark `catppuccin`. Twelve themes are eligible; eligibility does not enable them.
-- Ubuntu selection contract: `~/.config/dotfiles/local/theme` (XDG config respected); missing/invalid reads use Tokyo Night without persisting it. Mutation and application adapters are explicitly pending.
+- Ubuntu selection contract: `~/.config/dotfiles/local/theme` (XDG config respected); missing/invalid reads use Tokyo Night without persisting it. Mutation and adapters were implemented on the VPS on 2026-09-28; see validation below.
 - Native observation: `~/.local/state/dotfiles/theme/current.json`; personal Neovim reads native Omarchy state directly. No second native selection is stored.
 
 ### Personal Neovim mappings
@@ -42,14 +42,18 @@ Fixtures additionally cover concurrent/atomic observation, stale hook event argu
 
 For all three themes, use the actual native picker and common command in a normal desktop session. Verify desktop/terminal rendering, both OpenCode profile TUIs, Herdr panes/status, Bash/Starship, and editor appearance. Record which existing sessions require restart/reconnect. The CLI matrix exercised the picker backend, not its interactive UI. Native `SIGUSR2` dispatch was inspected; successful in-session OpenCode retint has not been demonstrated. Restore Everforest afterward.
 
-## Ubuntu Work Remaining
+## Ubuntu Implementation and Validation (2026-09-28)
 
-1. Implement atomic host-local selection mutation with serialization and read-only status/check; keep Tokyo Night as the initial fallback.
-2. Add an Ubuntu Neovim resolver/watcher using the same reviewed catalog/plugin mappings. Current Ubuntu Neovim intentionally retains Tokyo Night.
-3. Add explicit-color OpenCode themes for both profiles at the managed overlay boundary; preserve keybindings, provider/profile settings and Herdr integration. Do not equate similarly named built-in themes with the pinned palette.
-4. Inspect installed Herdr's actual literal-color fields and reload behavior; extend its exact Ubuntu derivation/validation deliberately. No literal-color compatibility claim was established in phase one.
-5. Derive Ubuntu Starship and managed shell accents without changing terminal background/palette or emitting terminal-palette escape sequences.
-6. Validate real SSH and Herdr sessions with differing local/remote selections, offline switching, absent apps, adapter failures, restart/reconnect behavior and independent removal.
-7. Run the focused suites and cross-area gate, then return to Omarchy: recheck native picker/common command, personal Neovim startup/live switching, profile preservation, unsupported selection, hook failures and Everforest restoration.
+- Implemented serialized atomic selection/generation publication, failure rollback, read-only status/check, Neovim resolver/watcher, explicit OpenCode/Herdr palettes, and Starship/FZF accents. See [operations](tools/theming.md#ubuntu-contract) for ownership and recovery.
+- Reviewed OpenCode 1.18.32 theme shape and symlink discovery, plus Herdr 0.8.2 literal-color fields and `HERDR_CONFIG_PATH` file semantics against tagged sources.
+- Targeted contract, tools, Neovim, Herdr, OpenCode, Bash suites passed; nine Ubuntu adapter regressions cover fallback, all palettes, unrelated settings, concurrent switching, corrupt output, conflicting files, injected runtime/selection failures, launchers, and shell options/status preservation.
+- Full-suite attempts were interrupted. The user explicitly requested targeted suites instead; no full-gate pass is claimed.
+- Applied `tools nvim opencode herdr bash` on the VPS; all five area checks and `dotfiles-theme check` passed. Herdr accepted the generated config. Selected **Tokyo Night** persistently.
+- Network-isolated (`unshare -Urn`) real personal Neovim stayed open through Everforest → Catppuccin → Tokyo Night; each live colorscheme reload passed. Final VPS selection: **Tokyo Night**.
+
+### Acceptance Remaining
+
+- Visual SSH/OpenCode/Herdr acceptance with differing local/remote selections; existing Herdr server reload/reconnect behavior. Existing app sessions were not restarted. Restart OpenCode and pre-integration Neovim once; open a new Bash session. A pre-integration Herdr server needs a deliberate restart to adopt the generated config path.
+- Return to Omarchy for the native picker/common-command and visual acceptance listed above; restore Everforest there. Its host selection was not changed by VPS deployment.
 
 Generated application output belongs outside Git and shared `nvim-matt` links. The eventual implementation commit transports definitions only; host selections remain independent. Additional themes and Claude Code remain later scope.
