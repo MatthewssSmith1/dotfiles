@@ -70,16 +70,16 @@
   },
   "agent": {
     "explore": {
-      "model": "openai/gpt-6-sol-fast",
-      "variant": "low"
+      "model": "openai/gpt-6.1-sol-fast",
+      "variant": "medium"
     },
     "general": {
-      "model": "openai/gpt-6-sol-fast",
-      "variant": "low"
+      "model": "openai/gpt-6.1-sol-fast",
+      "variant": "medium"
     },
     "compaction": {
-      "model": "openai/gpt-6-luna-fast",
-      "variant": "low"
+      "model": "openai/gpt-6.1-sol-fast",
+      "variant": "medium"
     },
     "title": {
       "model": "openai/gpt-6-luna",
@@ -88,7 +88,7 @@
     "posthog": {
       "description": "PostHog specialist. Use proactively for any task that touches PostHog.",
       "mode": "subagent",
-      "model": "openai/gpt-6-sol-fast",
+      "model": "openai/gpt-6.1-sol",
       "variant": "low",
       "permission": {
         "posthog_*": "allow",

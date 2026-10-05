@@ -53,14 +53,14 @@ jq -e '
       "posthog":{"type":"remote","url":"https://mcp.posthog.com/mcp","enabled":true}
     },
     "agent":{
-      "explore":{"model":"openai/gpt-6-sol-fast","variant":"low"},
-      "general":{"model":"openai/gpt-6-sol-fast","variant":"low"},
-      "compaction":{"model":"openai/gpt-6-luna-fast","variant":"low"},
+      "explore":{"model":"openai/gpt-6.1-sol-fast","variant":"medium"},
+      "general":{"model":"openai/gpt-6.1-sol-fast","variant":"medium"},
+      "compaction":{"model":"openai/gpt-6.1-sol-fast","variant":"medium"},
       "title":{"model":"openai/gpt-6-luna","variant":"low"},
       "posthog":{
         "description":"PostHog specialist. Use proactively for any task that touches PostHog.",
         "mode":"subagent",
-        "model":"openai/gpt-6-sol-fast",
+        "model":"openai/gpt-6.1-sol",
         "variant":"low",
         "permission":{"posthog_*":"allow","edit":"deny"}
       }
