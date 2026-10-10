@@ -54,11 +54,9 @@ Both named launchers pass the same keybinding-only `OPENCODE_TUI_CONFIG` overlay
 
 On the installed Omarchy v4, `omarchy-theme-set` stages the effective theme under `~/.local/state/omarchy/current/theme/`, then runs `omarchy-restart-terminal` and `omarchy-restart-opencode`; the latter sends `SIGUSR2` to running `opencode` processes. This is native reload behavior, not an OpenCode overlay watcher. If an existing session does not update, quit and restart it; config changes require a restart. The native `tui.json`, Herdr `tui.jsonc` and integration script remain host-owned. On Ubuntu, both named launchers select the generated TUI overlay when the common theme helper and palette are available. It retains shared keybindings and selects the explicit `dotfiles-host` palette discovered under the global OpenCode `themes/` directory. Provider/profile settings and Herdr integration remain inherited. Quit and restart existing sessions after changing themes; see [theme operations](theming.md#ubuntu-contract).
 
-### Harness separation and Codex CLI restrictions
+### Harness separation
 
-The shared launcher sets `OPENCODE_DISABLE_CLAUDE_CODE=1` for both profiles, disabling OpenCode's automatic Claude Code prompt and skill discovery. Shared `.agents/skills` and OpenCode-native skills remain discoverable. This covers `opencode-personal`, `opencode-work`, and managed interactive Bash's plain `opencode` command.
-
-Both overlays deny Bash commands invoking `codex`, with or without arguments, including direct paths ending in `/codex`. Primary agents and subagents inherit these permissions. This blocks ordinary Codex CLI attempts, including `codex -p subagent exec`; it does not isolate subprocesses or prevent indirect execution through scripts. Later project or agent permission overrides can supersede these rules. Direct native/noninteractive OpenCode bypasses the managed launcher and overlays.
+The shared launcher sets `OPENCODE_DISABLE_CLAUDE_CODE=1` for both profiles, disabling OpenCode's automatic Claude Code prompt and skill discovery. Shared `.agents/skills` and OpenCode-native skills remain discoverable. This covers `opencode-personal`, `opencode-work`, and managed interactive Bash's plain `opencode` command. Direct native/noninteractive OpenCode bypasses the managed launcher and overlays.
 
 ### PostHog MCP
 

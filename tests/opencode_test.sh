@@ -87,13 +87,10 @@ jq -e -s '
 ' "$personal_profile" "$work_profile" >/dev/null || fail 'work OpenCode personal-plus-TrueFoundry profile drifted'
 for profile in "$personal_profile" "$work_profile"; do
   jq -e '
-    .permission == {"bash": {
-      "codex":"deny", "codex *":"deny",
-      "*/codex":"deny", "*/codex *":"deny"
-    }, "posthog_*":"deny"} and
+    .permission == {"posthog_*":"deny"} and
     ([.agent | to_entries[] | select(.value | has("permission")) | .key] == ["posthog"]) and
     .agent.posthog.permission == {"posthog_*":"allow","edit":"deny"}
-  ' "$profile" >/dev/null || fail "OpenCode Codex CLI and PostHog restrictions drifted: $profile"
+  ' "$profile" >/dev/null || fail "OpenCode PostHog restrictions drifted: $profile"
 done
 jq -e '.keybinds == {
   "app_exit":"<leader>q",
