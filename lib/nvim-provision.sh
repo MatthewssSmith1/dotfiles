@@ -29,7 +29,8 @@ nvim_provision_mise() {
 nvim_provision_binary() {
   local install_dir binary candidate
   install_dir="$(nvim_provision_mise)" || return 1
-  [[ -d "$install_dir" && ! -L "$install_dir" ]] || return 1
+  # mise may link an installed selector to an existing user-owned runtime.
+  [[ -d "$install_dir" ]] || return 1
   binary=''
   for candidate in "$install_dir/bin/nvim" "$install_dir"/*/bin/nvim; do
     [[ -f "$candidate" && ! -L "$candidate" && -x "$candidate" ]] || continue

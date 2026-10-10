@@ -26,7 +26,7 @@ if [[ -z "$editor" ]]; then
     exit 127
   fi
   if ! install_dir="$("$mise_bin" where -C "$HOME" "$selector" 2>/dev/null)" ||
-    [[ ! -d "$install_dir" || -L "$install_dir" ]]; then
+    [[ ! -d "$install_dir" ]]; then
     printf 'nvim: missing installed Neovim %s; run apply nvim\n' "$selector" >&2
     exit 127
   fi

@@ -53,6 +53,15 @@ mapfile -t output < "$home/editor-output"
   fail 'nested runtime did not receive launcher arguments'
 pass
 
+mv "$home/editor" "$home/linked-runtime"
+ln -s "$home/linked-runtime" "$home/editor"
+status=0
+HOME="$home" PATH="$TEST_ROOT/bin:/usr/bin:/bin" "$home/.local/bin/nvim" 'linked runtime' || status=$?
+[[ "$status" == 23 ]] || fail 'launcher did not use symlinked mise install root'
+mapfile -t output < "$home/editor-output"
+[[ "${output[2]}" == 'linked runtime' ]] || fail 'linked runtime lost launcher arguments'
+pass
+
 HOME="$home" PATH="$TEST_ROOT/bin:/usr/bin:/bin" bash -c '
   _dotfiles_bash_trace() { :; }
   EDITOR=nvim VISUAL=/usr/bin/nvim
