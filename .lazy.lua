@@ -4,17 +4,18 @@ return {
 		opts = {
 			filesystem = {
 				filtered_items = {
-					always_show = {
-						".gitignore",
-						".gitconfig",
-						".gitconfig.local.example",
-						".agents",
-						".lazy.lua",
-					},
-					never_show = {
+          hide_dotfiles = false,
+          hide_gitignored = false,
+          hide_by_name = {
 						"generated",
+            ".prettierignore",
+          },
+					never_show = {
 						"pnpm-lock.yaml",
 						"pnpm-workspace.yaml",
+            ".claude",
+            ".git",
+            ".gitattributes",
 					},
 				},
 			},
