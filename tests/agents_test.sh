@@ -13,6 +13,7 @@ host="$(make_host agents linux)"
 readonly MANAGED_SKILLS=(
   grilling
   handoff
+  retro
   setup-domain-modeling
   writing-for-agents
 )
@@ -21,6 +22,8 @@ readonly MANAGED_SKILL_FILES=(
   grilling/agents/openai.yaml
   handoff/SKILL.md
   handoff/agents/openai.yaml
+  retro/SKILL.md
+  retro/agents/openai.yaml
   setup-domain-modeling/SKILL.md
   setup-domain-modeling/agents/openai.yaml
   setup-domain-modeling/monorepos.md

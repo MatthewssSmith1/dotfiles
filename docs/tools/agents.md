@@ -32,7 +32,7 @@ Removing Agents deletes its exact overlay/launcher links along with its other ma
 
 ## Personal Skills
 
-The globally deployed universal inventory is `grilling`, `handoff`, `writing-for-agents`, and `setup-domain-modeling`; Claude sees the same directories through exact aliases. The Claude-only inventory is `codex-subagent`, with its companion reference `parallel-worktrees.md`; it invokes Codex through the package-owned `subagent` profile (`~/.codex/subagent.config.toml`). Their complete contents live in [`packages/common/agents`](../../packages/common/agents) and change through normal Git review. The repository-local `applying-dotfiles` and `updating-dependencies` skills remain project-scoped.
+The globally deployed universal inventory is `grilling`, `handoff`, `retro`, `writing-for-agents`, and `setup-domain-modeling`; Claude sees the same directories through exact aliases. The Claude-only inventory is `codex-subagent`, with its companion reference `parallel-worktrees.md`; it invokes Codex through the package-owned `subagent` profile (`~/.codex/subagent.config.toml`). Their complete contents live in [`packages/common/agents`](../../packages/common/agents) and change through normal Git review. The repository-local `applying-dotfiles` and `updating-dependencies` skills remain project-scoped.
 
 [`scripts/agent-skills`](../../scripts/agent-skills) verifies the package inventory, skill frontmatter, regular-file structure, and file modes offline. It does not use a separate lock or schema and does not fetch or update skills.
 
