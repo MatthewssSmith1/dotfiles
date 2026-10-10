@@ -66,7 +66,6 @@ validate_nvim_prerequisites || fail 'nested mise Neovim failed check'
 [[ "$(sha256sum "$HOME/trace")" == "$before" ]] || fail 'nested runtime was reinstalled'
 pass
 
-# Installed mise Node must be reused even when not exposed on the shell PATH.
 mv "$HOME/mise-install" "$HOME/linked-runtime"
 ln -s "$HOME/linked-runtime" "$HOME/mise-install"
 [[ "$(nvim_provision_binary)" == "$HOME/mise-install/nvim-linux-x86_64/bin/nvim" ]] ||
@@ -76,6 +75,7 @@ validate_nvim_prerequisites || fail 'symlinked mise runtime failed check'
 [[ "$(sha256sum "$HOME/trace")" == "$before" ]] || fail 'symlinked runtime was reinstalled'
 pass
 
+# Installed mise Node must be reused even when not exposed on the shell PATH.
 rm "$HOME/mise-install/nvim-linux-x86_64/bin/nvim"
 if validate_nvim_prerequisites >/dev/null 2>&1; then fail 'missing Neovim passed check'; fi
 [[ "$(sha256sum "$HOME/trace")" == "$before" ]] || fail 'check used mise exec/install'
