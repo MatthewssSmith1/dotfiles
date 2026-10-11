@@ -104,8 +104,9 @@ overlay="$REPO_DIR/packages/common/agents/$CLAUDE_OVERLAY"
 launcher="$REPO_DIR/packages/common/agents/$CLAUDE_LAUNCHER"
 [[ "$(stat -c %a "$overlay")" == 644 && "$(stat -c %a "$launcher")" == 755 ]] ||
   fail 'Claude overlay or launcher mode is not exact'
-jq -e 'type == "object" and keys == ["$schema", "autoMemoryEnabled"] and
+jq -e 'type == "object" and keys == ["$schema", "attribution", "autoMemoryEnabled"] and
   .["$schema"] == "https://json.schemastore.org/claude-code-settings.json" and
+  .attribution == {"commit": "", "pr": ""} and
   .autoMemoryEnabled == false' "$overlay" >/dev/null || fail 'Claude overlay is not exact'
 bash -n "$launcher" || fail 'Claude launcher syntax is invalid'
 fixture="$(copy_repo_fixture agents-invalid-package)"

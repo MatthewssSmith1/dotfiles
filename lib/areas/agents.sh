@@ -78,8 +78,9 @@ validate_agents_closure() {
   done
   overlay="$DOTFILES_DIR/packages/common/agents/.config/dotfiles/claude/settings.json"
   launcher="$DOTFILES_DIR/packages/common/agents/.local/bin/claude-dotfiles"
-  jq -e 'type == "object" and keys == ["$schema", "autoMemoryEnabled"] and
+  jq -e 'type == "object" and keys == ["$schema", "attribution", "autoMemoryEnabled"] and
     .["$schema"] == "https://json.schemastore.org/claude-code-settings.json" and
+    .attribution == {"commit": "", "pr": ""} and
     has("autoMemoryEnabled") and .autoMemoryEnabled == false' "$overlay" >/dev/null ||
     die 'managed Claude settings overlay is not exact'
   bash -n "$launcher" || die 'managed Claude launcher has invalid syntax'

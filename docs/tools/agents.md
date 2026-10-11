@@ -16,7 +16,7 @@ OpenCode configuration is independently owned only when the optional `opencode` 
 
 ## Claude Code Settings
 
-The minimal, repository-owned overlay sets `autoMemoryEnabled` to `false`. The launcher passes it through `--settings`, merging it above normal user/project settings; organization-managed settings retain higher precedence. Model choices, plugins, credentials, and writable user preferences stay host-owned.
+The minimal, repository-owned overlay sets `autoMemoryEnabled` to `false` and empties `attribution.commit` and `attribution.pr`, so Claude adds no co-author trailer to commits and no generated-by footer to pull requests. The launcher passes it through `--settings`, merging it above normal user/project settings; organization-managed settings retain higher precedence. Model choices, plugins, credentials, and writable user preferences stay host-owned.
 
 ```text
 claude           -> managed interactive Bash dispatch -> claude-dotfiles -> native claude
@@ -26,7 +26,7 @@ command claude  -> native bypass from interactive Bash
 
 The Bash function falls back to native Claude when the launcher is absent. It is not exported. The launcher preserves arguments and exit status, requires a native executable, and rejects caller `--settings` options before `--`; use the native bypass for an alternative settings file. Dotfiles does not install or require Claude during deployment.
 
-IDE/Desktop launches do not pass through this launcher. To disable automatic memory for clients reading user settings, set `"autoMemoryEnabled": false` in the host-owned `~/.claude/settings.json`, preserving its other keys. Existing memory files remain intact. Start a fresh shell after deploying Bash changes and restart Claude Code to load changed settings.
+IDE/Desktop launches do not pass through this launcher. To apply the same preferences for clients reading user settings, set `"autoMemoryEnabled": false` and `"attribution": {"commit": "", "pr": ""}` in the host-owned `~/.claude/settings.json`, preserving its other keys. Existing memory files remain intact. Start a fresh shell after deploying Bash changes and restart Claude Code to load changed settings.
 
 Removing Agents deletes its exact overlay/launcher links along with its other managed payloads and bridges. It preserves the user settings file, so a manually configured user preference remains in effect.
 
