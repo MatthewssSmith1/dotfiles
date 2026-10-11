@@ -33,6 +33,8 @@ An operation is mandatory and must come first. `--profile` is assertion-only: th
 
 The Omarchy tools closure also deploys `dotfiles-omarchy-prune`, `dotfiles-amdgpu-ips`, and `dotfiles-polkit-fingerprint` onto `PATH` but never executes them. The latter two are explicit administration helpers for narrowly owned privileged system changes; normal apply/check/remove remains user-scoped and inert.
 
+Both Linux tools closures deploy the shared Worktrunk user config to `~/.config/worktrunk/config.toml`, preserving separate commits by default with `merge.squash = false`. Run `./dotfiles.sh apply tools` on each host to deploy it. Worktrunk still rebases and fast-forwards by default; an explicit `wt merge --squash` overrides this preference. Merge preferences belong in user config rather than a repository's shared `.config/wt.toml`.
+
 Every selected area completes preflight before its first write. Apply and remove take an exclusive lock on `HOME`; check takes a shared lock, so concurrent checks coexist but never overlap a mutating run. Derivable package links can converge directly after an interrupted Stow run; dotfiles has no deployment transaction, journal, backup, or rollback layer.
 
 ## Lean Ownership

@@ -26,6 +26,9 @@ home="$(new_home apply)"
 expect_success "$home" "$ubuntu" "$DOTFILES" apply tools
 [[ -L "$home/.config/mise/conf.d/20-dotfiles-tools.toml" && -L "$home/.config/mise/conf.d/30-dotfiles-tools-ubuntu.toml" ]] ||
   fail 'Ubuntu mise fragments were not deployed'
+[[ -L "$home/.config/worktrunk/config.toml" &&
+  "$(< "$home/.config/worktrunk/config.toml")" == $'[merge]\nsquash = false' ]] ||
+  fail 'Ubuntu Worktrunk commit-preserving preference was not deployed'
 [[ ! -e "$home/.local/bin/dotfiles-omarchy-prune" &&
   ! -e "$home/.local/bin/dotfiles-amdgpu-ips" &&
   ! -e "$home/.local/bin/dotfiles-framework-display" &&
@@ -68,6 +71,9 @@ SCRIPT
 chmod 0755 "$fake_bin/omarchy"
 native_home="$(new_home native)"
 expect_success "$native_home" "$native" "$DOTFILES" apply tools
+[[ -L "$native_home/.config/worktrunk/config.toml" &&
+  "$(< "$native_home/.config/worktrunk/config.toml")" == $'[merge]\nsquash = false' ]] ||
+  fail 'native Worktrunk commit-preserving preference was not deployed'
 [[ -L "$native_home/.local/bin/dotfiles" && -L "$native_home/.local/bin/dotfiles-omarchy-prune" &&
   -L "$native_home/.local/bin/dotfiles-amdgpu-ips" &&
   -L "$native_home/.local/bin/dotfiles-framework-display" &&
@@ -75,6 +81,8 @@ expect_success "$native_home" "$native" "$DOTFILES" apply tools
   fail 'native tools launchers were not deployed'
 expect_success "$native_home" "$native" "$DOTFILES" check tools
 expect_success "$native_home" "$native" "$DOTFILES" remove tools
+[[ ! -e "$native_home/.config/worktrunk/config.toml" ]] ||
+  fail 'native tools removal retained Worktrunk config'
 [[ ! -e "$native_home/.local/bin/dotfiles" && ! -e "$native_home/.local/bin/dotfiles-omarchy-prune" &&
   ! -e "$native_home/.local/bin/dotfiles-amdgpu-ips" &&
   ! -e "$native_home/.local/bin/dotfiles-framework-display" &&
@@ -450,6 +458,8 @@ pass
 # Default remove derives package-only tools from the detected profile without
 # state and converges again when links are already absent.
 expect_success "$home" "$ubuntu" "$DOTFILES" remove
+[[ ! -e "$home/.config/worktrunk/config.toml" ]] ||
+  fail 'default tools removal retained Worktrunk config'
 [[ ! -e "$home/.config/mise/conf.d/20-dotfiles-tools.toml" && ! -e "$home/.config/mise/conf.d/30-dotfiles-tools-ubuntu.toml" ]] ||
   fail 'default package-only tools removal retained links'
 expect_success "$home" "$ubuntu" "$DOTFILES" remove
