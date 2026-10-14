@@ -41,10 +41,12 @@ readonly MANAGED_SKILL_FILES=(
 )
 readonly CLAUDE_SKILLS=(
   codex-subagent
+  discuss
 )
 readonly CLAUDE_SKILL_FILES=(
   codex-subagent/SKILL.md
   codex-subagent/parallel-worktrees.md
+  discuss/SKILL.md
 )
 readonly CODEX_PROFILE_FILES=(
   subagent.config.toml
