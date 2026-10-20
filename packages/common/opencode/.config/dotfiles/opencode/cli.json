@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "keybinds": {
+    "app.exit": "<leader>q",
+    "session.queued_prompts": "none",
+    "prompt.clear": "<leader>k",
+    "prompt.stash": "ctrl+s",
+    "prompt.stash.pop": "ctrl+y",
+    "prompt.queue": "none",
+    "input.newline": "ctrl+return,shift+return,alt+return,ctrl+j"
+  }
+}

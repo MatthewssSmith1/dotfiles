@@ -56,7 +56,7 @@ class UbuntuThemes(unittest.TestCase):
 
     def test_all_palettes_and_unrelated_settings(self):
         base = tomllib.loads((REPO / 'packages/ubuntu/herdr/.config/herdr/config.toml').read_text())
-        bindings = json.loads((REPO / 'packages/common/opencode/.config/dotfiles/opencode/tui.jsonc').read_text())
+        bindings = json.loads((REPO / 'packages/common/opencode/.config/dotfiles/opencode/cli.json').read_text())
         for slug in ('tokyo-night', 'everforest', 'catppuccin'):
             self.run_theme('set', slug)
             colors = tomllib.loads((BIN.parent / f'themes/{slug}/colors.toml').read_text())
@@ -65,9 +65,9 @@ class UbuntuThemes(unittest.TestCase):
             generated['theme'] = base['theme']
             generated['ui']['accent'] = base['ui']['accent']
             self.assertEqual(generated, base)
-            tui = json.loads((self.current / 'opencode-tui.json').read_text())
-            self.assertEqual(tui.pop('theme'), 'dotfiles-host')
-            self.assertEqual(tui, bindings)
+            cli = json.loads((self.current / 'opencode-cli.json').read_text())
+            self.assertEqual(cli.pop('theme'), {'name': 'dotfiles-host'})
+            self.assertEqual(cli, bindings)
             palette = json.loads((self.current / 'opencode-theme.json').read_text())['theme']
             self.assertEqual(palette['background'], colors['background'])
             self.assertEqual(palette['primary'], colors['accent'])
@@ -185,23 +185,27 @@ _dotfiles_bash_theme_prompt
     def test_named_opencode_profiles_use_palette_only_on_ubuntu(self):
         self.run_theme('sync')
         wrapper = REPO / 'packages/common/opencode/.local/share/dotfiles/bin/opencode-launch'
-        for profile in ('personal', 'work', 'tui'):
-            source = REPO / f'packages/common/opencode/.config/dotfiles/opencode/{profile}.jsonc'
-            self.install(self.home / f'.config/dotfiles/opencode/{profile}.jsonc', source.read_text())
+        managed = REPO / 'packages/common/opencode/.config/dotfiles/opencode'
+        for name in ('personal.jsonc', 'work.jsonc', 'cli.json', 'runtime/index.js'):
+            self.install(self.home / '.config/dotfiles/opencode' / name, (managed / name).read_text())
         self.install(self.home / '.local/share/dotfiles/bin/opencode-launch', wrapper.read_text())
         self.run_theme('sync')
         self.install(self.home / '.local/bin/opencode',
-                     '#!/bin/sh\nprintf "%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_TUI_CONFIG" "$@"\n')
+                     '#!/bin/sh\n[ "$1" = --version ] && { echo "opencode v2.0.32"; exit 0; }\n'
+                     'printf "%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_CLI_CONFIG_CONTENT" "$@"\n')
+        bindings = json.loads((managed / 'cli.json').read_text())
         for host in ('ubuntu', 'omarchy'):
             self.install(self.home / '.local/bin/dotfiles-theme', f'#!/bin/sh\nprintf "{host}\\n"\n')
             for profile in ('personal', 'work'):
                 result = subprocess.run([str(wrapper), profile, 'argument with spaces'],
                                         env={**self.env, 'PATH': str(self.home / '.local/bin') + ':/usr/bin:/bin'},
                                         check=True, capture_output=True, text=True)
-                self.assertEqual(result.stdout.splitlines(), [
-                    str(self.home / f'.config/dotfiles/opencode/{profile}.jsonc'),
-                    str(self.current / 'opencode-tui.json') if host == 'ubuntu' else
-                    str(self.home / '.config/dotfiles/opencode/tui.jsonc'), 'argument with spaces'])
+                lines = result.stdout.splitlines()
+                self.assertEqual(lines[0], str(self.home / f'.config/dotfiles/opencode/{profile}.jsonc'))
+                self.assertEqual(lines[-2:], ['--standalone', 'argument with spaces'])
+                overlay = json.loads('\n'.join(lines[1:-2]))
+                self.assertEqual(overlay, {**bindings, 'theme': {'name': 'dotfiles-host'}}
+                                 if host == 'ubuntu' else bindings)
 
 
 if __name__ == '__main__':

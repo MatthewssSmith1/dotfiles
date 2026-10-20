@@ -1,79 +1,160 @@
 # OpenCode
 
-## Ownership
+## Ownership and runtime
 
-`opencode` is optional and package-only on both Linux profiles. Dotfiles owns:
+OpenCode is optional and package-only on both Linux profiles. **OpenCode v2 is
+required**; the current host was migrated with 2.0.32. Dotfiles deploys configuration,
+not an OpenCode installer or updater:
 
 ```text
 ~/.config/dotfiles/opencode/personal.jsonc
 ~/.config/dotfiles/opencode/work.jsonc
-~/.config/dotfiles/opencode/tui.jsonc
+~/.config/dotfiles/opencode/cli.json
+~/.config/dotfiles/opencode/runtime/index.js
 ~/.local/bin/opencode-personal
 ~/.local/bin/opencode-work
 ~/.local/share/dotfiles/bin/opencode-launch
 ```
 
-Omarchy retains its regular `~/.local/bin/opencode` mise wrapper, `~/.config/opencode/opencode.json`, and `~/.config/opencode/tui.json`. Herdr retains `~/.config/opencode/tui.jsonc` and its integration scripts. The `agents` area separately owns only the `AGENTS.md` bridge. OpenCode owns its plugins, credentials, sessions, package metadata, caches, backups, and other generated state.
+Omarchy retains its native mise wrapper and all `~/.config/opencode/` files.
+On Ubuntu or other Linux hosts, install v2 separately using a supported upstream
+method before launching a managed profile. Use the same shared payload; there is
+no parallel v1 implementation or automatic fallback. The launcher refuses v1.
+Upgrade older hosts before deploying these native-v2 profiles.
 
-The personal overlay declares no plugin and no provider block. It relies on OpenCode's native ChatGPT Plus/Pro OAuth (`/connect` → OpenAI → ChatGPT Plus/Pro, available since OpenCode 1.3.0), so models are auto-discovered from the subscription. The overlay sets GPT-6.1 Sol Fast (medium) for the `general` and `explore` subagents and compaction, GPT-6.1 Sol (low) for the custom `posthog` subagent, and GPT-6 Luna (low) for the hidden `title` agent. The work overlay uses the same native OpenAI models and agent defaults, then adds a reviewed non-GPT TrueFoundry catalog through `truefoundry-gateway`. It reads its TrueFoundry credential from `TFY_API_KEY`; OAuth credentials remain in OpenCode application state. Neither overlay sets a primary model, so it remains selectable in OpenCode. Both profiles connect to the PostHog MCP at startup; dotfiles apply, check, and remove never fetch.
+OpenCode owns credentials, sessions, databases, service registration, plugins,
+caches, package metadata, and generated preferences. Herdr owns its integration.
+The agents area separately owns the global `AGENTS.md` bridge. Apply, check, and
+remove are local/offline and never install runtimes or copy credentials/databases.
 
-OpenCode loads all existing global config names before the explicit overlay:
-
-```text
-~/.config/opencode/config.json
-~/.config/opencode/opencode.json
-~/.config/opencode/opencode.jsonc
-$OPENCODE_CONFIG
-```
-
-Apply and check accept missing global files but reject top-level `plugin` or `provider` declarations in any existing one. This prevents host provider and plugin settings from changing the reviewed profile boundaries. Project, `.opencode`, injected-content, and managed-service configuration may load later and remain outside this area. Global `.jsonc` validation accepts the repository's reviewed subset: full-line `//` comments and trailing commas.
-
-## Launching
-
-Managed interactive Bash selects a persistent host default:
+## Profiles and launching
 
 ```text
 ocp                         -> print personal or work
 ocp personal|work           -> persist and select immediately
-opencode                    -> selected profile
-c                           -> opencode --auto using the selected profile
+opencode                    -> selected profile in managed interactive Bash
+c                           -> selected profile with --auto
 c-personal / c-work         -> explicit named profile
-opencode-personal -> opencode-launch personal -> native opencode
-opencode-work     -> opencode-launch work     -> native opencode
+opencode-personal           -> opencode-launch personal -> native v2
+opencode-work               -> opencode-launch work -> native v2
 ```
 
-The host-owned, untracked `~/.config/dotfiles/local/opencode-profile` contains exactly `personal` or `work` followed by LF. Missing, invalid, symlinked, or foreign-owned state defaults new shells to personal. `ocp` writes a mode-`0600` replacement atomically and changes the current shell only after persistence succeeds; dotfiles apply, check, and remove never manage this file. Existing shells retain their loaded selection until `ocp` switches it or their configuration is reloaded; new shells load the selection from disk. `OPENCODE_DEFAULT_PROFILE` is not exported.
+The host-owned `~/.config/dotfiles/local/opencode-profile` contains exactly
+`personal` or `work` followed by LF. Missing, invalid, symlinked, or foreign-owned
+state defaults new shells to personal. `ocp` writes an atomic mode-0600 replacement;
+existing shells retain their selection until switched/reloaded. Dotfiles lifecycle
+commands never manage that file. Work dispatch allows the host-local Bash function
+to inject `TFY_API_KEY`; secrets stay outside the repository. Personal falls back
+to native OpenCode when the optional launcher is absent.
 
-Personal dispatch falls back to `command opencode` when the optional launcher is absent. Work dispatch calls `opencode-work`, allowing the host-local function loaded later to inject credentials. Noninteractive callers resolve native `opencode`; use a named launcher when a profile is required. The launcher finds the first executable `opencode` on `PATH`, injects `OPENCODE_CONFIG` and `OPENCODE_TUI_CONFIG`, and preserves arguments and exit status.
+The launcher uses the first executable `opencode` on PATH, validates its major
+version, supplies `OPENCODE_CONFIG`, and merges keybindings over the host's global
+CLI preferences through `OPENCODE_CLI_CONFIG_CONTENT`. Inherited inline server
+configuration, v1 TUI overrides, and server URL overrides are cleared.
 
-The TUI order begins with native `tui.json`, Herdr's `tui.jsonc`, then the explicit dotfiles overlay. Project TUI configuration may load later. The overlay maps `Ctrl+Enter`, `Shift+Enter`, `Alt+Enter`, and `Ctrl+J` to newline; `Ctrl+S` stashes a prompt; `Ctrl+Y` restores the latest stash; `Ctrl+X K` clears; and `Ctrl+X Q` quits.
+Interactive, `run`, `mini`, `api`, `models`, and `auth` operations use private
+servers (`--standalone`). This ensures the selected profile and work credential
+environment reach the server, rather than reusing a service started by another
+profile. **Private servers share normal OpenCode application data**: these profiles
+are configuration choices, not separate accounts or security sandboxes. XDG paths
+are not relocated. Explicit `--server` connections are rejected by named launchers.
 
-### Native Omarchy theme
+Use `command opencode` for native administration (`service`, `debug`, `mcp`,
+`session`, `stats`, `reload`, `pair`, `plugin`); named launchers reject these rather
+than silently targeting a shared service with a different profile. Use `/mcps`
+inside the chosen profile for MCP status/sign-in. `serve` and `acp` start their own
+servers; runtime upgrade/uninstall remain native host operations. Managed config
+disables OpenCode update checks, leaving runtime ownership with the host installer.
 
-Both named launchers pass the same keybinding-only `OPENCODE_TUI_CONFIG` overlay. It has no `theme` key; the native `~/.config/opencode/tui.json` sets `"theme": "system"`. OpenCode therefore takes colors from the terminal's effective Omarchy palette for new launches, including after native picker changes. The launcher does not read the shared tools area's `~/.local/state/dotfiles/theme/current.json`: that file is synchronization status, not a second native selection. Unsupported native themes also retain native OpenCode colors. Do not map these selections to similarly named OpenCode built-in themes; they need not reproduce Omarchy's palette.
+## Reviewed behavior
 
-On the installed Omarchy v4, `omarchy-theme-set` stages the effective theme under `~/.local/state/omarchy/current/theme/`, then runs `omarchy-restart-terminal` and `omarchy-restart-opencode`; the latter sends `SIGUSR2` to running `opencode` processes. This is native reload behavior, not an OpenCode overlay watcher. If an existing session does not update, quit and restart it; config changes require a restart. The native `tui.json`, Herdr `tui.jsonc` and integration script remain host-owned. On Ubuntu, both named launchers select the generated TUI overlay when the common theme helper and palette are available. It retains shared keybindings and selects the explicit `dotfiles-host` palette discovered under the global OpenCode `themes/` directory. Provider/profile settings and Herdr integration remain inherited. Quit and restart existing sessions after changing themes; see [theme operations](theming.md#ubuntu-contract).
+Both profiles use native ChatGPT subscription OAuth and discovered OpenAI models;
+no authentication plugin or OpenAI provider catalog is needed. Neither profile
+forces a primary model. Subagent defaults:
 
-### Harness separation
+- `general`, `explore`, `compaction`: GPT-6.1 Sol Fast, medium.
+- `posthog`: GPT-6.1 Sol, low; `title`: GPT-6 Luna, low.
+- **Build: blue** (`#7aa2f7`); **Plan: orange** (`#ff9e64`).
 
-The shared launcher sets `OPENCODE_DISABLE_CLAUDE_CODE=1` for both profiles, disabling OpenCode's automatic Claude Code prompt and skill discovery. Shared `.agents/skills` and OpenCode-native skills remain discoverable. This covers `opencode-personal`, `opencode-work`, and managed interactive Bash's plain `opencode` command. Direct native/noninteractive OpenCode bypasses the managed launcher and overlays.
+Work adds the reviewed non-GPT TrueFoundry catalog via
+`aisdk:@ai-sdk/openai-compatible`, reads `TFY_API_KEY`, and restricts providers to
+OpenAI and TrueFoundry with native provider policies. Its three Claude model entries
+retain their reasoning-effort defaults and variants. Validate real gateway requests
+on the work host before relying on the migrated profile.
 
-### PostHog MCP
+The built-in `opencode.config.compatibility` plugin is disabled to avoid automatic
+Claude Code/agents compatibility scanning. Shared skills are explicitly discovered
+from `~/.agents/skills`; OpenCode-native skill discovery remains available.
 
-- Both overlays enable the remote `mcp.posthog` server at `https://mcp.posthog.com/mcp`. Global config loads first, so the overlay's `enabled: true` deep-merges over the host-owned `~/.config/opencode/opencode.json` entry with `enabled: false`; that entry is redundant but left in place.
-- Both overlays deny `posthog_*` tools globally, so `build`, `plan`, `general`, and `explore` never see the PostHog tool schema, server instructions, or results.
-- The custom `posthog` subagent (GPT-6.1 Sol, low) allows `posthog_*` and denies `edit`. Its prompt keeps it read-only unless a change is explicitly requested, returns a brief structured reply, and shares HogQL only on request.
-- Primary agents delegate through the `task` tool, keeping PostHog tool output out of their context.
-- Authenticate with `opencode mcp auth posthog`. OAuth tokens live in OpenCode state (`~/.local/share/opencode/mcp-auth.json`); dotfiles does not manage them.
+Beyond the PostHog boundary below, V2's own permission defaults apply; the Codex
+CLI is not blocked.
 
-## Lifecycle
+PostHog connects at startup, with Code Mode disabled so its tools retain the
+`posthog_*` names used by the permission boundary. Those tools are denied globally
+and allowed only for the custom read-only `posthog` subagent. Primary agents delegate
+through `subagent`; the specialist's prompt requires an explicit request for writes.
+Use `/mcps` in the named profile to sign in. OAuth state remains OpenCode-owned.
+
+Global config files (`config.json`, `opencode.json`, `opencode.jsonc`) may be absent.
+Apply/check reject both v1 `plugin`/`provider` and v2 `plugins`/`providers` declarations
+in existing globals to preserve reviewed profile boundaries. Other project,
+injected, and managed configuration remains outside this area's validation.
+The reviewed JSONC subset is full-line `//` comments and trailing commas.
+
+## Terminal preferences and themes
+
+V2 uses one global `~/.config/opencode/cli.json`, not layered `tui.json(c)` files.
+The managed overlay contains keybindings only; host preferences and theme remain
+host-owned. Newline: Ctrl/Shift/Alt+Enter or Ctrl+J. Stash: Ctrl+S; restore: Ctrl+Y;
+clear: Ctrl+X K; exit: Ctrl+X Q. Conflicting queue shortcuts are disabled.
+
+Omarchy's global CLI config uses the terminal-derived `system` theme. No palette
+snapshot or second native theme selector is introduced.
+
+On Ubuntu, both named launchers select the generated CLI overlay when the common
+theme helper and its palette are available. It retains the shared keybindings and
+sets `theme.name` to the explicit `dotfiles-host` palette discovered under the global
+OpenCode `themes/` directory. Provider/profile settings and Herdr integration remain
+inherited. Ubuntu OpenCode apply synchronizes that output. Quit and restart existing
+sessions after changing themes; see [theme operations](theming.md#ubuntu-contract).
+The v2 overlay path is covered by offline tests; visual acceptance on a v2 Ubuntu
+host is still an operator check.
+
+Omarchy broadcasts `SIGUSR2` to all `opencode` processes on theme changes. The small
+managed server plugin absorbs that signal so a private server does not terminate;
+the terminal client handles its own palette refresh. Its real directory is resolved
+before loading because plugin roots cannot contain Stow entrypoints resolving outside
+that root. Unlike the retired trial plugin, it does not rewrite shell/XDG environments.
+
+## Lifecycle and migration
 
 ```bash
-dotfiles.sh check opencode
-dotfiles.sh apply opencode
-dotfiles.sh remove opencode
+~/dotfiles/dotfiles.sh check opencode
+~/dotfiles/dotfiles.sh apply opencode
+~/dotfiles/dotfiles.sh check opencode
+~/dotfiles/dotfiles.sh remove opencode
 ```
 
-Applying is explicit. No global config is adopted or replaced. Removal deletes only the six exact links and preserves the native executable/configuration, Herdr integration, credentials, and application state. The loaded Bash function immediately falls back to native behavior when the launcher is gone. Apply and remove also delete exact links from the previous dotfiles OpenCode layout, including its obsolete generic wrapper; similarly named unrelated objects are preserved.
+Apply/remove retire only exact symlinks from earlier managed layouts, including
+the v1 TUI overlay and isolated `opencode-v2` trial links. Unrelated files and links
+are preserved. Removal releases the seven current links, never native configuration,
+the runtime, integration files, credentials, or application data.
 
-OpenCode reads configuration at startup. Quit and restart it after changes.
+The previous 2.0.18 trial's runtime under `~/.local/share/opencode-v2-runtime` and
+data under `~/.local/share/opencode-v2/personal` are deliberately retained but unused.
+Its history diverged from normal OpenCode after the initial v1 snapshot. Do not
+overwrite the normal database with that snapshot or assume the histories synchronize.
+Archive/export any needed trial sessions before separately removing those directories.
+
+Restart a named profile after changing server settings. Do not restart an active
+shared service merely to deploy these overlays. Acceptance includes model/agent
+selection, permissions, shared skills, PostHog sign-in, Herdr session tracking,
+mode colors, keybindings, theme switching, and work gateway requests on its host.
+
+Validated on the initial 2.0.32 host: contract/OpenCode/CLI suites, apply/check,
+personal TUI startup and Ctrl+X Q exit. Disposable servers loaded both profiles
+without normalization warnings, exposed the configured blue/orange agents, excluded
+the compatibility scanner, loaded the runtime plugin, and survived `SIGUSR2`.
+These checks made no model requests and used no work credentials. Visual palette
+acceptance, Herdr tracking, PostHog sign-in, and real TrueFoundry requests remain
+operator checks; no compatibility claim is implied for the host-owned v1 Herdr TUI plugin.

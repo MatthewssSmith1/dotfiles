@@ -29,7 +29,7 @@ Initial checks can report pending deployment/provisioning. Neovim apply installs
 | `tools` | `~/.local/bin/dotfiles-theme`, Python helper and catalog below `~/.local/share/dotfiles/` |
 | `desktop` | Only `~/.config/omarchy/hooks/theme-set.d/90-dotfiles-theme` within native theme hooks |
 | `nvim` | Personal resolver, watcher, static plugins and lockfile within `nvim-matt` |
-| `opencode` | Named profile/keybinding overlays; native theme inheritance or Ubuntu generated TUI overlay |
+| `opencode` | Named profile/keybinding overlays; native theme inheritance or Ubuntu generated CLI overlay |
 | `herdr` | Ubuntu launcher and shell dispatcher; native remains validation-only |
 | `bash` | Ubuntu prompt-time Starship and FZF accent integration |
 
@@ -77,7 +77,7 @@ dotfiles-theme set tokyo-night
 dotfiles-theme check
 ```
 
-Generated output lives in `${XDG_STATE_HOME:-~/.local/state}/dotfiles/theme/ubuntu/`. A `sync.lock` serializes writers and read-only observations. Each complete `generation-*` contains OpenCode palette/TUI JSON, Herdr and Starship TOML, an accent, and the applied slug. An atomic `current` symlink publishes the generation after validation. Prior generations are retained for processes using resolved paths. Failed validation leaves the previous selection and generation active; failed selection publication rolls back the generation pointer. An interrupted process can leave selection/output out of sync: `check` detects this and `sync` repairs it.
+Generated output lives in `${XDG_STATE_HOME:-~/.local/state}/dotfiles/theme/ubuntu/`. A `sync.lock` serializes writers and read-only observations. Each complete `generation-*` contains OpenCode palette/CLI JSON, Herdr and Starship TOML, an accent, and the applied slug. An atomic `current` symlink publishes the generation after validation. Prior generations are retained for processes using resolved paths. Failed validation leaves the previous selection and generation active; failed selection publication rolls back the generation pointer. An interrupted process can leave selection/output out of sync: `check` detects this and `sync` repairs it.
 
 Tools apply and Ubuntu OpenCode apply synchronize available integration. Tools check detects stale output. A discovered managed OpenCode launcher enables the generated discovery link `${XDG_CONFIG_HOME:-~/.config}/opencode/themes/dotfiles-host.json`; conflicting user files are refused. App settings are derived from repository baselines, never written through Stow links. Herdr's installed 0.8.2 runtime additionally validates generated config in an isolated temporary home.
 

@@ -82,28 +82,30 @@ done
 grep -qxF 'area|opencode|optional' "$REPO_DIR/manifests/areas.tsv" || fail 'OpenCode is absent from lean dispatch'
 opencode_package="$REPO_DIR/packages/common/opencode"
 opencode_inventory="$(find "$opencode_package" -type f -printf '%P\n' | LC_ALL=C sort)"
-[[ "$opencode_inventory" == $'.config/dotfiles/opencode/personal.jsonc\n.config/dotfiles/opencode/tui.jsonc\n.config/dotfiles/opencode/work.jsonc\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
+[[ "$opencode_inventory" == $'.config/dotfiles/opencode/cli.json\n.config/dotfiles/opencode/personal.jsonc\n.config/dotfiles/opencode/runtime/index.js\n.config/dotfiles/opencode/work.jsonc\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch' ]] ||
   fail 'OpenCode payload inventory is not exact'
 [[ ! -e "$opencode_package/.local/bin/opencode" &&
   ! -e "$opencode_package/.local/bin/dotfiles-opencode-profile" &&
   ! -e "$opencode_package/.config/opencode/base.jsonc" &&
   ! -e "$opencode_package/.config/opencode/opencode.jsonc" ]] ||
   fail 'OpenCode package still claims a native or global path'
-for config in "$opencode_package/.config/dotfiles/opencode/"*.jsonc; do
+for config in "$opencode_package/.config/dotfiles/opencode/"*.json{,c}; do
   [[ -f "$config" && ! -L "$config" && "$(stat -c %a -- "$config")" == 644 ]] ||
     fail "OpenCode config is not an exact regular payload: $config"
 done
-jq empty "$opencode_package/.config/dotfiles/opencode/"*.jsonc ||
+jq empty "$opencode_package/.config/dotfiles/opencode/"*.json{,c} ||
   fail 'managed OpenCode config is invalid JSON'
-tui_config="$opencode_package/.config/dotfiles/opencode/tui.jsonc"
-jq -e '."$schema" == "https://opencode.ai/tui.json" and .keybinds == {
-  "app_exit":"<leader>q",
-  "input_clear":"<leader>k",
-  "prompt_stash":"ctrl+s",
-  "prompt_stash_pop":"ctrl+y",
-  "input_newline":"ctrl+return,shift+return,alt+return,ctrl+j"
-}' "$tui_config" >/dev/null ||
-  fail 'managed OpenCode TUI config is not exact'
+cli_config="$opencode_package/.config/dotfiles/opencode/cli.json"
+jq -e '."$schema" == "https://opencode.ai/v2/cli.json" and .keybinds == {
+  "app.exit":"<leader>q",
+  "session.queued_prompts":"none",
+  "prompt.clear":"<leader>k",
+  "prompt.stash":"ctrl+s",
+  "prompt.stash.pop":"ctrl+y",
+  "prompt.queue":"none",
+  "input.newline":"ctrl+return,shift+return,alt+return,ctrl+j"
+}' "$cli_config" >/dev/null ||
+  fail 'managed OpenCode CLI config is not exact'
 for profile in personal work; do
   [[ "$(jq -r '."$schema"' "$opencode_package/.config/dotfiles/opencode/$profile.jsonc")" == 'https://opencode.ai/config.json' ]] ||
     fail "OpenCode $profile profile schema is not exact"

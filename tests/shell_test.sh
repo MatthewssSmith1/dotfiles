@@ -218,15 +218,18 @@ rm "$home/.local/share/dotfiles/bin/opencode-launch"
 mkdir -p "$home/.config/dotfiles/opencode" "$home/production-bin"
 ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/personal.jsonc" \
   "$home/.config/dotfiles/opencode/personal.jsonc"
-ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/tui.jsonc" \
-  "$home/.config/dotfiles/opencode/tui.jsonc"
+ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/cli.json" \
+  "$home/.config/dotfiles/opencode/cli.json"
+mkdir -p "$home/.config/dotfiles/opencode/runtime"
+ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/runtime/index.js" \
+  "$home/.config/dotfiles/opencode/runtime/index.js"
 ln -s "$REPO_DIR/packages/common/opencode/.local/share/dotfiles/bin/opencode-launch" \
   "$home/.local/share/dotfiles/bin/opencode-launch"
-printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_TUI_CONFIG"\nprintf "<%%s>" "$@"\n' > "$home/production-bin/opencode"
+printf '#!/usr/bin/env bash\n[[ "${1:-}" != --version ]] || { printf "opencode v2.0.32\\n"; exit; }\nprintf "%%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_CLI_CONFIG_CONTENT"\nprintf "<%%s>" "$@"\n' > "$home/production-bin/opencode"
 chmod 0755 "$home/production-bin/opencode"
 output="$(HOME="$home" PATH="$home/production-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
   'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode literal' 2>/dev/null)"
-[[ "$output" == "$home/.config/dotfiles/opencode/personal.jsonc"$'\n'"$home/.config/dotfiles/opencode/tui.jsonc"$'\n<literal>' ]] ||
+[[ "$output" == "$home/.config/dotfiles/opencode/personal.jsonc"$'\n'"$(< "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/cli.json")"$'\n<--standalone><literal>' ]] ||
   fail 'interactive OpenCode did not compose with the production launcher'
 rm "$home/.local/share/dotfiles/bin/opencode-launch"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \

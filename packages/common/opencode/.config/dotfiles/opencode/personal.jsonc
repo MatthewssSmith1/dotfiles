@@ -1,42 +1,37 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "permission": {
-    "posthog_*": "deny"
-  },
+  "update": "disable",
+  "plugins": ["-opencode.config.compatibility", "{env:DOTFILES_OPENCODE_PLUGIN_DIR}"],
+  "skills": ["{env:HOME}/.agents/skills"],
+  "permissions": [
+    {"action": "posthog_*", "resource": "*", "effect": "deny"}
+  ],
   "mcp": {
-    "posthog": {
-      "type": "remote",
-      "url": "https://mcp.posthog.com/mcp",
-      "enabled": true
+    "servers": {
+      "posthog": {
+        "type": "remote",
+        "url": "https://mcp.posthog.com/mcp",
+        "disabled": false,
+        "codemode": false
+      }
     }
   },
-  "agent": {
-    "explore": {
-      "model": "openai/gpt-6.1-sol-fast",
-      "variant": "medium"
-    },
-    "general": {
-      "model": "openai/gpt-6.1-sol-fast",
-      "variant": "medium"
-    },
-    "compaction": {
-      "model": "openai/gpt-6.1-sol-fast",
-      "variant": "medium"
-    },
-    "title": {
-      "model": "openai/gpt-6-luna",
-      "variant": "low"
-    },
+  "agents": {
+    "build": {"color": "#7aa2f7"},
+    "plan": {"color": "#ff9e64"},
+    "explore": {"model": "openai/gpt-6.1-sol-fast#medium"},
+    "general": {"model": "openai/gpt-6.1-sol-fast#medium"},
+    "compaction": {"model": "openai/gpt-6.1-sol-fast#medium"},
+    "title": {"model": "openai/gpt-6-luna#low"},
     "posthog": {
       "description": "PostHog specialist. Use proactively for any task that touches PostHog.",
       "mode": "subagent",
-      "model": "openai/gpt-6.1-sol",
-      "variant": "low",
-      "permission": {
-        "posthog_*": "allow",
-        "edit": "deny"
-      },
-      "prompt": "You run PostHog work delegated by a parent agent; your reply is its only view of what you found.\nStay read-only unless the task explicitly requests a change in PostHog.\nWhen the request is ambiguous, pick the most sensible reading and state it.\nReply with a brief:\n- Answer: result and key numbers.\n- Basis: one line with project, events/properties, filters, time window, exclusions.\n- Caveats: sampling, incomplete data, schema assumptions.\n- Links: existing insights or recordings worth opening.\nShare HogQL on request, or when a failed task leaves the query as the useful artifact."
+      "model": "openai/gpt-6.1-sol#low",
+      "permissions": [
+        {"action": "posthog_*", "resource": "*", "effect": "allow"},
+        {"action": "edit", "resource": "*", "effect": "deny"}
+      ],
+      "system": "You run PostHog work delegated by a parent agent; your reply is its only view of what you found.\nStay read-only unless the task explicitly requests a change in PostHog.\nWhen the request is ambiguous, pick the most sensible reading and state it.\nReply with a brief:\n- Answer: result and key numbers.\n- Basis: one line with project, events/properties, filters, time window, exclusions.\n- Caveats: sampling, incomplete data, schema assumptions.\n- Links: existing insights or recordings worth opening.\nShare HogQL on request, or when a failed task leaves the query as the useful artifact."
     }
   }
 }

@@ -66,7 +66,8 @@ def selection(config, supported):
         return "tokyo-night", "invalid local selection"
 
 
-# Reviewed against OpenCode 1.18.32 packages/tui/src/theme/index.ts.
+# Reviewed against OpenCode 1.18.32 packages/tui/src/theme/index.ts; every key is
+# still present in the 2.0.32 binary, which scans the same themes/*.json directories.
 OPENCODE_COLORS = {
     "primary": "accent", "secondary": "magenta", "accent": "accent",
     "error": "red", "warning": "yellow", "success": "green", "info": "blue",
@@ -107,8 +108,8 @@ def outputs(repo, colors, slug):
     for value in colors.values():
         if value != "dark" and not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
             raise ValueError("invalid portable palette")
-    tui = json.loads((repo / "packages/common/opencode/.config/dotfiles/opencode/tui.jsonc").read_text())
-    tui["theme"] = "dotfiles-host"
+    cli = json.loads((repo / "packages/common/opencode/.config/dotfiles/opencode/cli.json").read_text())
+    cli["theme"] = {"name": "dotfiles-host"}
     herdr = (repo / "packages/ubuntu/herdr/.config/herdr/config.toml").read_text()
     base = tomllib.loads(herdr)
     custom = {key: colors[value] for key, value in HERDR_COLORS.items()}
@@ -130,7 +131,7 @@ def outputs(repo, colors, slug):
     tomllib.loads(starship)
     return {
         "opencode-theme.json": encoded({"theme": {k: colors[v] for k, v in OPENCODE_COLORS.items()}}),
-        "opencode-tui.json": encoded(tui),
+        "opencode-cli.json": encoded(cli),
         "herdr.toml": herdr,
         "starship.toml": starship,
         "accent": colors["accent"] + "\n",

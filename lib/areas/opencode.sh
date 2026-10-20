@@ -33,6 +33,12 @@ opencode_legacy_canonical_is_exact() {
 }
 
 opencode_legacy_links_present() {
+  local target
+  for target in .config/dotfiles/opencode/tui.jsonc \
+    .config/dotfiles/opencode/v2-cli.json .config/dotfiles/opencode/v2-personal.jsonc \
+    .config/dotfiles/opencode/v2-shell/index.js .local/bin/opencode-v2; do
+    opencode_legacy_link_is_exact "$target" "$target" && return 0
+  done
   opencode_legacy_link_is_exact .config/opencode/base.jsonc .config/opencode/base.jsonc ||
     opencode_legacy_link_is_exact .config/opencode/dotfiles-tui.jsonc .config/opencode/dotfiles-tui.jsonc ||
     opencode_legacy_link_is_exact .config/opencode/profiles/personal.jsonc .config/opencode/profiles/personal.jsonc ||
@@ -45,6 +51,11 @@ opencode_legacy_links_present() {
 remove_opencode_legacy_links() {
   local target source target_source
   local -a legacy=(
+    '.config/dotfiles/opencode/tui.jsonc .config/dotfiles/opencode/tui.jsonc'
+    '.config/dotfiles/opencode/v2-cli.json .config/dotfiles/opencode/v2-cli.json'
+    '.config/dotfiles/opencode/v2-personal.jsonc .config/dotfiles/opencode/v2-personal.jsonc'
+    '.config/dotfiles/opencode/v2-shell/index.js .config/dotfiles/opencode/v2-shell/index.js'
+    '.local/bin/opencode-v2 .local/bin/opencode-v2'
     '.config/opencode/base.jsonc .config/opencode/base.jsonc'
     '.config/opencode/dotfiles-tui.jsonc .config/opencode/dotfiles-tui.jsonc'
     '.config/opencode/profiles/personal.jsonc .config/opencode/profiles/personal.jsonc'
@@ -64,7 +75,7 @@ validate_opencode_payload() {
   local expected actual source
   [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == common/opencode ]] ||
     die 'OpenCode closure must contain only common/opencode'
-  expected=$'.config/dotfiles/opencode/personal.jsonc\n.config/dotfiles/opencode/tui.jsonc\n.config/dotfiles/opencode/work.jsonc\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch'
+  expected=$'.config/dotfiles/opencode/cli.json\n.config/dotfiles/opencode/personal.jsonc\n.config/dotfiles/opencode/runtime/index.js\n.config/dotfiles/opencode/work.jsonc\n.local/bin/opencode-personal\n.local/bin/opencode-work\n.local/share/dotfiles/bin/opencode-launch'
   actual="$(printf '%s\n' "${LEAN_TARGET_PATHS[@]}" | LC_ALL=C sort)"
   [[ "$actual" == "$expected" ]] || die 'OpenCode package payload inventory is not exact'
   for source in "${LEAN_TARGET_SOURCES[@]}"; do
@@ -74,7 +85,7 @@ validate_opencode_payload() {
       [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected OpenCode config mode: $source"
     fi
   done
-  jq empty "$(opencode_source personal.jsonc)" "$(opencode_source tui.jsonc)" \
+  jq empty "$(opencode_source personal.jsonc)" "$(opencode_source cli.json)" \
     "$(opencode_source work.jsonc)" >/dev/null || die 'managed OpenCode config is invalid JSON'
 }
 
@@ -90,7 +101,7 @@ validate_opencode_global_configs() {
     file_contains_nul "$path" && die "global OpenCode config contains NUL bytes: $path"
     parsed="$(opencode_json "$path")" || die "global OpenCode config is invalid JSON/JSONC: $path"
     [[ "$(jq -r type <<< "$parsed")" == object ]] || die "global OpenCode config is not an object: $path"
-    if jq -e 'has("plugin") or has("provider")' <<< "$parsed" >/dev/null; then
+    if jq -e 'has("plugin") or has("provider") or has("plugins") or has("providers")' <<< "$parsed" >/dev/null; then
       die "global OpenCode config declares plugin or provider settings: $path"
     fi
   done

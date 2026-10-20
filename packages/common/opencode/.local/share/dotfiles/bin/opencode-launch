@@ -11,23 +11,63 @@ esac
 
 config="$HOME/.config/dotfiles/opencode/$profile.jsonc"
 [[ -f "$config" ]] || { printf 'opencode-launch: managed profile is absent: %s\n' "$config" >&2; exit 1; }
-tui_config="$HOME/.config/dotfiles/opencode/tui.jsonc"
-[[ -f "$tui_config" ]] || { printf 'opencode-launch: managed TUI config is absent: %s\n' "$tui_config" >&2; exit 1; }
+cli_config="$HOME/.config/dotfiles/opencode/cli.json"
+[[ -f "$cli_config" ]] || { printf 'opencode-launch: managed CLI config is absent: %s\n' "$cli_config" >&2; exit 1; }
 
-# Ubuntu output is optional. Native Omarchy keeps its keybinding-only overlay.
+# Ubuntu generated output is optional. Native Omarchy keeps its keybinding-only overlay.
 theme_root="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/theme/ubuntu/current"
-if [[ -x "$HOME/.local/bin/dotfiles-theme" && -f "$theme_root/opencode-tui.json" &&
+if [[ -x "$HOME/.local/bin/dotfiles-theme" && -f "$theme_root/opencode-cli.json" &&
       -f "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/themes/dotfiles-host.json" ]] &&
    [[ "$("$HOME/.local/bin/dotfiles-theme" host)" == ubuntu ]]; then
-  tui_config="$theme_root/opencode-tui.json"
+  cli_config="$theme_root/opencode-cli.json"
 fi
+
+export OPENCODE_CONFIG="$config" OPENCODE_CLI_CONFIG_CONTENT
+OPENCODE_CLI_CONFIG_CONTENT="$(< "$cli_config")"
+export DOTFILES_OPENCODE_PLUGIN_DIR
+DOTFILES_OPENCODE_PLUGIN_DIR="$(dirname -- "$(realpath -- "$HOME/.config/dotfiles/opencode/runtime/index.js")")"
+# V2 compatibility discovery is disabled in the profile; shared skills are explicit.
+unset OPENCODE_TUI_CONFIG OPENCODE_CONFIG_CONTENT OPENCODE_SERVER OPENCODE_SERVER_URL
+
+# A shared service owns its startup environment. Never silently run a profile
+# against a server started with another profile or without work credentials.
+case "${1:-}" in
+  run|mini|api|models)
+    command="$1"; shift
+    set -- "$command" --standalone "$@"
+    ;;
+  auth)
+    case "${2:-}" in
+      login|list|logout|switch|export|import)
+        command="$2"; shift 2
+        set -- auth "$command" --standalone "$@"
+        ;;
+    esac
+    ;;
+  debug|mcp|stats|session|service|reload|pair|plugin)
+    printf 'opencode-launch: use native opencode for administrative commands; use /mcps in the profile TUI for MCP status/sign-in\n' >&2
+    exit 2
+    ;;
+  serve|acp|upgrade|update|uninstall) ;;
+  --help|-h|--version|-v|--completions) ;;
+  *) set -- --standalone "$@" ;;
+esac
+for argument in "$@"; do
+  case "$argument" in
+    --server|--server=*) printf 'opencode-launch: named profiles cannot use an external server; use native opencode\n' >&2; exit 2 ;;
+  esac
+done
 
 IFS=: read -r -a path_entries <<< "${PATH:-}"
 for directory in "${path_entries[@]}"; do
   [[ -n "$directory" ]] || directory=.
   candidate="$directory/opencode"
   [[ -f "$candidate" && -x "$candidate" ]] || continue
-  OPENCODE_DISABLE_CLAUDE_CODE=1 OPENCODE_CONFIG="$config" OPENCODE_TUI_CONFIG="$tui_config" exec "$candidate" "$@"
+  case "$("$candidate" --version)" in
+    'opencode v2.'*) ;;
+    *) printf 'opencode-launch: OpenCode v2 is required; upgrade the host runtime before using these profiles\n' >&2; exit 1 ;;
+  esac
+  exec "$candidate" "$@"
 done
 
 printf 'opencode-launch: no opencode executable found on PATH\n' >&2
