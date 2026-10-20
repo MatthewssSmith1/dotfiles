@@ -11,6 +11,7 @@ CAPTURE_PATH_PREFIX="$fake_bin"
 host="$(make_host agents linux)"
 
 readonly MANAGED_SKILLS=(
+  discuss
   grilling
   handoff
   retro
@@ -18,6 +19,8 @@ readonly MANAGED_SKILLS=(
   writing-for-agents
 )
 readonly MANAGED_SKILL_FILES=(
+  discuss/SKILL.md
+  discuss/agents/openai.yaml
   grilling/SKILL.md
   grilling/agents/openai.yaml
   handoff/SKILL.md
@@ -41,12 +44,10 @@ readonly MANAGED_SKILL_FILES=(
 )
 readonly CLAUDE_SKILLS=(
   codex-subagent
-  discuss
 )
 readonly CLAUDE_SKILL_FILES=(
   codex-subagent/SKILL.md
   codex-subagent/parallel-worktrees.md
-  discuss/SKILL.md
 )
 readonly CODEX_PROFILE_FILES=(
   subagent.config.toml

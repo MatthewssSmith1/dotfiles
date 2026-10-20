@@ -1,7 +1,6 @@
 ---
 name: discuss
-description: Read-only conversation mode; talk it through before any changes.
-disable-model-invocation: true
+description: 'Read-only conversation mode: talk it through before changing anything. Use when the user asks to discuss, keep discussing, or stay read-only.'
 ---
 
 Stay **read-only** until the user explicitly says to implement: read, search, and run inspecting commands freely; leave files, git, and remote state untouched.

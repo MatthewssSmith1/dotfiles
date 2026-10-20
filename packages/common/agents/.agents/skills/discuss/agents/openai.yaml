@@ -1,0 +1,3 @@
+interface:
+  display_name: "Discuss"
+  short_description: "Talk it through read-only before changing anything"

@@ -1,6 +1,6 @@
 ---
 name: codex-subagent
-description: Delegate tasks to subagents with the Codex CLI. Use when the user says "codex", or asks to implement a plan, review, or get a second opinion.
+description: Delegate to the Codex CLI. Use when the user says "codex" or asks for a second opinion from another model.
 ---
 
 # Instructions
@@ -27,7 +27,7 @@ EOF
 
 - Prompt via heredoc. A prompt passed as an argument needs `</dev/null` or Codex blocks on stdin.
 - `run_in_background: true`; the harness notifies on exit; read the `.out`.
-- For simple work, override with `-c model_reasoning_effort="low"`.
+- For simple work, override with `-c model_reasoning_effort="low"`; for reviews, `-c model_reasoning_effort="high"`.
 - Prompt is self-contained: paths, snippets, constraints, gate command, exact output expected. Name the files the dispatch owns; edits elsewhere are allowed when the work needs them and are listed in the report. Say "single agent; do not spawn agents."
 - Follow-up: `codex -p subagent exec resume --last -`. Flags are per invocation; repeat any override.
 
