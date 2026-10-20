@@ -52,6 +52,17 @@ On the `omarchy` profile, apply and check hard-fail during preflight unless the 
 
 Credential helpers normally remain host-local settings. Dotfiles does not migrate or rewrite historical helper paths. On Ubuntu VPS hosts, appending the managed `github-vps.conf` include to the host-local file activates the exact GitHub helper reset/router and constrained `gh`; without that include the capability is dormant. The managed reset deliberately supersedes earlier generic helpers. Active validation rejects every later generic helper and every additional URL helper Git would select for a managed repository over HTTP or HTTPS, including included and repository-local settings. `rebase.autostash` is not supplied unless a host-local or repository layer sets it.
 
+On Omarchy, do not run `gh auth setup-git`. It writes the active mise version's absolute `gh` path into the native `~/.config/git/config` baseline, which breaks on the next `gh` upgrade when mise prunes that version. Instead declare the helper chain in `~/.config/dotfiles/local/git.conf` through the version-stable mise shim:
+
+```ini
+[credential "https://github.com"]
+	helper =
+	helper = !~/.local/share/mise/shims/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !~/.local/share/mise/shims/gh auth git-credential
+```
+
 Follow [GitHub Access](github-access.md) before activation, GitHub credential setup, remote writes, protected-branch changes, or PAT rotation.
 
 ## Non-Goals
