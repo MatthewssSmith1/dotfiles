@@ -20,7 +20,7 @@ seed_native_home() {
   mkdir -p "$home/.local/bin" "$home/.config/opencode"
   cat > "$home/.local/bin/opencode" <<'EOF'
 #!/usr/bin/env bash
-if [[ "${1:-}" == --version ]]; then printf '%s\n' "${FAKE_OPENCODE_VERSION:-opencode v2.0.32}"; exit; fi
+if [[ "${1:-}" == --version ]]; then printf '%s\n' "${FAKE_OPENCODE_VERSION:-opencode v2.1.2}"; exit; fi
 [[ ! -v OPENCODE_TUI_CONFIG && ! -v OPENCODE_CONFIG_CONTENT && ! -v OPENCODE_SERVER && ! -v OPENCODE_SERVER_URL ]] || exit 99
 [[ ! -v EXPECTED_XDG_CONFIG_HOME || "$XDG_CONFIG_HOME" == "$EXPECTED_XDG_CONFIG_HOME" ]] || exit 98
 [[ ! -v EXPECTED_TFY_API_KEY || "$TFY_API_KEY" == "$EXPECTED_TFY_API_KEY" ]] || exit 97

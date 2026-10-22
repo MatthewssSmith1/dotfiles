@@ -3,7 +3,7 @@
 ## Ownership and runtime
 
 OpenCode is optional and package-only on both Linux profiles. **OpenCode v2 is
-required**; the current host was migrated with 2.0.32. Dotfiles deploys configuration,
+required**; migrated with 2.0.32, current pin 2.1.2 (npm `@opencode/cli`). Dotfiles deploys configuration,
 not an OpenCode installer or updater:
 
 ```text
@@ -158,3 +158,10 @@ the compatibility scanner, loaded the runtime plugin, and survived `SIGUSR2`.
 These checks made no model requests and used no work credentials. Visual palette
 acceptance, Herdr tracking, PostHog sign-in, and real TrueFoundry requests remain
 operator checks; no compatibility claim is implied for the host-owned v1 Herdr TUI plugin.
+
+Revalidated on Ubuntu with 2.1.2, installed through a host-local mise pin
+(`~/.config/mise/config.toml`, not the shared tools area): apply/check, both launchers'
+version gate, `models` on a private server, headless TUI startup, and `SIGUSR2`
+survival once the runtime plugin had loaded. The first private-server starts after
+upgrading failed twice with `Location plugins did not finish activating`; later
+starts succeeded.

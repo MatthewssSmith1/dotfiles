@@ -225,7 +225,7 @@ ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/runtime/inde
   "$home/.config/dotfiles/opencode/runtime/index.js"
 ln -s "$REPO_DIR/packages/common/opencode/.local/share/dotfiles/bin/opencode-launch" \
   "$home/.local/share/dotfiles/bin/opencode-launch"
-printf '#!/usr/bin/env bash\n[[ "${1:-}" != --version ]] || { printf "opencode v2.0.32\\n"; exit; }\nprintf "%%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_CLI_CONFIG_CONTENT"\nprintf "<%%s>" "$@"\n' > "$home/production-bin/opencode"
+printf '#!/usr/bin/env bash\n[[ "${1:-}" != --version ]] || { printf "opencode v2.1.2\\n"; exit; }\nprintf "%%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_CLI_CONFIG_CONTENT"\nprintf "<%%s>" "$@"\n' > "$home/production-bin/opencode"
 chmod 0755 "$home/production-bin/opencode"
 output="$(HOME="$home" PATH="$home/production-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
   'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode literal' 2>/dev/null)"

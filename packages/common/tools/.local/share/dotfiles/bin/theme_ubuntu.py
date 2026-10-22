@@ -67,7 +67,7 @@ def selection(config, supported):
 
 
 # Reviewed against OpenCode 1.18.32 packages/tui/src/theme/index.ts; every key is
-# still present in the 2.0.32 binary, which scans the same themes/*.json directories.
+# still present in the 2.1.2 binary, which scans the same themes/*.json directories.
 OPENCODE_COLORS = {
     "primary": "accent", "secondary": "magenta", "accent": "accent",
     "error": "red", "warning": "yellow", "success": "green", "info": "blue",

@@ -191,7 +191,7 @@ _dotfiles_bash_theme_prompt
         self.install(self.home / '.local/share/dotfiles/bin/opencode-launch', wrapper.read_text())
         self.run_theme('sync')
         self.install(self.home / '.local/bin/opencode',
-                     '#!/bin/sh\n[ "$1" = --version ] && { echo "opencode v2.0.32"; exit 0; }\n'
+                     '#!/bin/sh\n[ "$1" = --version ] && { echo "opencode v2.1.2"; exit 0; }\n'
                      'printf "%s\\n" "$OPENCODE_CONFIG" "$OPENCODE_CLI_CONFIG_CONTENT" "$@"\n')
         bindings = json.loads((managed / 'cli.json').read_text())
         for host in ('ubuntu', 'omarchy'):
