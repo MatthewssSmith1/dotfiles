@@ -14,14 +14,28 @@ for workspace = 1, 10 do
   local keys = "SUPER + code:" .. tostring(workspace + 9)
   hl.unbind(keys)
   o.bind(keys, "Switch to workspace " .. workspace,
-    hl.dsp.focus({ workspace = tostring(workspace) }),
+    o.workspaces.focus(workspace),
     local_navigation)
 
   local move_keys = "SUPER + SHIFT + code:" .. tostring(workspace + 9)
   hl.unbind(move_keys)
   o.bind(move_keys, "Move window to workspace " .. workspace,
-    hl.dsp.window.move({ workspace = tostring(workspace) }),
+    o.workspaces.move_window(workspace),
     local_navigation)
+end
+
+-- Keep Omarchy's brightness actions and repeat/lock behavior local too.
+for _, binding in ipairs({
+  { "XF86MonBrightnessUp", "Brightness up", "raise" },
+  { "XF86MonBrightnessDown", "Brightness down", "lower" },
+}) do
+  hl.unbind(binding[1])
+  o.bind(binding[1], binding[2], { brightness = binding[3] }, {
+    dont_inhibit = true,
+    allow_input_capture = true,
+    locked = true,
+    repeating = true,
+  })
 end
 
 for panel = 1, 9 do

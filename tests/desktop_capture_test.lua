@@ -9,14 +9,16 @@ local expected = {
   ["SUPER + CTRL + D"] = { "Display", "omarchy-shell shell toggle omarchy.monitor" },
   ["SUPER + CTRL + B"] = { "Bluetooth", "omarchy-shell shell toggle omarchy.bluetooth" },
   ["SUPER + CTRL + P"] = { "Power", "omarchy-shell shell toggle omarchy.power" },
+  ["XF86MonBrightnessUp"] = { "Brightness up", { brightness = "raise" } },
+  ["XF86MonBrightnessDown"] = { "Brightness down", { brightness = "lower" } },
 }
 -- Explicit physical keycodes: top-row 1 through 0, independent of layout.
 for i, code in ipairs({ 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 }) do
   expected["SUPER + code:" .. code] = {
-    "Switch to workspace " .. i, { "focus", { workspace = tostring(i) } },
+    "Switch to workspace " .. i, { "monitor-focus", i },
   }
   expected["SUPER + SHIFT + code:" .. code] = {
-    "Move window to workspace " .. i, { "move", { workspace = tostring(i) } },
+    "Move window to workspace " .. i, { "monitor-move", i },
   }
   if i <= 9 then
     expected["SUPER + CTRL + code:" .. code] = {
@@ -52,9 +54,15 @@ o = { bind = function(keys, description, action, flags)
   assert(unbound[keys] and not active[keys], "must unbind before replacing: " .. keys)
   assert(not seen[keys], "duplicate binding: " .. keys)
   equal({ description, action }, assert(expected[keys], "unexpected binding: " .. keys))
-  equal(flags, { dont_inhibit = true, allow_input_capture = true })
+  local wanted_flags = { dont_inhibit = true, allow_input_capture = true }
+  if keys == "XF86MonBrightnessUp" or keys == "XF86MonBrightnessDown" then
+    wanted_flags.locked, wanted_flags.repeating = true, true
+  end
+  equal(flags, wanted_flags)
   active[keys], seen[keys], unbound[keys] = true, true, nil
-end }
+end,
+  workspaces = { focus = dispatcher("monitor-focus"), move_window = dispatcher("monitor-move") },
+}
 local getenv = os.getenv
 os.getenv = function(name)
   if name == "HOME" then return package_root end
@@ -69,7 +77,7 @@ for _ = 1, 2 do
     assert(seen[keys] and active[keys], "missing binding: " .. keys)
     count = count + 1
   end
-  assert(count == 37)
+  assert(count == 39)
   assert(next(unbound) == nil)
 end
-print("PASS: 37 exact capture bindings; repeated loading replaces every binding")
+print("PASS: 39 exact capture bindings; repeated loading replaces every binding")

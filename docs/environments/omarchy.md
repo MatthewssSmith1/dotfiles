@@ -107,10 +107,11 @@ The guarded block also maps a `Dotfiles` submenu from the reviewed `menu-dotfile
 
 The generated binding unbinds the manifest key before registering it with
 `dont_inhibit = true` and `allow_input_capture = true`, then loads the handwritten
-`~/.config/dotfiles/omarchy/hypr/capture-bypass.lua`. That fragment preserves 36
+`~/.config/dotfiles/omarchy/hypr/capture-bypass.lua`. That fragment preserves 38
 existing actions: Super+F fullscreen, Super+physical 1–0 workspace switching,
 Super+Shift+physical 1–0 window moves, Super+Ctrl+physical 1–9 bar panels,
-Super+Ctrl+A/W/D/B/P shell panels, and Super+K keybindings. Each unbinds before
+Super+Ctrl+A/W/D/B/P shell panels, Super+K keybindings, and display brightness
+up/down (including hold-to-repeat and locked-screen behavior). Each unbinds before
 replacement, so repeated loading does not accumulate bindings. Personal shortcuts
 remain generated only once from the manifest. Both fragments are stowed with the
 desktop package; generation never rewrites the handwritten fragment.
@@ -118,7 +119,8 @@ desktop package; generation never rewrites the handwritten fragment.
 These overrides apply to all capturing apps, including remote desktop clients;
 they are not scoped to WorkSpaces, and no WorkSpaces settings are changed. They
 preserve the working host's tested Lua Hyprland API: `hl.unbind`, `o.bind` with
-both capture flags, and `hl.dsp.focus`, `hl.dsp.window.move`, and
+both capture flags, monitor-aware `o.workspaces.focus` and
+`o.workspaces.move_window`, Omarchy's brightness actions, and
 `hl.dsp.window.fullscreen({ mode = "fullscreen" })`. Offline tests record those
 API calls and check exact actions, physical codes, flags, and repeated loading;
 they do not prove compositor behavior.
