@@ -4,6 +4,7 @@ set -Eeuo pipefail
 
 profile="${1:-}"
 shift || true
+arguments=("$@")
 case "$profile" in
   work|personal) ;;
   *) printf 'opencode-launch: expected profile work or personal\n' >&2; exit 2 ;;
@@ -57,6 +58,18 @@ for argument in "$@"; do
     --server|--server=*) printf 'opencode-launch: named profiles cannot use an external server; use native opencode\n' >&2; exit 2 ;;
   esac
 done
+
+# The work key comes from the environment or the host-owned truefoundry bundle.
+if [[ "$profile" == work && -z "${TFY_API_KEY:-}" ]]; then
+  [[ -z "${DOTFILES_TFY_BUNDLE_LOADED:-}" ]] ||
+    { printf 'opencode-launch: truefoundry bundle does not set TFY_API_KEY\n' >&2; exit 1; }
+  secret="$(type -P dotfiles-secret || true)"
+  [[ -n "$secret" ]] ||
+    { printf 'opencode-launch: TFY_API_KEY is unset and dotfiles-secret is unavailable\n' >&2; exit 1; }
+  export DOTFILES_TFY_BUNDLE_LOADED=1
+  exec "$secret" exec-env truefoundry -- "$0" work "${arguments[@]}"
+fi
+unset DOTFILES_TFY_BUNDLE_LOADED
 
 IFS=: read -r -a path_entries <<< "${PATH:-}"
 for directory in "${path_entries[@]}"; do

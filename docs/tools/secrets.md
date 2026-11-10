@@ -1,6 +1,6 @@
 # Local Environment Bundles
 
-Ubuntu Bash deploys `dotfiles-secret`, an offline launcher that passes one host-owned environment assignment file to one child process. The repository owns the launcher and format contract. The host owns every real bundle and any application wrapper; dotfiles never creates, reads, copies, backs up, or removes them.
+Ubuntu Bash deploys `dotfiles-secret`, an offline launcher that passes one host-owned environment assignment file to one child process. The repository owns the launcher and format contract. The host owns every real bundle; dotfiles never creates, copies, backs up, or removes them. Managed work launchers read only the `truefoundry` bundle, only through `dotfiles-secret` at launch.
 
 GitHub VPS PAT bundles use the same safety principles but are loaded by the independent Git-owned `dotfiles-github-auth` executable. Their exact names and single-`GH_TOKEN` format are documented in [GitHub Access](github-access.md); they are not generic `dotfiles-secret` bundles.
 
@@ -38,31 +38,20 @@ Records are separated by LF; the final LF is optional. Blank lines and lines who
 
 There is no `export` prefix, quote removal, escaping, interpolation, command substitution, inline comment, multiline value, or shell syntax. Prefer one bundle per application or trust boundary rather than one global bundle.
 
-## OpenCode Work Wrapper
+## TrueFoundry Work Launchers
 
-Managed interactive Bash routes plain `opencode` through its persisted personal or work selection. The host-owned `~/.config/dotfiles/local/bash.sh` may lazily inject the work credential by overriding only the named work launcher:
+The OpenCode and Claude work launchers (`opencode-work`/`c-work` and `claude-work`/`cx-work`, or plain `opencode`/`claude` while `agent-profile` is work) share one bundle, `truefoundry.env`, containing `TFY_API_KEY`. A launcher uses an inherited nonempty `TFY_API_KEY` as is. Otherwise it re-executes itself once through `dotfiles-secret exec-env truefoundry`, and it fails closed when `dotfiles-secret` is unavailable or the bundle does not set the key. Personal launchers never read the bundle. No host-local Bash wrapper is needed; remove any older `opencode-work()` override from `~/.config/dotfiles/local/bash.sh`.
 
-```bash
-opencode-work() {
-  local launcher="$HOME/.local/share/dotfiles/bin/opencode-launch"
-  if [[ ! -x "$launcher" ]]; then
-    printf '%s\n' 'opencode work launcher is unavailable' >&2
-    return 127
-  fi
-  command dotfiles-secret exec-env opencode -- "$launcher" work "$@"
-}
-```
-
-Sourcing the host-local file performs no bundle read or network operation. Calling `opencode-work`, `c-work`, or plain `opencode`/`c` while work is selected reads only `opencode.env`; explicit personal commands never receive the work credential. Existing shells keep their loaded selection until switched or reloaded, while new shells read it from `~/.config/dotfiles/local/opencode-profile`. Do not define a host-local `opencode()` unless intentionally replacing managed dispatch.
+Native Omarchy does not deploy `dotfiles-secret`, so work launches there need `TFY_API_KEY` from the caller's environment.
 
 ## Host Setup And Rotation
 
-Create `~/.config/dotfiles/local/secrets/` as a real mode-`0700` directory. With `umask 077`, create `opencode.env` using a trusted editor or input method that does not place its value in command arguments, shell history, or repository files, then verify exact mode `0600` and user ownership. Add the work wrapper to the real host-local Bash file, start a new managed interactive Bash, and run:
+Create `~/.config/dotfiles/local/secrets/` as a real mode-`0700` directory. With `umask 077`, create `truefoundry.env` using a trusted editor or input method that does not place its value in command arguments, shell history, or repository files, then verify exact mode `0600` and user ownership. Then run:
 
 ```bash
-dotfiles-secret check-env opencode
+dotfiles-secret check-env truefoundry
 ```
 
-Then verify a real OpenCode launch without printing or logging the value. For rotation, write a new mode-`0600` file in the same private directory and atomically rename it over `opencode.env`. Each invocation rereads the bundle; removing it makes future launches fail closed.
+Then verify a real work launch without printing or logging the value. For rotation, write a new mode-`0600` file in the same private directory and atomically rename it over `truefoundry.env`. Each invocation rereads the bundle; removing it makes future launches fail closed. Hosts upgrading from the earlier `opencode.env` bundle rename it to `truefoundry.env` in place.
 
 Bundles persist until the host rotates or removes them. Root, the VPS provider, same-user processes, a compromised child, and backups or snapshots may read them. Prefer a dedicated, scoped, expiring, independently revocable key where available, and make backup inclusion an explicit host policy. Bash-area removal retains `secrets/`, every bundle, `bash.sh`, any old `secrets.conf`, and any old volatile runtime artifact.

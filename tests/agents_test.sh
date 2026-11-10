@@ -52,8 +52,12 @@ readonly CLAUDE_SKILL_FILES=(
 readonly CODEX_PROFILE_FILES=(
   subagent.config.toml
 )
-readonly CLAUDE_OVERLAY='.config/dotfiles/claude/settings.json'
+readonly CLAUDE_OVERLAY='.config/dotfiles/claude/personal.json'
+readonly CLAUDE_WORK_OVERLAY='.config/dotfiles/claude/work.json'
 readonly CLAUDE_LAUNCHER='.local/bin/claude-dotfiles'
+readonly CLAUDE_MANAGED_PATHS=(
+  "$CLAUDE_OVERLAY" "$CLAUDE_WORK_OVERLAY" "$CLAUDE_LAUNCHER" .local/bin/claude-personal .local/bin/claude-work
+)
 
 run_agents_area() {
   local home="$1" operation="$2"
@@ -104,14 +108,33 @@ actual_codex_profiles="$(find "$codex_root" -type f -printf '%P\n' | LC_ALL=C so
 expected_codex_profiles="$(printf '%s\n' "${CODEX_PROFILE_FILES[@]}" | LC_ALL=C sort)"
 [[ "$actual_codex_profiles" == "$expected_codex_profiles" ]] || fail 'Codex profile inventory is not exact'
 overlay="$REPO_DIR/packages/common/agents/$CLAUDE_OVERLAY"
+work_overlay="$REPO_DIR/packages/common/agents/$CLAUDE_WORK_OVERLAY"
 launcher="$REPO_DIR/packages/common/agents/$CLAUDE_LAUNCHER"
-[[ "$(stat -c %a "$overlay")" == 644 && "$(stat -c %a "$launcher")" == 755 ]] ||
-  fail 'Claude overlay or launcher mode is not exact'
+for path in "${CLAUDE_MANAGED_PATHS[@]}"; do
+  mode=644
+  [[ "$path" != .local/bin/* ]] || mode=755
+  [[ "$(stat -c %a "$REPO_DIR/packages/common/agents/$path")" == "$mode" ]] ||
+    fail "Claude managed payload mode is not exact: $path"
+done
 jq -e 'type == "object" and keys == ["$schema", "attribution", "autoMemoryEnabled"] and
   .["$schema"] == "https://json.schemastore.org/claude-code-settings.json" and
   .attribution == {"commit": "", "pr": ""} and
   .autoMemoryEnabled == false' "$overlay" >/dev/null || fail 'Claude overlay is not exact'
-bash -n "$launcher" || fail 'Claude launcher syntax is invalid'
+jq -e --slurpfile personal "$overlay" 'del(.env, .modelOverrides) == $personal[0] and
+  .env == {
+    "ANTHROPIC_BASE_URL": "https://tfy.promptlens.trilogy.com",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-5-5",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
+  } and
+  .modelOverrides == ([.env | to_entries[] | select(.key | test("^ANTHROPIC_DEFAULT_.*_MODEL$")) |
+    {key: .value, value: ("claude-group/" + .value)}] | from_entries)' "$work_overlay" >/dev/null ||
+  fail 'Claude work overlay drifted from personal plus TrueFoundry routing'
+for path in "$CLAUDE_LAUNCHER" .local/bin/claude-personal .local/bin/claude-work; do
+  bash -n "$REPO_DIR/packages/common/agents/$path" || fail "Claude launcher syntax is invalid: $path"
+done
 fixture="$(copy_repo_fixture agents-invalid-package)"
 printf 'invalid direct entry\n' > "$fixture/packages/common/agents/.agents/skills/UNDECLARED"
 if TEST_OUTPUT="$("$fixture/scripts/agent-skills" verify 2>&1)"; then
@@ -165,7 +188,7 @@ assert_native_skills() {
 
 run_agents_area "$home" apply
 assert_native_skills
-for path in "$CLAUDE_OVERLAY" "$CLAUDE_LAUNCHER"; do
+for path in "${CLAUDE_MANAGED_PATHS[@]}"; do
   [[ -L "$home/$path" && "$(realpath "$home/$path")" == "$REPO_DIR/packages/common/agents/$path" ]] ||
     fail "missing exact Claude managed link: $path"
 done
@@ -214,48 +237,105 @@ pass
 # options before --, and ignores functions while guarding recursive aliases.
 launcher_home="$(new_home agents-launcher)"
 mkdir -p "$launcher_home/.config/dotfiles/claude" "$launcher_home/native-bin"
-cp "$overlay" "$launcher_home/.config/dotfiles/claude/settings.json"
+cp "$overlay" "$work_overlay" "$launcher_home/.config/dotfiles/claude/"
 printf '#!/usr/bin/env bash\nprintf "<%%s>\\n" "$@"\nexit "${FAKE_CLAUDE_STATUS:-0}"\n' > "$launcher_home/native-bin/claude"
 chmod 0755 "$launcher_home/native-bin/claude"
 set +e
 output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" FAKE_CLAUDE_STATUS=39 \
-  "$launcher" 'two words' '' -- --settings operand 2>&1)"
+  "$launcher" personal 'two words' '' -- --settings operand 2>&1)"
 status=$?
 set -e
 ((status == 39)) || fail "Claude launcher changed native status: $status"
-expected=$'<--settings>\n<'"$launcher_home"$'/.config/dotfiles/claude/settings.json>\n<two words>\n<>\n<-->\n<--settings>\n<operand>'
+expected=$'<--settings>\n<'"$launcher_home"$'/.config/dotfiles/claude/personal.json>\n<two words>\n<>\n<-->\n<--settings>\n<operand>'
 [[ "$output" == "$expected" ]] || fail 'Claude launcher changed settings order or operands'
 for option in --settings '--settings=other.json'; do
   set +e
-  output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" "$option" 2>&1)"
+  output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" work "$option" 2>&1)"
   status=$?
   set -e
   ((status == 2)) || fail "Claude launcher accepted competing option: $option"
   assert_contains "$output" 'cannot override the managed overlay'
 done
 set +e
-output="$(HOME="$launcher_home" PATH=/usr/bin:/bin "$launcher" 2>&1)"
+output="$(HOME="$launcher_home" PATH=/usr/bin:/bin "$launcher" personal 2>&1)"
 status=$?
 set -e
 ((status == 127)) || fail 'missing native Claude did not return 127'
 assert_contains "$output" 'no claude executable found on PATH'
-rm "$launcher_home/.config/dotfiles/claude/settings.json"
+for profile in '' other; do
+  set +e
+  output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" $profile 2>&1)"
+  status=$?
+  set -e
+  ((status == 2)) || fail "Claude launcher accepted profile: ${profile:-<none>}"
+  assert_contains "$output" 'expected profile work or personal'
+done
+rm "$launcher_home/.config/dotfiles/claude/personal.json"
 set +e
-output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" 2>&1)"
+output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" personal 2>&1)"
 status=$?
 set -e
 ((status == 1)) || fail 'missing Claude overlay did not fail'
 assert_contains "$output" 'managed settings overlay is missing or unreadable'
-cp "$overlay" "$launcher_home/.config/dotfiles/claude/settings.json"
+cp "$overlay" "$launcher_home/.config/dotfiles/claude/personal.json"
 ln -s "$launcher" "$launcher_home/native-bin/claude-recursive"
 mv "$launcher_home/native-bin/claude" "$launcher_home/native-bin/claude-real"
 ln -s "$launcher" "$launcher_home/native-bin/claude"
 set +e
-output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" 2>&1)"
+output="$(HOME="$launcher_home" PATH="$launcher_home/native-bin:/usr/bin:/bin" "$launcher" personal 2>&1)"
 status=$?
 set -e
 ((status == 126)) || fail 'recursive Claude alias was accepted'
 assert_contains "$output" 'points to this launcher'
+pass
+
+# Work loads the key from the environment or the truefoundry bundle, exposes it
+# only as the gateway token, and personal never inherits gateway credentials.
+env_home="$(new_home agents-launcher-env)"
+mkdir -p "$env_home/.config/dotfiles/claude" "$env_home/native-bin" "$env_home/secret-bin" "$env_home/empty-secret-bin"
+cp "$overlay" "$work_overlay" "$env_home/.config/dotfiles/claude/"
+printf '#!/usr/bin/env bash\nprintf "%%s=%%s\\n" settings "$2" auth "${ANTHROPIC_AUTH_TOKEN-unset}" tfy "${TFY_API_KEY-unset}" base "${ANTHROPIC_BASE_URL-unset}" api "${ANTHROPIC_API_KEY-unset}" oauth "${CLAUDE_CODE_OAUTH_TOKEN-unset}" guard "${DOTFILES_TFY_BUNDLE_LOADED-unset}"\nprintf "<%%s>" "${@:3}"\n' > "$env_home/native-bin/claude"
+printf '#!/usr/bin/env bash\n[[ "$1 $2 $3" == "exec-env truefoundry --" ]] || exit 9\nshift 3\nTFY_API_KEY=bundle-key exec "$@"\n' > "$env_home/secret-bin/dotfiles-secret"
+printf '#!/usr/bin/env bash\nshift 3\nexec "$@"\n' > "$env_home/empty-secret-bin/dotfiles-secret"
+chmod 0755 "$env_home/native-bin/claude" "$env_home/secret-bin/dotfiles-secret" "$env_home/empty-secret-bin/dotfiles-secret"
+work_settings="settings=$env_home/.config/dotfiles/claude/work.json"
+output="$(HOME="$env_home" PATH="$env_home/native-bin:/usr/bin:/bin" TFY_API_KEY=env-key ANTHROPIC_API_KEY=old \
+  CLAUDE_CODE_OAUTH_TOKEN=old "$launcher" work 'two words')"
+[[ "$output" == "$work_settings"$'\nauth=env-key\ntfy=unset\nbase=unset\napi=unset\noauth=unset\nguard=unset\n<two words>' ]] ||
+  fail 'Claude work launcher did not map the environment key to the gateway token'
+output="$(HOME="$env_home" PATH="$env_home/native-bin:$env_home/secret-bin:/usr/bin:/bin" "$launcher" work 'two words')"
+[[ "$output" == "$work_settings"$'\nauth=bundle-key\ntfy=unset\nbase=unset\napi=unset\noauth=unset\nguard=unset\n<two words>' ]] ||
+  fail 'Claude work launcher did not load the truefoundry bundle'
+output="$(HOME="$env_home" PATH="$env_home/native-bin:$env_home/secret-bin:/usr/bin:/bin" ANTHROPIC_AUTH_TOKEN=old \
+  TFY_API_KEY=leak ANTHROPIC_BASE_URL=http://wrong "$launcher" personal literal)"
+[[ "$output" == "settings=$env_home/.config/dotfiles/claude/personal.json"$'\nauth=unset\ntfy=unset\nbase=unset\napi=unset\noauth=unset\nguard=unset\n<literal>' ]] ||
+  fail 'Claude personal launcher inherited gateway credentials'
+for secret_dir in empty-secret-bin missing-secret-bin; do
+  expected='does not set TFY_API_KEY'
+  [[ "$secret_dir" == empty-secret-bin ]] || expected='dotfiles-secret is unavailable'
+  set +e
+  output="$(HOME="$env_home" PATH="$env_home/native-bin:$env_home/$secret_dir:/usr/bin:/bin" "$launcher" work 2>&1)"
+  status=$?
+  set -e
+  ((status == 1)) || fail "Claude work launcher did not fail closed: $expected"
+  assert_contains "$output" "$expected"
+done
+pass
+
+# The retired single-overlay link is reported by check and retired by apply.
+retire_home="$(new_home agents-retire-overlay)"
+run_agents_area "$retire_home" apply
+ln -s "$REPO_DIR/packages/common/agents/.config/dotfiles/claude/settings.json" \
+  "$retire_home/.config/dotfiles/claude/settings.json"
+expect_agents_failure 'legacy managed Claude overlay link remains' "$retire_home" check
+run_agents_area "$retire_home" apply
+[[ ! -e "$retire_home/.config/dotfiles/claude/settings.json" && ! -L "$retire_home/.config/dotfiles/claude/settings.json" ]] ||
+  fail 'legacy Claude overlay link was not retired'
+run_agents_area "$retire_home" check
+printf 'host-owned\n' > "$retire_home/.config/dotfiles/claude/settings.json"
+run_agents_area "$retire_home" apply
+[[ "$(< "$retire_home/.config/dotfiles/claude/settings.json")" == host-owned ]] ||
+  fail 'unrelated Claude settings file was retired'
 pass
 
 # Exact existing bridges are adopted derivably; any non-exact bridge refuses.
@@ -310,7 +390,7 @@ for skill in "${MANAGED_SKILLS[@]}"; do
   [[ ! -e "$home/.claude/skills/$skill" && ! -L "$home/.claude/skills/$skill" ]] ||
     fail "managed Claude alias survived removal: $skill"
 done
-for path in "$CLAUDE_OVERLAY" "$CLAUDE_LAUNCHER"; do
+for path in "${CLAUDE_MANAGED_PATHS[@]}"; do
   [[ ! -e "$home/$path" && ! -L "$home/$path" ]] || fail "Claude managed link survived removal: $path"
 done
 assert_same "$home/.claude/settings.json" "$TEST_ROOT/claude-settings-reference"
@@ -333,7 +413,7 @@ done
 pass
 
 # A conflict at either new destination refuses before creating any package link.
-for path in "$CLAUDE_OVERLAY" "$CLAUDE_LAUNCHER"; do
+for path in "${CLAUDE_MANAGED_PATHS[@]}"; do
   conflict_home="$(new_home "agents-${path//\//-}-conflict")"
   mkdir -p "$(dirname "$conflict_home/$path")"
   printf 'foreign\n' > "$conflict_home/$path"

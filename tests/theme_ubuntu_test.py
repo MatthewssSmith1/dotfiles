@@ -198,7 +198,8 @@ _dotfiles_bash_theme_prompt
             self.install(self.home / '.local/bin/dotfiles-theme', f'#!/bin/sh\nprintf "{host}\\n"\n')
             for profile in ('personal', 'work'):
                 result = subprocess.run([str(wrapper), profile, 'argument with spaces'],
-                                        env={**self.env, 'PATH': str(self.home / '.local/bin') + ':/usr/bin:/bin'},
+                                        env={**self.env, 'PATH': str(self.home / '.local/bin') + ':/usr/bin:/bin',
+                                             'TFY_API_KEY': 'fixture-work-key'},
                                         check=True, capture_output=True, text=True)
                 lines = result.stdout.splitlines()
                 self.assertEqual(lines[0], str(self.home / f'.config/dotfiles/opencode/{profile}.jsonc'))

@@ -135,9 +135,11 @@ verify() {
     elif [[ -f "$entry" ]]; then
       [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/*/* ||
         "$relative" == .claude/skills/*/* || "$relative" == .codex/*.config.toml ||
-        "$relative" == .config/dotfiles/claude/settings.json || "$relative" == .local/bin/claude-dotfiles ]] ||
+        "$relative" == .config/dotfiles/claude/personal.json || "$relative" == .config/dotfiles/claude/work.json ||
+        "$relative" == .local/bin/claude-dotfiles || "$relative" == .local/bin/claude-personal ||
+        "$relative" == .local/bin/claude-work ]] ||
         die "package file is outside managed Agents payload: $relative"
-      if [[ "$relative" == .local/bin/claude-dotfiles ]]; then
+      if [[ "$relative" == .local/bin/claude-* ]]; then
         [[ "$(stat -c '%a' -- "$entry")" == 755 ]] || die "unexpected package file mode: $relative"
       else
         [[ "$(stat -c '%a' -- "$entry")" == 644 ]] || die "unexpected package file mode: $relative"

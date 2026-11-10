@@ -18,7 +18,6 @@
   },
   "policies": [
     {"action": "provider.use", "resource": "*", "effect": "deny"},
-    {"action": "provider.use", "resource": "openai", "effect": "allow"},
     {"action": "provider.use", "resource": "truefoundry-gateway", "effect": "allow"}
   ],
   "providers": {
@@ -30,8 +29,10 @@
         "apiKey": "{env:TFY_API_KEY}"
       },
       "models": {
-        "claude-group/claude-fable-5": {
-          "name": "Claude Fable 5",
+        "claude-group/claude-fable-5-1": {
+          "name": "Claude Fable 5.1",
+          "limit": {"context": 1000000, "output": 128000},
+          "compatibility": {"cacheFormat": "anthropic"},
           "settings": {"reasoningEffort": "medium"},
           "variants": [
             {"id": "none", "settings": {"reasoningEffort": "none"}},
@@ -40,8 +41,10 @@
             {"id": "high", "settings": {"reasoningEffort": "high"}}
           ]
         },
-        "claude-group/claude-opus-5": {
-          "name": "Claude Opus 5",
+        "claude-group/claude-haiku-5-5": {
+          "name": "Claude Haiku 5.5",
+          "limit": {"context": 1000000, "output": 128000},
+          "compatibility": {"cacheFormat": "anthropic"},
           "settings": {"reasoningEffort": "medium"},
           "variants": [
             {"id": "none", "settings": {"reasoningEffort": "none"}},
@@ -50,8 +53,10 @@
             {"id": "high", "settings": {"reasoningEffort": "high"}}
           ]
         },
-        "claude-group/claude-sonnet-5": {
-          "name": "Claude Sonnet 5",
+        "claude-group/claude-opus-5-5": {
+          "name": "Claude Opus 5.5",
+          "limit": {"context": 1000000, "output": 128000},
+          "compatibility": {"cacheFormat": "anthropic"},
           "settings": {"reasoningEffort": "medium"},
           "variants": [
             {"id": "none", "settings": {"reasoningEffort": "none"}},
@@ -60,26 +65,93 @@
             {"id": "high", "settings": {"reasoningEffort": "high"}}
           ]
         },
-        "glm-5p3": {"name": "GLM 5.3"}
+        "claude-group/claude-sonnet-5-5": {
+          "name": "Claude Sonnet 5.5",
+          "limit": {"context": 1000000, "output": 128000},
+          "compatibility": {"cacheFormat": "anthropic"},
+          "settings": {"reasoningEffort": "medium"},
+          "variants": [
+            {"id": "none", "settings": {"reasoningEffort": "none"}},
+            {"id": "low", "settings": {"reasoningEffort": "low"}},
+            {"id": "medium", "settings": {"reasoningEffort": "medium"}},
+            {"id": "high", "settings": {"reasoningEffort": "high"}}
+          ]
+        },
+        "gemini-group/gemini-4-argon": {
+          "name": "Gemini 4 Argon",
+          "limit": {"context": 1048576, "output": 32768},
+          "settings": {"reasoningEffort": "medium"},
+          "variants": [
+            {"id": "none", "settings": {"reasoningEffort": "none"}},
+            {"id": "low", "settings": {"reasoningEffort": "low"}},
+            {"id": "medium", "settings": {"reasoningEffort": "medium"}},
+            {"id": "high", "settings": {"reasoningEffort": "high"}}
+          ]
+        },
+        "openai-group/gpt-6-astra": {
+          "name": "GPT-6 Astra",
+          "limit": {"context": 1050000, "input": 922000, "output": 128000},
+          "settings": {"reasoningEffort": "medium"},
+          "variants": [
+            {"id": "none", "settings": {"reasoningEffort": "none"}},
+            {"id": "low", "settings": {"reasoningEffort": "low"}},
+            {"id": "medium", "settings": {"reasoningEffort": "medium"}},
+            {"id": "high", "settings": {"reasoningEffort": "high"}}
+          ]
+        },
+        "openai-group/gpt-6.1-sol": {
+          "name": "GPT-6.1 Sol",
+          "limit": {"context": 1050000, "input": 922000, "output": 128000},
+          "settings": {"reasoningEffort": "medium"},
+          "variants": [
+            {"id": "none", "settings": {"reasoningEffort": "none"}},
+            {"id": "low", "settings": {"reasoningEffort": "low"}},
+            {"id": "medium", "settings": {"reasoningEffort": "medium"}},
+            {"id": "high", "settings": {"reasoningEffort": "high"}}
+          ]
+        }
       }
     }
   },
   "agents": {
     "build": {"color": "#7aa2f7"},
     "plan": {"color": "#ff9e64"},
-    "explore": {"model": "openai/gpt-6.1-sol-fast#medium"},
-    "general": {"model": "openai/gpt-6.1-sol-fast#medium"},
-    "compaction": {"model": "openai/gpt-6.1-sol-fast#medium"},
-    "title": {"model": "openai/gpt-6-luna#low"},
+    "explore": {"model": "truefoundry-gateway/claude-group/claude-sonnet-5-5#medium"},
+    "general": {"model": "truefoundry-gateway/claude-group/claude-opus-5-5#medium"},
+    "compaction": {"model": "truefoundry-gateway/claude-group/claude-sonnet-5-5#medium"},
+    "title": {"model": "truefoundry-gateway/claude-group/claude-haiku-5-5#low"},
     "posthog": {
       "description": "PostHog specialist. Use proactively for any task that touches PostHog.",
       "mode": "subagent",
-      "model": "openai/gpt-6.1-sol#low",
+      "model": "truefoundry-gateway/claude-group/claude-sonnet-5-5#medium",
       "permissions": [
         {"action": "posthog_*", "resource": "*", "effect": "allow"},
-        {"action": "edit", "resource": "*", "effect": "deny"}
+        {"action": "edit", "resource": "*", "effect": "deny"},
+        {"action": "subagent", "resource": "*", "effect": "deny"}
       ],
       "system": "You run PostHog work delegated by a parent agent; your reply is its only view of what you found.\nStay read-only unless the task explicitly requests a change in PostHog.\nWhen the request is ambiguous, pick the most sensible reading and state it.\nReply with a brief:\n- Answer: result and key numbers.\n- Basis: one line with project, events/properties, filters, time window, exclusions.\n- Caveats: sampling, incomplete data, schema assumptions.\n- Links: existing insights or recordings worth opening.\nShare HogQL on request, or when a failed task leaves the query as the useful artifact."
+    },
+    "review": {
+      "description": "Code reviewer. Use for reviewing changes, diffs, or plans; read-only.",
+      "mode": "subagent",
+      "model": "truefoundry-gateway/openai-group/gpt-6.1-sol#high",
+      "permissions": [
+        {"action": "*", "resource": "*", "effect": "deny"},
+        {"action": "read", "resource": "*", "effect": "allow"},
+        {"action": "read", "resource": "*.env", "effect": "ask"},
+        {"action": "read", "resource": "*.env.*", "effect": "ask"},
+        {"action": "read", "resource": "*.env.example", "effect": "allow"},
+        {"action": "grep", "resource": "*", "effect": "allow"},
+        {"action": "glob", "resource": "*", "effect": "allow"},
+        {"action": "skill", "resource": "*", "effect": "allow"},
+        {"action": "external_directory", "resource": "*", "effect": "allow"},
+        {"action": "shell", "resource": "git diff*", "effect": "allow"},
+        {"action": "shell", "resource": "git log*", "effect": "allow"},
+        {"action": "shell", "resource": "git show*", "effect": "allow"},
+        {"action": "shell", "resource": "git status*", "effect": "allow"},
+        {"action": "subagent", "resource": "*", "effect": "deny"}
+      ],
+      "system": "You review work delegated by a parent agent; your reply is its only view of what you found.\nDo not modify files or state.\nReview for correctness, regressions, security, and missed requirements; skip style nits unless asked.\nReply with:\n- Verdict: approve, approve with nits, or changes needed.\n- Findings: severity-ordered (blocker/major/minor), each with file:line, problem, and suggested fix.\n- Unverified: what you could not check and why."
     }
   }
 }

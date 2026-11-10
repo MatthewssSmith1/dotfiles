@@ -10,25 +10,34 @@ The `agents` area deploys one shared personal package on every profile. It owns 
 ~/.claude/skills/<universal> -> ../../.agents/skills/<universal>
 ```
 
-Agents also owns `~/.config/dotfiles/claude/settings.json` and `~/.local/bin/claude-dotfiles`, the Claude Code settings overlay and launcher described below.
+Agents also owns `~/.config/dotfiles/claude/{personal,work}.json`, `~/.local/bin/claude-dotfiles`, and the `claude-personal`/`claude-work` launchers described below.
 
 OpenCode configuration is independently owned only when the optional `opencode` area is applied; see [OpenCode](opencode.md). OpenCode plugins, credentials, sessions, generated state, other Claude configuration (including `~/.claude/settings.json`), synced Claude skills, unrelated skills, and the rest of `~/.codex/` (including `config.toml`) remain host-owned. Managed skill names are whole-directory boundaries: an unmanaged same-name directory or an extra entry refuses before mutation. Universal skill names are also exact Claude aliases and cannot overlap Claude-only skill names. Other skill names coexist as external directories or symlinks and survive apply, check, reapply, and removal. In particular, the Omarchy-native `omarchy` and `diagnose-crash` skill symlinks remain native-owned.
 
 ## Claude Code Settings
 
-The minimal, repository-owned overlay sets `autoMemoryEnabled` to `false` and empties `attribution.commit` and `attribution.pr`, so Claude adds no co-author trailer to commits and no generated-by footer to pull requests. The launcher passes it through `--settings`, merging it above normal user/project settings; organization-managed settings retain higher precedence. Model choices, plugins, credentials, and writable user preferences stay host-owned.
+The minimal, repository-owned personal overlay sets `autoMemoryEnabled` to `false` and empties `attribution.commit` and `attribution.pr`, so Claude adds no co-author trailer to commits and no generated-by footer to pull requests. The work overlay is the personal overlay plus TrueFoundry routing (below). The launcher passes the selected overlay through `--settings`, merging it above normal user/project settings; organization-managed settings retain higher precedence. Plugins, credentials, and writable user preferences stay host-owned.
 
 ```text
-claude           -> managed interactive Bash dispatch -> claude-dotfiles -> native claude
-claude-dotfiles  -> explicit managed launch, including scripts/noninteractive shells
-command claude  -> native bypass from interactive Bash
+claude                        -> managed interactive Bash dispatch by agent-profile
+cx-personal / cx-work         -> explicit named profile
+claude-personal|claude-work   -> claude-dotfiles <profile> -> native claude
+command claude                -> native bypass from interactive Bash
 ```
 
-The Bash function falls back to native Claude when the launcher is absent. It is not exported. The launcher preserves arguments and exit status, requires a native executable, and rejects caller `--settings` options before `--`; use the native bypass for an alternative settings file. Dotfiles does not install or require Claude during deployment.
+`agent-profile` selects personal or work for both `claude` and `opencode`; see [OpenCode](opencode.md#profiles-and-launching). Personal falls back to native Claude when the launcher is absent. The Bash function is not exported. `claude-dotfiles` requires `personal` or `work` first, preserves the remaining arguments and exit status, requires a native executable, and rejects caller `--settings` options before `--`; use the native bypass for an alternative settings file. Dotfiles does not install or require Claude during deployment.
+
+### Work: TrueFoundry
+
+Work sends every request through the TrueFoundry gateway using only the TFY key, on the metered `claude-group/` route (the same route OpenCode work uses). It does not use a Claude subscription seat. The overlay sets `ANTHROPIC_BASE_URL`, pins the opus/sonnet/haiku/fable aliases to Opus, Sonnet, and Haiku 5.5 and Fable 5.1, maps those IDs to `claude-group/<id>` through `modelOverrides` so Claude Code still recognizes them, and disables experimental betas for the gateway.
+
+The key is never in a settings file or argument list. The work launcher uses an inherited `TFY_API_KEY`, otherwise re-executes once through `dotfiles-secret exec-env truefoundry` (see [Local Environment Bundles](secrets.md)), otherwise fails closed. It exports the key only as `ANTHROPIC_AUTH_TOKEN`, which takes precedence over the stored claude.ai login without replacing it, and clears `TFY_API_KEY`, `ANTHROPIC_API_KEY`, and `CLAUDE_CODE_OAUTH_TOKEN`. Personal clears `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, and `TFY_API_KEY`, so it keeps the claude.ai login.
+
+Both profiles share `~/.claude`, including the claude.ai login, history, and plugins. **Do not run `/logout` in a work session**: it revokes the shared login used by personal. Features tied to the claude.ai login (claude.ai connectors, Remote Control, cloud sessions, voice) are unavailable in work.
 
 IDE/Desktop launches do not pass through this launcher. To apply the same preferences for clients reading user settings, set `"autoMemoryEnabled": false` and `"attribution": {"commit": "", "pr": ""}` in the host-owned `~/.claude/settings.json`, preserving its other keys. Existing memory files remain intact. Start a fresh shell after deploying Bash changes and restart Claude Code to load changed settings.
 
-Removing Agents deletes its exact overlay/launcher links along with its other managed payloads and bridges. It preserves the user settings file, so a manually configured user preference remains in effect.
+Apply and removal retire the exact link left by the earlier single `settings.json` overlay; check reports it. Removing Agents deletes its exact overlay/launcher links along with its other managed payloads and bridges. It preserves the user settings file, so a manually configured user preference remains in effect.
 
 ## Personal Skills
 

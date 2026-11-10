@@ -30,8 +30,8 @@ remove are local/offline and never install runtimes or copy credentials/database
 ## Profiles and launching
 
 ```text
-ocp                         -> print personal or work
-ocp personal|work           -> persist and select immediately
+agent-profile               -> print personal or work
+agent-profile personal|work -> persist and select immediately (OpenCode and Claude)
 opencode                    -> selected profile in managed interactive Bash
 c                           -> selected profile with --auto
 c-personal / c-work         -> explicit named profile
@@ -39,13 +39,16 @@ opencode-personal           -> opencode-launch personal -> native v2
 opencode-work               -> opencode-launch work -> native v2
 ```
 
-The host-owned `~/.config/dotfiles/local/opencode-profile` contains exactly
+The host-owned `~/.config/dotfiles/local/agent-profile` contains exactly
 `personal` or `work` followed by LF. Missing, invalid, symlinked, or foreign-owned
-state defaults new shells to personal. `ocp` writes an atomic mode-0600 replacement;
-existing shells retain their selection until switched/reloaded. Dotfiles lifecycle
-commands never manage that file. Work dispatch allows the host-local Bash function
-to inject `TFY_API_KEY`; secrets stay outside the repository. Personal falls back
-to native OpenCode when the optional launcher is absent.
+state defaults new shells to personal. `agent-profile` writes an atomic mode-0600
+replacement; existing shells retain their selection until switched/reloaded. Dotfiles
+lifecycle commands never manage that file. The same selection drives `claude`; see
+[Agents](agents.md#claude-code-settings). The work launcher uses an inherited
+`TFY_API_KEY` or loads the host `truefoundry` bundle through `dotfiles-secret`, and
+otherwise fails closed; see [Local Environment Bundles](secrets.md). Secrets stay
+outside the repository. Personal falls back to native OpenCode when the optional
+launcher is absent.
 
 The launcher uses the first executable `opencode` on PATH, validates its major
 version, supplies `OPENCODE_CONFIG`, and merges keybindings over the host's global
@@ -68,19 +71,38 @@ disables OpenCode update checks, leaving runtime ownership with the host install
 
 ## Reviewed behavior
 
-Both profiles use native ChatGPT subscription OAuth and discovered OpenAI models;
+Personal uses native ChatGPT subscription OAuth and discovered OpenAI models;
 no authentication plugin or OpenAI provider catalog is needed. Neither profile
-forces a primary model. Subagent defaults:
+forces a primary model. Both use **Build: blue** (`#7aa2f7`) and **Plan: orange**
+(`#ff9e64`). Personal subagent defaults:
 
 - `general`, `explore`, `compaction`: GPT-6.1 Sol Fast, medium.
 - `posthog`: GPT-6.1 Sol, low; `title`: GPT-6 Luna, low.
-- **Build: blue** (`#7aa2f7`); **Plan: orange** (`#ff9e64`).
 
-Work adds the reviewed non-GPT TrueFoundry catalog via
-`aisdk:@ai-sdk/openai-compatible`, reads `TFY_API_KEY`, and restricts providers to
-OpenAI and TrueFoundry with native provider policies. Its three Claude model entries
-retain their reasoning-effort defaults and variants. Validate real gateway requests
-on the work host before relying on the migrated profile.
+**Work routes every model through TrueFoundry.** It declares the reviewed gateway
+catalog via `aisdk:@ai-sdk/openai-compatible`, reads `TFY_API_KEY`, and native
+provider policies deny every other provider, including ChatGPT OAuth. Catalog:
+Claude Fable 5.1 and Haiku, Opus, and Sonnet 5.5 (`claude-group/`), Gemini 4 Argon
+(`gemini-group/`), and GPT-6 Astra and GPT-6.1 Sol (`openai-group/`). All default to
+medium effort with none/low/medium/high variants.
+
+Gateway models are not in OpenCode's catalog, so they would fall back to 200k context and
+32k output; each declares an explicit `limit` with the vendor maxima from models.dev:
+Claude 1,000,000/128,000, GPT 1,050,000 (922,000 input)/128,000, Argon 1,048,576/32,768.
+Lower `limit.context` if the gateway rejects long requests. Claude models set
+`compatibility.cacheFormat: "anthropic"` because the OpenAI-compatible adapter otherwise
+sends no prompt-cache markers.
+
+Work subagents are split by capability, not model. Each agent's model is only a default:
+the parent may pass `model` on a `subagent` call to run any catalog model. Defaults:
+
+- `general`: Claude Opus 5.5, medium; `explore`, `compaction`, `posthog`: Claude Sonnet 5.5, medium.
+- `title`: Claude Haiku 5.5, low.
+- `review` (work only): GPT-6.1 Sol, high. A deny-by-default allow-list grants read, grep,
+  glob, skill, and only `git diff`/`log`/`show`/`status` in the shell; no edits, web, or
+  nested subagents. Its prompt returns a verdict, severity-ordered findings, and unverified areas.
+
+Validate real gateway requests on the work host before relying on the profile.
 
 The built-in `opencode.config.compatibility` plugin is disabled to avoid automatic
 Claude Code/agents compatibility scanning. Shared skills are explicitly discovered
@@ -91,7 +113,8 @@ CLI is not blocked.
 
 PostHog connects at startup, with Code Mode disabled so its tools retain the
 `posthog_*` names used by the permission boundary. Those tools are denied globally
-and allowed only for the custom read-only `posthog` subagent. Primary agents delegate
+and allowed only for the custom read-only `posthog` subagent, which on work also cannot
+start nested subagents. Primary agents delegate
 through `subagent`; the specialist's prompt requires an explicit request for writes.
 Use `/mcps` in the named profile to sign in. OAuth state remains OpenCode-owned.
 

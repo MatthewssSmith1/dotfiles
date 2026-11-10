@@ -128,54 +128,54 @@ expected_trace=$'ubuntu\nenvironment\nupstream-shell\nupstream-aliases\nupstream
   fail 'guarded initializer order changed'
 pass
 
-# Interactive OpenCode profile selection persists, updates the current shell,
+# Interactive agent profile selection persists, updates the current shell,
 # preserves explicit dispatch, and otherwise falls back to native OpenCode.
 mkdir -p "$home/native-bin"
 printf '#!/usr/bin/env bash\nprintf "native"\nprintf "<%%s>" "$@"\n' > "$home/native-bin/opencode"
 printf '#!/usr/bin/env bash\nprintf "personal"\nprintf "<%%s>" "$@"\n' > "$home/native-bin/opencode-personal"
 chmod 0755 "$home/native-bin/opencode" "$home/native-bin/opencode-personal"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; eval ocp; opencode "two words"' 2>/dev/null)"
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; eval agent-profile; opencode "two words"' 2>/dev/null)"
 [[ "$output" == $'personal\nnative<two words>' ]] || fail 'missing profile did not default to native personal dispatch'
 mkdir -p "$home/.local/share/dotfiles/bin"
 printf '#!/usr/bin/env bash\nprintf "helper"\nprintf "<%%s>" "$@"\n' > "$home/.local/share/dotfiles/bin/opencode-launch"
 chmod 0755 "$home/.local/share/dotfiles/bin/opencode-launch"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; eval '\''ocp work'\''; opencode literal; alias c="opencode --auto"; eval '\''c "two words"'\''; eval '\''c-personal explicit'\''; eval '\''c-work secret'\''; opencode-profile personal; eval '\''c final'\''' 2>/dev/null)"
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; eval '\''agent-profile work'\''; opencode literal; alias c="opencode --auto"; eval '\''c "two words"'\''; eval '\''c-personal explicit'\''; eval '\''c-work secret'\''; agent-profile personal; eval '\''c final'\''' 2>/dev/null)"
 [[ "$output" == $'work\nhost-work<literal>host-work<--auto><two words>personal<explicit>host-work<secret>personal\nhelper<personal><--auto><final>' ]] ||
   fail 'OpenCode selection or explicit alias routing changed'
-profile_path="$home/.config/dotfiles/local/opencode-profile"
+profile_path="$home/.config/dotfiles/local/agent-profile"
 [[ "$(< "$profile_path")" == personal && "$(stat -c %a -- "$profile_path")" == 600 ]] ||
-  fail 'OpenCode profile was not persisted with exact mode'
+  fail 'agent profile was not persisted with exact mode'
 printf 'work\n' > "$profile_path"
 chmod 0600 "$profile_path"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile; opencode startup; bash -c '\''[[ -z ${OPENCODE_DEFAULT_PROFILE+x} ]]'\''' 2>/dev/null)"
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile; opencode startup; bash -c '\''[[ -z ${DOTFILES_AGENT_PROFILE+x} ]]'\''' 2>/dev/null)"
 [[ "$output" == $'work\nhost-work<startup>' ]] || fail 'persisted work profile or non-export contract changed'
 
 for invalid in invalid $'work\nextra'; do
   printf '%s\n' "$invalid" > "$profile_path"
   output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-    'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
-  [[ "$output" == personal ]] || fail 'invalid persisted OpenCode profile was trusted'
+    'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile' 2>/dev/null)"
+  [[ "$output" == personal ]] || fail 'invalid persisted agent profile was trusted'
 done
 printf 'work\n' > "$profile_path"
 chmod 0777 "$home/.config/dotfiles/local"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
-[[ "$output" == personal ]] || fail 'OpenCode profile beneath unsafe directory was trusted'
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile' 2>/dev/null)"
+[[ "$output" == personal ]] || fail 'agent profile beneath unsafe directory was trusted'
 chmod 0755 "$home/.config/dotfiles/local"
 rm -f "$profile_path"
 ln -s "$home/profile-target" "$profile_path"
 printf 'work\n' > "$home/profile-target"
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
-[[ "$output" == personal ]] || fail 'symlinked OpenCode profile was trusted'
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile' 2>/dev/null)"
+[[ "$output" == personal ]] || fail 'symlinked agent profile was trusted'
 rm "$profile_path"
 mkdir "$profile_path"
 set +e
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; OPENCODE_DEFAULT_PROFILE=personal; opencode-profile work; status=$?; printf "status=%s profile=%s\n" "$status" "$OPENCODE_DEFAULT_PROFILE"' 2>/dev/null)"
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; DOTFILES_AGENT_PROFILE=personal; agent-profile work; status=$?; printf "status=%s profile=%s\n" "$status" "$DOTFILES_AGENT_PROFILE"' 2>/dev/null)"
 status=$?
 set -e
 [[ "$status" == 0 && "$output" == 'status=1 profile=personal' ]] || fail 'failed profile write changed current state'
@@ -184,20 +184,20 @@ printf 'personal\n' > "$profile_path"
 chmod 0600 "$profile_path"
 set +e
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile invalid; printf "status=%s profile=%s disk=%s\n" "$?" "$OPENCODE_DEFAULT_PROFILE" "$(< "$HOME/.config/dotfiles/local/opencode-profile")"' 2>&1)"
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile invalid; printf "status=%s profile=%s disk=%s\n" "$?" "$DOTFILES_AGENT_PROFILE" "$(< "$HOME/.config/dotfiles/local/agent-profile")"' 2>&1)"
 set -e
-assert_contains "$output" 'usage: opencode-profile [personal|work]'
+assert_contains "$output" 'usage: agent-profile [personal|work]'
 assert_contains "$output" 'status=2 profile=personal disk=personal'
 set +e
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile work extra; printf "status=%s profile=%s disk=%s\n" "$?" "$OPENCODE_DEFAULT_PROFILE" "$(< "$HOME/.config/dotfiles/local/opencode-profile")"' 2>&1)"
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile work extra; printf "status=%s profile=%s disk=%s\n" "$?" "$DOTFILES_AGENT_PROFILE" "$(< "$HOME/.config/dotfiles/local/agent-profile")"' 2>&1)"
 set -e
 assert_contains "$output" 'status=2 profile=personal disk=personal'
 if ((EUID == 0)); then
   chown 1 "$profile_path"
   output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-    'source "$HOME/.config/dotfiles/bash/rc.bash"; opencode-profile' 2>/dev/null)"
-  [[ "$output" == personal ]] || fail 'foreign-owned OpenCode profile was trusted'
+    'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile' 2>/dev/null)"
+  [[ "$output" == personal ]] || fail 'foreign-owned agent profile was trusted'
   chown 0 "$profile_path"
 fi
 set +e
@@ -209,11 +209,11 @@ set -e
 ((status != 0)) || fail 'OpenCode Bash function was exported to child shells'
 set +e
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
-  'source "$HOME/.config/dotfiles/bash/rc.bash"; OPENCODE_DEFAULT_PROFILE=broken; opencode' 2>&1)"
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; DOTFILES_AGENT_PROFILE=broken; opencode' 2>&1)"
 status=$?
 set -e
-((status == 2)) || fail 'invalid in-memory OpenCode profile did not return 2'
-assert_contains "$output" 'invalid OpenCode profile: broken'
+((status == 2)) || fail 'invalid in-memory agent profile did not return 2'
+assert_contains "$output" 'invalid agent profile: broken'
 rm "$home/.local/share/dotfiles/bin/opencode-launch"
 mkdir -p "$home/.config/dotfiles/opencode" "$home/production-bin"
 ln -s "$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/personal.jsonc" \
@@ -242,15 +242,30 @@ pass
 printf '#!/usr/bin/env bash\nprintf "native"\nprintf "<%%s>" "$@"\nexit "${CLAUDE_STATUS:-0}"\n' > "$home/native-bin/claude"
 chmod 0755 "$home/native-bin/claude"
 mkdir -p "$home/.local/bin"
-printf '#!/usr/bin/env bash\nexec claude --settings "$HOME/.config/dotfiles/claude/settings.json" "$@"\n' > "$home/.local/bin/claude-dotfiles"
+printf '#!/usr/bin/env bash\nexec claude --settings "$HOME/.config/dotfiles/claude/$1.json" "${@:2}"\n' > "$home/.local/bin/claude-dotfiles"
 chmod 0755 "$home/.local/bin/claude-dotfiles"
 set +e
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb CLAUDE_STATUS=37 bash --noprofile --norc -i -c \
   'source "$HOME/.config/dotfiles/bash/rc.bash"; claude "two words" literal' 2>/dev/null)"
 status=$?
 set -e
-[[ "$status" == 37 && "$output" == "native<--settings><$home/.config/dotfiles/claude/settings.json><two words><literal>" ]] ||
+[[ "$status" == 37 && "$output" == "native<--settings><$home/.config/dotfiles/claude/personal.json><two words><literal>" ]] ||
   fail 'interactive Claude did not dispatch through the managed overlay or preserve status'
+for profile in personal work; do
+  printf '#!/usr/bin/env bash\nprintf "%s"\nprintf "<%%s>" "$@"\n' "$profile" > "$home/native-bin/claude-$profile"
+  chmod 0755 "$home/native-bin/claude-$profile"
+done
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; agent-profile work >/dev/null; claude literal; eval '\''cx-personal explicit'\''; eval '\''cx-work secret'\''; agent-profile personal >/dev/null' 2>/dev/null)"
+[[ "$output" == 'work<literal>personal<explicit>work<secret>' ]] ||
+  fail 'Claude selection or explicit alias routing changed'
+set +e
+output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
+  'source "$HOME/.config/dotfiles/bash/rc.bash"; DOTFILES_AGENT_PROFILE=broken; claude' 2>&1)"
+status=$?
+set -e
+((status == 2)) || fail 'invalid in-memory agent profile did not stop Claude dispatch'
+assert_contains "$output" 'invalid agent profile: broken'
 output="$(HOME="$home" PATH="$home/native-bin:$PATH" TERM=dumb bash --noprofile --norc -i -c \
   'source "$HOME/.config/dotfiles/bash/rc.bash"; command claude bypass' 2>/dev/null)"
 [[ "$output" == 'native<bypass>' ]] || fail 'command claude did not bypass the managed launcher'

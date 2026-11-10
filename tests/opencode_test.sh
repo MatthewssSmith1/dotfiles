@@ -24,6 +24,7 @@ if [[ "${1:-}" == --version ]]; then printf '%s\n' "${FAKE_OPENCODE_VERSION:-ope
 [[ ! -v OPENCODE_TUI_CONFIG && ! -v OPENCODE_CONFIG_CONTENT && ! -v OPENCODE_SERVER && ! -v OPENCODE_SERVER_URL ]] || exit 99
 [[ ! -v EXPECTED_XDG_CONFIG_HOME || "$XDG_CONFIG_HOME" == "$EXPECTED_XDG_CONFIG_HOME" ]] || exit 98
 [[ ! -v EXPECTED_TFY_API_KEY || "$TFY_API_KEY" == "$EXPECTED_TFY_API_KEY" ]] || exit 97
+[[ ! -v DOTFILES_TFY_BUNDLE_LOADED ]] || exit 96
 printf '%s\n' "$OPENCODE_CONFIG" "$OPENCODE_CLI_CONFIG_CONTENT" "$DOTFILES_OPENCODE_PLUGIN_DIR"
 printf '<%s>\n' "$@"
 exit "${FAKE_OPENCODE_STATUS:-0}"
@@ -73,14 +74,31 @@ jq -e -s '
   .[0] as $personal | .[1] as $work |
   ($work | has("model") | not) and
   $work.permissions == $personal.permissions and
-  $work.agents == $personal.agents and
+  ($work.agents | del(.explore, .general, .compaction, .title, .posthog, .review)) ==
+    ($personal.agents | del(.explore, .general, .compaction, .title, .posthog)) and
+  ($work.agents.posthog | del(.model, .permissions)) == ($personal.agents.posthog | del(.model, .permissions)) and
+  $work.agents.posthog.permissions ==
+    $personal.agents.posthog.permissions + [{"action":"subagent","resource":"*","effect":"deny"}] and
+  $work.agents.explore.model == "truefoundry-gateway/claude-group/claude-sonnet-5-5#medium" and
+  $work.agents.general.model == "truefoundry-gateway/claude-group/claude-opus-5-5#medium" and
+  $work.agents.compaction.model == "truefoundry-gateway/claude-group/claude-sonnet-5-5#medium" and
+  $work.agents.title.model == "truefoundry-gateway/claude-group/claude-haiku-5-5#low" and
+  $work.agents.posthog.model == "truefoundry-gateway/claude-group/claude-sonnet-5-5#medium" and
+  $work.agents.review.model == "truefoundry-gateway/openai-group/gpt-6.1-sol#high" and
+  $work.agents.review.mode == "subagent" and
+  ($work.agents.review.system | type == "string" and length > 0) and
+  $work.agents.review.permissions[0] == {"action":"*","resource":"*","effect":"deny"} and
+  $work.agents.review.permissions[-1] == {"action":"subagent","resource":"*","effect":"deny"} and
+  ([$work.agents.review.permissions[] | select(.effect == "allow") | .action] - ["read","grep","glob","skill","external_directory","shell"]) == [] and
+  ([$work.agents.review.permissions[] | select(.action == "shell") | .resource] ==
+    ["git diff*","git log*","git show*","git status*"]) and
+  ([$work.agents[].model | strings | select(startswith("truefoundry-gateway/") | not)] == []) and
   $work.plugins == $personal.plugins and
   $work.skills == $personal.skills and
   $work.mcp == $personal.mcp and
   ($work.providers | keys) == ["truefoundry-gateway"] and
   $work.policies == [
     {"action":"provider.use","resource":"*","effect":"deny"},
-    {"action":"provider.use","resource":"openai","effect":"allow"},
     {"action":"provider.use","resource":"truefoundry-gateway","effect":"allow"}
   ] and
   $work.providers["truefoundry-gateway"].package == "aisdk:@ai-sdk/openai-compatible" and
@@ -88,12 +106,14 @@ jq -e -s '
     "baseURL":"https://tfy.promptlens.trilogy.com","apiKey":"{env:TFY_API_KEY}"
   } and
   ($work.providers["truefoundry-gateway"].models | keys) == [
-    "claude-group/claude-fable-5",
-    "claude-group/claude-opus-5",
-    "claude-group/claude-sonnet-5",
-    "glm-5p3"
+    "claude-group/claude-fable-5-1",
+    "claude-group/claude-haiku-5-5",
+    "claude-group/claude-opus-5-5",
+    "claude-group/claude-sonnet-5-5",
+    "gemini-group/gemini-4-argon",
+    "openai-group/gpt-6-astra",
+    "openai-group/gpt-6.1-sol"
   ] and
-  ($work.providers | tojson | test("gpt"; "i") | not) and
   ([$work.providers["truefoundry-gateway"].models[] | select(has("variants")) |
     .settings == {"reasoningEffort":"medium"} and
     .variants == [
@@ -101,21 +121,39 @@ jq -e -s '
       {"id":"low","settings":{"reasoningEffort":"low"}},
       {"id":"medium","settings":{"reasoningEffort":"medium"}},
       {"id":"high","settings":{"reasoningEffort":"high"}}
-    ]] | length == 3 and all)
-' "$personal_profile" "$work_profile" >/dev/null || fail 'work OpenCode personal-plus-TrueFoundry profile drifted'
+    ]] | length == 7 and all) and
+  ([$work.providers["truefoundry-gateway"].models | to_entries[] |
+    if (.key | startswith("claude-group/")) then
+      .value.limit == {"context":1000000,"output":128000} and .value.compatibility == {"cacheFormat":"anthropic"}
+    elif (.key | startswith("openai-group/")) then
+      .value.limit == {"context":1050000,"input":922000,"output":128000} and (.value | has("compatibility") | not)
+    elif .key == "gemini-group/gemini-4-argon" then
+      .value.limit == {"context":1048576,"output":32768} and (.value | has("compatibility") | not)
+    else false end] | all)
+' "$personal_profile" "$work_profile" >/dev/null || fail 'work OpenCode TrueFoundry-only profile drifted'
 for profile in "$personal_profile" "$work_profile"; do
   jq -e '
     (has("permission") or has("agent") or has("provider") or has("plugin") | not) and
     .permissions == [
       {"action":"posthog_*","resource":"*","effect":"deny"}
-    ] and
-    ([.agents | to_entries[] | select(.value | has("permissions")) | .key] == ["posthog"]) and
-    .agents.posthog.permissions == [
-      {"action":"posthog_*","resource":"*","effect":"allow"},
-      {"action":"edit","resource":"*","effect":"deny"}
     ]
   ' "$profile" >/dev/null || fail "OpenCode PostHog restrictions drifted: $profile"
 done
+jq -e '
+  ([.agents | to_entries[] | select(.value | has("permissions")) | .key] == ["posthog"]) and
+  .agents.posthog.permissions == [
+    {"action":"posthog_*","resource":"*","effect":"allow"},
+    {"action":"edit","resource":"*","effect":"deny"}
+  ]
+' "$personal_profile" >/dev/null || fail "OpenCode PostHog restrictions drifted: $personal_profile"
+jq -e '
+  ([.agents | to_entries[] | select(.value | has("permissions")) | .key] == ["posthog","review"]) and
+  .agents.posthog.permissions == [
+    {"action":"posthog_*","resource":"*","effect":"allow"},
+    {"action":"edit","resource":"*","effect":"deny"},
+    {"action":"subagent","resource":"*","effect":"deny"}
+  ]
+' "$work_profile" >/dev/null || fail "OpenCode PostHog restrictions drifted: $work_profile"
 jq -e '.keybinds == {
   "app.exit":"<leader>q",
   "session.queued_prompts":"none",
@@ -165,7 +203,7 @@ expect_success "$themed" "$native" "$DOTFILES" apply opencode
 for selection in everforest tokyo-night catppuccin unknown; do
   printf '%s\n' "$selection" > "$themed/.local/state/omarchy/current/theme.name"
   for profile in personal work; do
-    output="$(HOME="$themed" PATH="$themed/.local/bin:/usr/bin:/bin" "$themed/.local/bin/opencode-$profile")"
+    output="$(HOME="$themed" TFY_API_KEY=fixture-work-key PATH="$themed/.local/bin:/usr/bin:/bin" "$themed/.local/bin/opencode-$profile")"
     [[ "$output" == "$themed/.config/dotfiles/opencode/$profile.jsonc"$'\n'"$(< "$cli_profile")"$'\n'"$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/runtime"$'\n<--standalone>' ]] ||
       fail "native theme change altered $profile launch overlay"
   done
@@ -217,7 +255,7 @@ set -e
 ((status == 37)) || fail "OpenCode launcher changed status: $status"
 expected="$home/.config/dotfiles/opencode/personal.jsonc"$'\n'"$(< "$cli_profile")"$'\n'"$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/runtime"$'\n<--standalone>\n<two words>\n<>\n<-->\n<*>'
 [[ "$output" == "$expected" ]] || fail 'personal launcher changed overlays or arguments'
-output="$(HOME="$home" PATH="$launcher_path" OPENCODE_DISABLE_CLAUDE_CODE=0 "$home/.local/bin/opencode-work" literal)"
+output="$(HOME="$home" TFY_API_KEY=fixture-work-key PATH="$launcher_path" OPENCODE_DISABLE_CLAUDE_CODE=0 "$home/.local/bin/opencode-work" literal)"
 [[ "$output" == "$home/.config/dotfiles/opencode/work.jsonc"$'\n'"$(< "$cli_profile")"$'\n'"$REPO_DIR/packages/common/opencode/.config/dotfiles/opencode/runtime"$'\n<--standalone>\n<literal>' ]] ||
   fail 'work launcher selected the wrong overlays'
 set +e
@@ -350,7 +388,8 @@ for profile in personal work; do
       "$themed/.local/bin/opencode-$profile" "$command" 'two words' '')"
     assert_contains "$output" $'<'"$command"$'>\n<--standalone>\n<two words>\n<>'
   done
-  output="$(HOME="$themed" PATH="$themed/.local/bin:/usr/bin:/bin" "$themed/.local/bin/opencode-$profile" auth login openai)"
+  output="$(HOME="$themed" PATH="$themed/.local/bin:/usr/bin:/bin" TFY_API_KEY=fixture-work-key \
+    "$themed/.local/bin/opencode-$profile" auth login openai)"
   assert_contains "$output" $'<auth>\n<login>\n<--standalone>\n<openai>'
   for command in mcp service reload pair; do
     if HOME="$themed" "$themed/.local/bin/opencode-$profile" "$command" >/dev/null 2>&1; then
@@ -360,6 +399,30 @@ for profile in personal work; do
   if HOME="$themed" "$themed/.local/bin/opencode-$profile" --server=http://wrong >/dev/null 2>&1; then
     fail 'profile accepted an external server'
   fi
+done
+pass
+
+# Work loads a missing key from the truefoundry bundle once, fails closed when
+# it cannot, and personal never consults the bundle.
+secret_bin="$TEST_ROOT/secret-bin"
+mkdir -p "$secret_bin/bundle" "$secret_bin/empty" "$secret_bin/missing"
+printf '#!/usr/bin/env bash\n[[ "$1 $2 $3" == "exec-env truefoundry --" ]] || exit 9\nshift 3\nTFY_API_KEY=bundle-key exec "$@"\n' > "$secret_bin/bundle/dotfiles-secret"
+printf '#!/usr/bin/env bash\nshift 3\nexec "$@"\n' > "$secret_bin/empty/dotfiles-secret"
+chmod 0755 "$secret_bin/bundle/dotfiles-secret" "$secret_bin/empty/dotfiles-secret"
+output="$(HOME="$themed" PATH="$themed/.local/bin:$secret_bin/bundle:/usr/bin:/bin" EXPECTED_TFY_API_KEY=bundle-key \
+  "$themed/.local/bin/opencode-work" run 'two words')"
+assert_contains "$output" $'<run>\n<--standalone>\n<two words>'
+output="$(HOME="$themed" PATH="$themed/.local/bin:$secret_bin/empty:/usr/bin:/bin" "$themed/.local/bin/opencode-personal" literal)"
+assert_contains "$output" $'<--standalone>\n<literal>'
+for case_dir in empty missing; do
+  expected='does not set TFY_API_KEY'
+  [[ "$case_dir" == empty ]] || expected='dotfiles-secret is unavailable'
+  set +e
+  output="$(HOME="$themed" PATH="$themed/.local/bin:$secret_bin/$case_dir:/usr/bin:/bin" "$themed/.local/bin/opencode-work" 2>&1)"
+  status=$?
+  set -e
+  ((status == 1)) || fail "OpenCode work launcher did not fail closed: $expected"
+  assert_contains "$output" "$expected"
 done
 pass
 

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "autoMemoryEnabled": false,
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://tfy.promptlens.trilogy.com",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-5-5",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
+  },
+  "modelOverrides": {
+    "claude-opus-5-5": "claude-group/claude-opus-5-5",
+    "claude-sonnet-5-5": "claude-group/claude-sonnet-5-5",
+    "claude-haiku-5-5": "claude-group/claude-haiku-5-5",
+    "claude-fable-5-1": "claude-group/claude-fable-5-1"
+  }
+}

@@ -3,7 +3,13 @@
 set -Eeuo pipefail
 
 : "${HOME:?HOME is required}"
-readonly settings="$HOME/.config/dotfiles/claude/settings.json"
+profile="${1:-}"
+shift || true
+case "$profile" in
+  work|personal) ;;
+  *) printf 'claude-dotfiles: expected profile work or personal\n' >&2; exit 2 ;;
+esac
+readonly settings="$HOME/.config/dotfiles/claude/$profile.json"
 [[ -f "$settings" && -r "$settings" ]] || {
   printf 'claude-dotfiles: managed settings overlay is missing or unreadable: %s\n' "$settings" >&2
   exit 1
@@ -35,5 +41,27 @@ native="$(type -P claude || true)"
   printf 'claude-dotfiles: resolved claude points to this launcher\n' >&2
   exit 126
 }
+
+if [[ "$profile" == work ]]; then
+  # The work key comes from the environment or the host-owned truefoundry bundle.
+  if [[ -z "${TFY_API_KEY:-}" ]]; then
+    [[ -z "${DOTFILES_TFY_BUNDLE_LOADED:-}" ]] || {
+      printf 'claude-dotfiles: truefoundry bundle does not set TFY_API_KEY\n' >&2
+      exit 1
+    }
+    secret="$(type -P dotfiles-secret || true)"
+    [[ -n "$secret" ]] || {
+      printf 'claude-dotfiles: TFY_API_KEY is unset and dotfiles-secret is unavailable\n' >&2
+      exit 1
+    }
+    export DOTFILES_TFY_BUNDLE_LOADED=1
+    exec "$secret" exec-env truefoundry -- "$0" work "$@"
+  fi
+  export ANTHROPIC_AUTH_TOKEN="$TFY_API_KEY"
+  unset ANTHROPIC_BASE_URL TFY_API_KEY ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
+else
+  unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL TFY_API_KEY
+fi
+unset DOTFILES_TFY_BUNDLE_LOADED
 
 exec "$native" --settings "$settings" "$@"

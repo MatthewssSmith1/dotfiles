@@ -56,7 +56,7 @@ agents_universal_skill_names() {
 }
 
 validate_agents_closure() {
-  local relative source index overlay launcher
+  local relative source index overlay work_overlay launcher
   [[ "$PROFILE_ENTRY_KIND" == packages && "${PACKAGES[*]}" == common/agents ]] ||
     die 'Agents closure must contain only common/agents'
   if [[ "$MODE" != remove ]]; then
@@ -67,23 +67,39 @@ validate_agents_closure() {
     relative="${LEAN_TARGET_PATHS[index]}"; source="${LEAN_TARGET_SOURCES[index]}"
     [[ "$relative" == .agents/AGENTS.md || "$relative" == .agents/skills/* ||
       "$relative" == .claude/skills/* || "$relative" == .codex/*.config.toml ||
-      "$relative" == .config/dotfiles/claude/settings.json ||
-      "$relative" == .local/bin/claude-dotfiles ]] ||
+      "$relative" == .config/dotfiles/claude/personal.json ||
+      "$relative" == .config/dotfiles/claude/work.json ||
+      "$relative" == .local/bin/claude-dotfiles || "$relative" == .local/bin/claude-personal ||
+      "$relative" == .local/bin/claude-work ]] ||
       die "Agents package has an out-of-area target: $relative"
-    if [[ "$relative" == .local/bin/claude-dotfiles ]]; then
+    if [[ "$relative" == .local/bin/claude-* ]]; then
       [[ "$(stat -c %a -- "$source")" == 755 ]] || die "unexpected Agents payload mode: $relative"
     else
       [[ "$(stat -c %a -- "$source")" == 644 ]] || die "unexpected Agents payload mode: $relative"
     fi
   done
-  overlay="$DOTFILES_DIR/packages/common/agents/.config/dotfiles/claude/settings.json"
-  launcher="$DOTFILES_DIR/packages/common/agents/.local/bin/claude-dotfiles"
+  overlay="$DOTFILES_DIR/packages/common/agents/.config/dotfiles/claude/personal.json"
+  work_overlay="$DOTFILES_DIR/packages/common/agents/.config/dotfiles/claude/work.json"
   jq -e 'type == "object" and keys == ["$schema", "attribution", "autoMemoryEnabled"] and
     .["$schema"] == "https://json.schemastore.org/claude-code-settings.json" and
     .attribution == {"commit": "", "pr": ""} and
     has("autoMemoryEnabled") and .autoMemoryEnabled == false' "$overlay" >/dev/null ||
     die 'managed Claude settings overlay is not exact'
-  bash -n "$launcher" || die 'managed Claude launcher has invalid syntax'
+  jq -e --slurpfile personal "$overlay" 'del(.env, .modelOverrides) == $personal[0] and
+    (.env | type == "object") and (.env.ANTHROPIC_AUTH_TOKEN == null) and
+    (.env.ANTHROPIC_API_KEY == null) and (.modelOverrides | type == "object")' "$work_overlay" >/dev/null ||
+    die 'managed Claude work overlay drifted from personal'
+  for launcher in claude-dotfiles claude-personal claude-work; do
+    bash -n "$DOTFILES_DIR/packages/common/agents/.local/bin/$launcher" ||
+      die "managed Claude launcher has invalid syntax: $launcher"
+  done
+}
+
+# Retired single-overlay link from before personal/work Claude profiles.
+agents_legacy_overlay_is_exact() {
+  local path="$HOME/.config/dotfiles/claude/settings.json"
+  [[ -L "$path" &&
+    "$(resolve_link "$path")" == "$DOTFILES_DIR/packages/common/agents/.config/dotfiles/claude/settings.json" ]]
 }
 
 preflight_agents_skill_boundaries() {
@@ -183,6 +199,8 @@ preflight_agents() {
   register_agents_area
   validate_agents_closure
   preflight_agents_skill_boundaries "$MODE"
+  [[ "$MODE" != check ]] || ! agents_legacy_overlay_is_exact ||
+    die 'legacy managed Claude overlay link remains; run dotfiles.sh apply agents to retire it'
   lean_preflight_area "$MODE"
   preflight_agents_bridges "$MODE"
   preflight_agents_skill_aliases "$MODE"
@@ -218,6 +236,7 @@ apply_agents_skill_aliases() {
 
 apply_agents() {
   preflight_agents
+  agents_legacy_overlay_is_exact && rm -- "$HOME/.config/dotfiles/claude/settings.json"
   lean_apply_area
   apply_agents_bridges
   apply_agents_skill_aliases
@@ -242,6 +261,7 @@ remove_agents() {
   done
   ((${#LEAN_ATTACHMENT_PATHS[@]} == 0 && ${#LEAN_JSON_PATHS[@]} == 0)) ||
     die 'Agents remove bypasses guarded teardown but guarded resources are registered'
+  agents_legacy_overlay_is_exact && rm -- "$HOME/.config/dotfiles/claude/settings.json"
   lean_remove_stow
   remove_empty_agents_skill_directories
   log_success 'removed exact managed Agents links and bridges'
