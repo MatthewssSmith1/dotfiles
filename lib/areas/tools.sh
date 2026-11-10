@@ -18,7 +18,7 @@ validate_tools_fragments() {
   grep -qxF '"aqua:pnpm/pnpm" = "11.13.1"' "$common" || die 'pnpm selector is not the accepted 11.13.1 release'
   grep -qxF "\"aqua:max-sixty/worktrunk\" = \"$TOOLS_WORKTRUNK_VERSION\"" "$common" || die "Worktrunk selector is not the accepted $TOOLS_WORKTRUNK_VERSION release"
   grep -qxF 'not_found_auto_install = false' "$common" || die 'mise automatic installation is not disabled'
-  grep -qxF 'idiomatic_version_file_enable_tools = []' "$common" || die 'mise idiomatic version files are not disabled'
+  grep -qxF 'idiomatic_version_file_enable_tools = ["node"]' "$common" || die 'mise idiomatic version files must be enabled for Node only'
   ! grep -Eq '^[[:space:]]*locked[[:space:]]*=' "$common" "$ubuntu" || die 'managed mise configuration must not enable locked mode'
   ! grep -Eq '^[[:space:]]*node[[:space:]]*=' "$common" || die 'common tools must not select Node'
   grep -qxF 'node = "lts"' "$ubuntu" || die 'Ubuntu tools must select the Node LTS fallback'

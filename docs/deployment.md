@@ -78,4 +78,6 @@ exception](environments/omarchy.md#windows-vm-launcher).
 
 Ubuntu selectors outside Neovim are ordinary mise configuration; install them manually with the exact command printed by the relevant area. Neovim apply may install its mise-managed runtime.
 
+The common tools fragment enables mise idiomatic version files for Node only, so repositories may select Node through `package.json` `devEngines.runtime`, `.nvmrc`, or `.node-version` (`engines.node` is ignored). Automatic installation stays disabled; run `mise install` in a repository whose selected Node is missing.
+
 Herdr's agent-detection manifest refresh, OpenCode personal-profile installation of its pinned npm plugin when uncached, and explicitly invoked upstream Windows VM runtime networking retain their documented behavior. Baseline synchronization remains a separate explicit operation.

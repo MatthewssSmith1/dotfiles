@@ -466,13 +466,14 @@ expect_success "$home" "$ubuntu" "$DOTFILES" remove
 pass
 
 # Native common fragment has no Node/foundation selectors; Ubuntu alone owns
-# the LTS fallback. Managed settings disable implicit installation and locking.
+# the LTS fallback. Managed settings disable implicit installation and locking,
+# and enable idiomatic version files for Node only.
 common="$REPO_DIR/packages/common/tools/.config/mise/conf.d/20-dotfiles-tools.toml"
 ubuntu_fragment="$REPO_DIR/packages/ubuntu/tools/.config/mise/conf.d/30-dotfiles-tools-ubuntu.toml"
 ! grep -Eq '^(node|git|tmux|neovim|starship|fzf|zoxide|bat|fd|ripgrep)[[:space:]]*=' "$common" || fail 'common tools select a native foundation tool'
 ! grep -Rqs 'locked = true' "$REPO_DIR/packages/common/tools" "$REPO_DIR/packages/ubuntu/tools" || fail 'tools retained locked mise mode'
 grep -qxF 'not_found_auto_install = false' "$common" || fail 'automatic install setting is missing'
-grep -qxF 'idiomatic_version_file_enable_tools = []' "$common" || fail 'idiomatic version files are enabled'
+grep -qxF 'idiomatic_version_file_enable_tools = ["node"]' "$common" || fail 'idiomatic version files are not enabled for Node only'
 grep -qxF 'node = "lts"' "$ubuntu_fragment" || fail 'Ubuntu Node fallback is missing'
 pass
 

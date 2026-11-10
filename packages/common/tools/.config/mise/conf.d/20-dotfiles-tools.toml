@@ -4,4 +4,4 @@
 
 [settings]
 not_found_auto_install = false
-idiomatic_version_file_enable_tools = []
+idiomatic_version_file_enable_tools = ["node"]
