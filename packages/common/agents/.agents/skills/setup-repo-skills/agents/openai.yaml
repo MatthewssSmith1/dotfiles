@@ -1,0 +1,5 @@
+interface:
+  display_name: "Setup Repo Skills"
+  short_description: "Generate repository-owned engineering skills"
+policy:
+  allow_implicit_invocation: false

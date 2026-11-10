@@ -15,7 +15,7 @@ readonly MANAGED_SKILLS=(
   grilling
   handoff
   retro
-  setup-domain-modeling
+  setup-repo-skills
   writing-for-agents
 )
 readonly MANAGED_SKILL_FILES=(
@@ -27,17 +27,21 @@ readonly MANAGED_SKILL_FILES=(
   handoff/agents/openai.yaml
   retro/SKILL.md
   retro/agents/openai.yaml
-  setup-domain-modeling/SKILL.md
-  setup-domain-modeling/agents/openai.yaml
-  setup-domain-modeling/monorepos.md
-  setup-domain-modeling/template/.agents/skills/domain-modeling/DR-FORMAT.md
-  setup-domain-modeling/template/.agents/skills/domain-modeling/GLOSSARY-FORMAT.md
-  setup-domain-modeling/template/.agents/skills/domain-modeling/SKILL.template.md
-  setup-domain-modeling/template/.agents/skills/domain-modeling/agents/openai.yaml
-  setup-domain-modeling/template/AGENTS.md
-  setup-domain-modeling/template/GLOSSARY.md
-  setup-domain-modeling/template/docs/adr/AGENTS.md
-  setup-domain-modeling/template/docs/bdr/AGENTS.md
+  setup-repo-skills/SKILL.md
+  setup-repo-skills/agents/openai.yaml
+  setup-repo-skills/template/.agents/skills/domain-language/GLOSSARY-FORMAT.md
+  setup-repo-skills/template/.agents/skills/domain-language/SKILL.template.md
+  setup-repo-skills/template/.agents/skills/domain-language/agents/openai.yaml
+  setup-repo-skills/template/.agents/skills/indefensible-numbers/SKILL.template.md
+  setup-repo-skills/template/.agents/skills/indefensible-numbers/agents/openai.yaml
+  setup-repo-skills/template/.agents/skills/representation-first/RELATIONAL.md
+  setup-repo-skills/template/.agents/skills/representation-first/SKILL.template.md
+  setup-repo-skills/template/.agents/skills/representation-first/agents/openai.yaml
+  setup-repo-skills/template/.agents/skills/representation-first/sources.md
+  setup-repo-skills/template/GLOSSARY-MAP.md
+  setup-repo-skills/template/GLOSSARY.md
+  setup-repo-skills/template/docs/adr/AGENTS.md
+  setup-repo-skills/template/docs/bdr/AGENTS.md
   writing-for-agents/SKILL-MECHANICS.md
   writing-for-agents/SKILL.md
   writing-for-agents/agents/openai.yaml
