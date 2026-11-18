@@ -1,5 +1,5 @@
 [tools]
-"aqua:pnpm/pnpm" = "11.13.1"
+"npm:pnpm" = "12.18.0"
 "aqua:max-sixty/worktrunk" = "0.76.0"
 
 [settings]

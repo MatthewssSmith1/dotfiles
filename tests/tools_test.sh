@@ -42,7 +42,7 @@ pass
 export DOTFILES_TEST_HIDE_COMMANDS='mise node pnpm wt'
 expect_failure 'mise is absent' "$home" "$ubuntu" "$DOTFILES" check tools
 assert_contains "$TEST_OUTPUT" 'mise install node@lts'
-assert_contains "$TEST_OUTPUT" 'mise install aqua:pnpm/pnpm@11.13.1'
+assert_contains "$TEST_OUTPUT" 'mise install npm:pnpm@12.18.0'
 assert_contains "$TEST_OUTPUT" 'mise install aqua:max-sixty/worktrunk@0.76.0'
 unset DOTFILES_TEST_HIDE_COMMANDS
 pass
@@ -50,7 +50,7 @@ pass
 # Selected fake tools satisfy the exact accepted checks.
 make_tool mise 'mise 2026.7.7'
 make_tool node 'v24.0.0'
-make_tool pnpm '11.13.1'
+make_tool pnpm '12.18.0'
 make_tool wt 'worktrunk 0.76.0'
 expect_success "$home" "$ubuntu" "$DOTFILES" check tools
 pass

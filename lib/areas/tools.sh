@@ -1,6 +1,6 @@
 # Mise configuration area converted to the lean package-only lifecycle.
 
-readonly TOOLS_PNPM_SELECTOR='aqua:pnpm/pnpm@11.13.1'
+readonly TOOLS_PNPM_SELECTOR='npm:pnpm@12.18.0'
 readonly TOOLS_WORKTRUNK_VERSION='0.76.0'
 readonly TOOLS_WORKTRUNK_SELECTOR="aqua:max-sixty/worktrunk@$TOOLS_WORKTRUNK_VERSION"
 
@@ -15,7 +15,7 @@ validate_tools_fragments() {
   local common="$DOTFILES_DIR/packages/common/tools/.config/mise/conf.d/20-dotfiles-tools.toml"
   local ubuntu="$DOTFILES_DIR/packages/ubuntu/tools/.config/mise/conf.d/30-dotfiles-tools-ubuntu.toml"
   [[ -f "$common" && -f "$ubuntu" ]] || die 'managed mise fragments are missing'
-  grep -qxF '"aqua:pnpm/pnpm" = "11.13.1"' "$common" || die 'pnpm selector is not the accepted 11.13.1 release'
+  grep -qxF '"npm:pnpm" = "12.18.0"' "$common" || die 'pnpm selector is not the accepted 12.18.0 release'
   grep -qxF "\"aqua:max-sixty/worktrunk\" = \"$TOOLS_WORKTRUNK_VERSION\"" "$common" || die "Worktrunk selector is not the accepted $TOOLS_WORKTRUNK_VERSION release"
   grep -qxF 'not_found_auto_install = false' "$common" || die 'mise automatic installation is not disabled'
   grep -qxF 'idiomatic_version_file_enable_tools = ["node"]' "$common" || die 'mise idiomatic version files must be enabled for Node only'
@@ -52,7 +52,7 @@ tools_missing_guidance() {
 validate_selected_tool_versions() {
   local actual
   actual="$(pnpm --version 2>/dev/null || true)"
-  [[ "$actual" == 11.13.1 ]] || die "pnpm must resolve to 11.13.1, found '${actual:-missing}'"
+  [[ "$actual" == 12.18.0 ]] || die "pnpm must resolve to 12.18.0, found '${actual:-missing}'"
   actual="$(wt --version 2>/dev/null || true)"
   [[ "$actual" == *"$TOOLS_WORKTRUNK_VERSION"* ]] || die "Worktrunk must resolve to $TOOLS_WORKTRUNK_VERSION, found '${actual:-missing}'"
   if [[ "$SELECTED_PROFILE" == ubuntu ]]; then
