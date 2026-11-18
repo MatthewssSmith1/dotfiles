@@ -106,7 +106,7 @@ jq -e -s '
     "baseURL":"https://tfy.promptlens.trilogy.com","apiKey":"{env:TFY_API_KEY}"
   } and
   ($work.providers["truefoundry-gateway"].models | keys) == [
-    "claude-group/claude-fable-5-1",
+    "claude-group/claude-fable-5-2",
     "claude-group/claude-haiku-5-5",
     "claude-group/claude-opus-5-5",
     "claude-group/claude-sonnet-5-5",

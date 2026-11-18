@@ -10,13 +10,13 @@
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-5-5",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-2",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   },
   "modelOverrides": {
     "claude-opus-5-5": "claude-group/claude-opus-5-5",
     "claude-sonnet-5-5": "claude-group/claude-sonnet-5-5",
     "claude-haiku-5-5": "claude-group/claude-haiku-5-5",
-    "claude-fable-5-1": "claude-group/claude-fable-5-1"
+    "claude-fable-5-2": "claude-group/claude-fable-5-2"
   }
 }

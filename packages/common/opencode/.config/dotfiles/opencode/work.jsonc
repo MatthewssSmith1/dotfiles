@@ -29,8 +29,8 @@
         "apiKey": "{env:TFY_API_KEY}"
       },
       "models": {
-        "claude-group/claude-fable-5-1": {
-          "name": "Claude Fable 5.1",
+        "claude-group/claude-fable-5-2": {
+          "name": "Claude Fable 5.2",
           "limit": {"context": 1000000, "output": 128000},
           "compatibility": {"cacheFormat": "anthropic"},
           "settings": {"reasoningEffort": "medium"},

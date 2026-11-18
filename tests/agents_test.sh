@@ -130,7 +130,7 @@ jq -e --slurpfile personal "$overlay" 'del(.env, .modelOverrides) == $personal[0
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5-5",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5-5",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-5-5",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-1",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "claude-fable-5-2",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   } and
   .modelOverrides == ([.env | to_entries[] | select(.key | test("^ANTHROPIC_DEFAULT_.*_MODEL$")) |

@@ -82,7 +82,7 @@ forces a primary model. Both use **Build: blue** (`#7aa2f7`) and **Plan: orange*
 **Work routes every model through TrueFoundry.** It declares the reviewed gateway
 catalog via `aisdk:@ai-sdk/openai-compatible`, reads `TFY_API_KEY`, and native
 provider policies deny every other provider, including ChatGPT OAuth. Catalog:
-Claude Fable 5.1 and Haiku, Opus, and Sonnet 5.5 (`claude-group/`), Gemini 4 Argon
+Claude Fable 5.2 and Haiku, Opus, and Sonnet 5.5 (`claude-group/`), Gemini 4 Argon
 (`gemini-group/`), and GPT-6 Astra and GPT-6.1 Sol (`openai-group/`). All default to
 medium effort with none/low/medium/high variants.
 

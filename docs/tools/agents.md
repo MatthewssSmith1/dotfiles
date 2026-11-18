@@ -29,7 +29,7 @@ command claude                -> native bypass from interactive Bash
 
 ### Work: TrueFoundry
 
-Work sends every request through the TrueFoundry gateway using only the TFY key, on the metered `claude-group/` route (the same route OpenCode work uses). It does not use a Claude subscription seat. The overlay sets `ANTHROPIC_BASE_URL`, pins the opus/sonnet/haiku/fable aliases to Opus, Sonnet, and Haiku 5.5 and Fable 5.1, maps those IDs to `claude-group/<id>` through `modelOverrides` so Claude Code still recognizes them, and disables experimental betas for the gateway.
+Work sends every request through the TrueFoundry gateway using only the TFY key, on the metered `claude-group/` route (the same route OpenCode work uses). It does not use a Claude subscription seat. The overlay sets `ANTHROPIC_BASE_URL`, pins the opus/sonnet/haiku/fable aliases to Opus, Sonnet, and Haiku 5.5 and Fable 5.2, maps those IDs to `claude-group/<id>` through `modelOverrides` so Claude Code still recognizes them, and disables experimental betas for the gateway.
 
 The key is never in a settings file or argument list. The work launcher uses an inherited `TFY_API_KEY`, otherwise re-executes once through `dotfiles-secret exec-env truefoundry` (see [Local Environment Bundles](secrets.md)), otherwise fails closed. It exports the key only as `ANTHROPIC_AUTH_TOKEN`, which takes precedence over the stored claude.ai login without replacing it, and clears `TFY_API_KEY`, `ANTHROPIC_API_KEY`, and `CLAUDE_CODE_OAUTH_TOKEN`. Personal clears `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, and `TFY_API_KEY`, so it keeps the claude.ai login.
 
